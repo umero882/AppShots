@@ -7,7 +7,7 @@ import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
 import { defaultProjectState } from "../lib/templates";
 import TemplatePicker from "../components/TemplatePicker";
-import { templateToProjectState } from "../lib/galleryTemplates";
+import { templateToProjectState, textPosFor } from "../lib/galleryTemplates";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -96,7 +96,7 @@ export default function Dashboard() {
               >
                 <div className="grid place-items-center rounded-xl bg-ink-900 p-4">
                   <ScreenCanvas
-                    state={{ ...p.state, _textPos: textPos(p.state) }}
+                    state={{ ...p.state, _textPos: textPosFor(p.state.layoutId) }}
                     screen={p.state.screens?.[0] || { heading: "", image: null }}
                     width={150}
                   />
@@ -130,11 +130,6 @@ export default function Dashboard() {
       </main>
     </div>
   );
-}
-
-function textPos(state) {
-  const map = { "text-top": "top", "text-bottom": "bottom", "device-only": "none", centered: "top" };
-  return map[state.layoutId] || "top";
 }
 
 function EmptyState({ onCreate, creating }) {

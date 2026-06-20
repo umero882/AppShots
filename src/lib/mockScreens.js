@@ -67,7 +67,6 @@ export function mockProfile(accent, { dark } = {}) {
   const p = palette(dark);
   let s = bar(0, 60, W, 200, accent, 0, 0.18);
   s += circ(W / 2, 150, 48, accent);
-  s += circ(W / 2, 150, 44, p.bg, 0.0);
   s += bar(W / 2 - 70, 215, 140, 16, p.text);
   s += bar(W / 2 - 45, 240, 90, 10, p.sub, 5, 0.7);
   for (let i = 0; i < 3; i++) {
@@ -131,7 +130,7 @@ export function mockChat(accent, { dark } = {}) {
   for (const [x, y, w, right] of rows) {
     s += bar(x, y, w, 52, right ? accent : p.card, 18, right ? 0.9 : 1);
     s += bar(x + 18, y + 14, w - 60, 10, right ? "#ffffff" : p.text, 5, right ? 0.85 : 0.8);
-    s += bar(x + 18, y + 30, w - 110, 8, right ? "#ffffff" : p.sub, 4, right ? 0.6 : 0.6);
+    s += bar(x + 18, y + 30, w - 110, 8, right ? "#ffffff" : p.sub, 4, 0.6);
   }
   s += bar(28, 700, 334, 52, p.card, 26);
   s += circ(338, 726, 18, accent);

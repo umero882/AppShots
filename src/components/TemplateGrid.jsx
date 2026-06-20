@@ -47,6 +47,7 @@ export default function TemplateGrid({
           <button
             key={c}
             onClick={() => setCategory(c)}
+            aria-pressed={category === c}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
               category === c
                 ? "bg-brand-600 text-white"
@@ -59,7 +60,9 @@ export default function TemplateGrid({
       </div>
 
       {visible.length === 0 ? (
-        <p className="py-10 text-center text-sm text-slate-500">No templates match "{query}".</p>
+        <p className="py-10 text-center text-sm text-slate-500">
+          {query ? `No templates match "${query}".` : "No templates in this category."}
+        </p>
       ) : (
         <div
           className={`grid gap-3 ${

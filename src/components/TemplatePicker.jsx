@@ -1,10 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { X, FilePlus2 } from "lucide-react";
 import TemplateGrid from "./TemplateGrid";
 
 export default function TemplatePicker({ open, onClose, onPick }) {
+  const panelRef = useRef(null);
+
   useEffect(() => {
     if (!open) return;
+    panelRef.current?.focus();
     const onKey = (e) => {
       if (e.key === "Escape") onClose?.();
     };
@@ -18,13 +21,15 @@ export default function TemplatePicker({ open, onClose, onPick }) {
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:p-8"
       onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Choose a template"
     >
       <div
+        ref={panelRef}
+        tabIndex={-1}
         className="card my-auto w-full max-w-5xl p-5 sm:p-6"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose a template"
       >
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>

@@ -740,7 +740,7 @@ export const TEMPLATES = [
     scr(mockOnboarding("#0ea5e9"), "Start in seconds"),
     scr(mockStats("#0ea5e9"), "See your progress"),
   ]),
-  mk("minimal-mist", "Mist", "Minimal", "#6366f1", solidBg("#eef2ff"), "#1e1b4b", "centered", "ipad-13", [
+  mk("minimal-mist", "Mist", "Minimal", "#6366f1", solidBg("#eef2ff"), "#1e1b4b", "inter", "centered", "ipad-13", [
     scr(mockDashboard("#6366f1"), "Designed to feel calm"),
     scr(mockChat("#6366f1"), "Talk to anyone"),
   ]),

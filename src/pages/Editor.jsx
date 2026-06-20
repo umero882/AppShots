@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
-import { applyTemplateStyle } from "../lib/galleryTemplates";
+import { applyTemplateStyle, textPosFor } from "../lib/galleryTemplates";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
@@ -23,10 +23,6 @@ const TABS = [
   { id: "text", label: "Text", icon: Type },
   { id: "layout", label: "Layout", icon: LayoutTemplate },
 ];
-
-const layoutTextPos = {
-  "text-top": "top", "text-bottom": "bottom", "device-only": "none", centered: "top",
-};
 
 export default function Editor() {
   const { id } = useParams();
@@ -174,7 +170,7 @@ export default function Editor() {
     );
   }
 
-  const textPos = layoutTextPos[state.layoutId] || "top";
+  const textPos = textPosFor(state.layoutId);
   const canvasState = { ...state, _textPos: textPos };
   const screen = state.screens[activeScreen];
   const showWatermark = user.plan === "free";

@@ -2,7 +2,7 @@
  * WCAG 2.1 relative-luminance contrast helpers. Accepts 3- or 6-digit hex.
  */
 function normalize(hex) {
-  let h = hex.replace("#", "").trim();
+  let h = hex.trim().replace(/^#/, "");
   if (h.length === 3) h = h.split("").map((c) => c + c).join("");
   return h;
 }
