@@ -53,6 +53,12 @@ export function defaultProjectState() {
       weight: 800,
       align: "center",
     },
+    // Subheading styling, independent of the header (size/color/weight).
+    subtext: {
+      color: "#ffffff",
+      size: 28,
+      weight: 500,
+    },
     deviceScale: 0.78,
     screens: [defaultScreen()],
   };

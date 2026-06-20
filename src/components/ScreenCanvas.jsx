@@ -40,33 +40,48 @@ export default function ScreenCanvas({ state, screen, width = 280, innerRef }) {
 
   const scaledFont = (state.text.size / device.canvas.w) * width;
 
-  // Keep headline/subheading legible on ANY background (incl. dark-on-dark or
-  // light-on-light) with an adaptive opposite-luminance halo.
-  const halo = legibilityHalo(state.text.color);
-  const haloR = Math.max(1, scaledFont * 0.07);
-  const textShadow = `0 0 ${haloR}px rgba(${halo},0.6), 0 0 ${haloR * 2}px rgba(${halo},0.45)`;
+  // Subheading styling is independent of the header. Fall back to header-derived
+  // defaults for older projects that have no `subtext`.
+  const sub = {
+    color: state.subtext?.color || state.text.color,
+    size: state.subtext?.size ?? Math.round(state.text.size * 0.45),
+    weight: state.subtext?.weight ?? 500,
+  };
+  const scaledSub = (sub.size / device.canvas.w) * width;
+
+  // Keep text legible on ANY background (incl. dark-on-dark) with an adaptive
+  // opposite-luminance halo, keyed to each line's own color.
+  const haloFor = (hex, base) => {
+    const h = legibilityHalo(hex);
+    const r = Math.max(1, base * 0.07);
+    return `0 0 ${r}px rgba(${h},0.6), 0 0 ${r * 2}px rgba(${h},0.45)`;
+  };
 
   const TextBlock = screen.heading ? (
     <div
       className="px-[8%] text-center"
-      style={{
-        fontFamily: font.stack,
-        color: state.text.color,
-        fontWeight: state.text.weight,
-        textAlign: state.text.align,
-        textShadow,
-      }}
+      style={{ fontFamily: font.stack, textAlign: state.text.align }}
     >
-      <div style={{ fontSize: scaledFont, lineHeight: 1.1, letterSpacing: "-0.02em" }}>
+      <div
+        style={{
+          fontSize: scaledFont,
+          lineHeight: 1.1,
+          letterSpacing: "-0.02em",
+          color: state.text.color,
+          fontWeight: state.text.weight,
+          textShadow: haloFor(state.text.color, scaledFont),
+        }}
+      >
         {screen.heading}
       </div>
       {screen.subheading ? (
         <div
           style={{
-            fontSize: scaledFont * 0.45,
+            fontSize: scaledSub,
             marginTop: scaledFont * 0.35,
-            opacity: 0.85,
-            fontWeight: 500,
+            color: sub.color,
+            fontWeight: sub.weight,
+            textShadow: haloFor(sub.color, scaledSub),
           }}
         >
           {screen.subheading}

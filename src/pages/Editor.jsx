@@ -450,6 +450,14 @@ function BackgroundPanel({ state, update }) {
 
 function TextPanel({ state, update, screen, onScreen }) {
   const t = state.text;
+  // Effective subheading style (independent size/color/weight), with fallback
+  // for projects created before subtext existed.
+  const sub = state.subtext || {
+    color: t.color,
+    size: Math.round(t.size * 0.45),
+    weight: 500,
+  };
+  const setSub = (patch) => update({ subtext: { ...sub, ...patch } });
   return (
     <div className="space-y-5">
       <div>
@@ -532,6 +540,46 @@ function TextPanel({ state, update, screen, onScreen }) {
           onChange={(e) => update({ text: { ...t, color: e.target.value } })}
           className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
         />
+      </div>
+
+      <div className="space-y-4 border-t border-white/10 pt-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Subheading style
+        </p>
+        <div>
+          <p className="label">Size · {sub.size}px</p>
+          <input
+            type="range"
+            min="18"
+            max="90"
+            value={sub.size}
+            onChange={(e) => setSub({ size: +e.target.value })}
+            className="w-full accent-brand-500"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="label">Weight</p>
+            <select
+              className="input"
+              value={sub.weight}
+              onChange={(e) => setSub({ weight: +e.target.value })}
+            >
+              {[300, 400, 500, 600, 700, 800].map((w) => (
+                <option key={w} value={w}>{w}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <p className="label">Color</p>
+            <input
+              type="color"
+              value={sub.color}
+              onChange={(e) => setSub({ color: e.target.value })}
+              className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
