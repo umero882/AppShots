@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   templateToProjectState, applyTemplateStyle, filterTemplates, textPosFor,
+  suggestTextColor, SUGGEST_LIGHT, SUGGEST_DARK,
 } from "../galleryTemplates.js";
 
 const fixture = {
@@ -91,5 +92,17 @@ describe("filterTemplates", () => {
   });
   it("uses sane defaults when opts omitted", () => {
     expect(filterTemplates(list)).toHaveLength(3);
+  });
+});
+
+describe("suggestTextColor", () => {
+  it("suggests light text on a dark solid", () => {
+    expect(suggestTextColor({ type: "solid", solid: "#0b1020" })).toBe(SUGGEST_LIGHT);
+  });
+  it("suggests dark text on a light solid", () => {
+    expect(suggestTextColor({ type: "solid", solid: "#f3f4f6" })).toBe(SUGGEST_DARK);
+  });
+  it("suggests light text on a dark gradient", () => {
+    expect(suggestTextColor({ type: "gradient", gradient: "grape" })).toBe(SUGGEST_LIGHT);
   });
 });

@@ -3,10 +3,13 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Plus, Download, Trash2, Copy, Check, Loader2,
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
+  Contrast,
 } from "lucide-react";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
-import { applyTemplateStyle, textPosFor } from "../lib/galleryTemplates";
+import {
+  applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
+} from "../lib/galleryTemplates";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
@@ -362,8 +365,28 @@ function DevicePanel({ state, update }) {
 
 function BackgroundPanel({ state, update }) {
   const bg = state.background;
+  const suggested = suggestTextColor(bg);
+  const lowContrast =
+    state.text.color.toLowerCase() !== suggested.toLowerCase() &&
+    worstContrast(state.text.color, bg) < 3;
   return (
     <div className="space-y-5">
+      {lowContrast && (
+        <button
+          type="button"
+          onClick={() => update({ text: { ...state.text, color: suggested } })}
+          className="flex w-full items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-left text-xs text-amber-200 transition hover:bg-amber-400/20"
+        >
+          <Contrast size={15} className="shrink-0" />
+          <span className="flex-1">
+            Your headline is hard to read here. Use{" "}
+            {suggested === "#ffffff" ? "light" : "dark"} text?
+          </span>
+          <span className="rounded bg-amber-400/20 px-1.5 py-0.5 font-semibold text-amber-100">
+            Apply
+          </span>
+        </button>
+      )}
       <div className="flex gap-2">
         {["gradient", "solid"].map((t) => (
           <button

@@ -72,6 +72,19 @@ export function worstContrast(textColor, background) {
   );
 }
 
+export const SUGGEST_LIGHT = "#ffffff";
+export const SUGGEST_DARK = "#0b1020";
+
+/**
+ * Best-contrast headline color (light or dark) for a given background — picks
+ * whichever of SUGGEST_LIGHT / SUGGEST_DARK has the higher worst-case contrast.
+ */
+export function suggestTextColor(background) {
+  return worstContrast(SUGGEST_DARK, background) > worstContrast(SUGGEST_LIGHT, background)
+    ? SUGGEST_DARK
+    : SUGGEST_LIGHT;
+}
+
 function scaleFor(layoutId) {
   const l = LAYOUTS.find((x) => x.id === layoutId) || LAYOUTS[0];
   return l.deviceScale;
