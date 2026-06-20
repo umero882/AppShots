@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Plus, Download, Trash2, Copy, Check, Loader2,
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
-  Contrast,
+  Contrast, Search,
 } from "lucide-react";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
@@ -374,12 +374,53 @@ function BackgroundPanel({ state, update }) {
     state.text.color.toLowerCase() !== suggested.toLowerCase() &&
     worstContrast(state.text.color, bg) < 3;
 
+  const [q, setQ] = useState("");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [picking, setPicking] = useState(null);
+
   async function onUploadBg(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     const dataUrl = await readFileAsDataURL(file);
     update({ background: { ...bg, type: "image", image: dataUrl } });
     e.target.value = "";
+  }
+
+  function runSearch(e) {
+    e?.preventDefault();
+    const term = q.trim();
+    setQuery(term);
+    setResults(
+      term
+        ? Array.from({ length: 12 }, (_, i) => ({
+            id: String(i),
+            url: `https://loremflickr.com/600/1300/${encodeURIComponent(term)}?lock=${i + 1}`,
+          }))
+        : []
+    );
+  }
+
+  function clearSearch() {
+    setQ("");
+    setQuery("");
+    setResults([]);
+  }
+
+  // Picking a web result: fetch it cross-origin and store as a data-URL so it
+  // persists and exports cleanly (LoremFlickr is CORS-enabled).
+  async function pickResult(url) {
+    setPicking(url);
+    try {
+      const resp = await fetch(url, { mode: "cors" });
+      const blob = await resp.blob();
+      const dataUrl = await readFileAsDataURL(blob);
+      update({ background: { ...bg, type: "image", image: dataUrl } });
+    } catch {
+      update({ background: { ...bg, type: "image", image: url } });
+    } finally {
+      setPicking(null);
+    }
   }
 
   return (
@@ -466,35 +507,80 @@ function BackgroundPanel({ state, update }) {
             <Upload size={15} /> Upload image
           </button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUploadBg} />
-          <div>
-            <p className="label">Explore</p>
-            <div className="scroll-thin -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
-              {["All", ...BG_CATEGORIES].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setBgCat(c)}
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                    bgCat === c ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300 hover:bg-white/10"
-                  }`}
-                >
-                  {c}
+
+          <form onSubmit={runSearch} className="flex gap-2">
+            <div className="relative flex-1">
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search the web for any image"
+                className="input pl-9"
+              />
+            </div>
+            <button type="submit" className="btn-soft">Search</button>
+          </form>
+
+          {query ? (
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="label mb-0">Results for “{query}”</p>
+                <button onClick={clearSearch} className="text-xs text-slate-400 transition hover:text-white">
+                  Back to gallery
                 </button>
-              ))}
+              </div>
+              <div className="grid grid-cols-3 gap-2.5">
+                {results.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => pickResult(r.url)}
+                    disabled={!!picking}
+                    className="relative h-16 overflow-hidden rounded-xl bg-ink-800 bg-cover bg-center ring-2 ring-transparent transition hover:ring-white/30 disabled:opacity-60"
+                    style={{ backgroundImage: `url("${r.url}")` }}
+                  >
+                    {picking === r.url && (
+                      <span className="absolute inset-0 grid place-items-center bg-black/50">
+                        <Loader2 size={16} className="animate-spin text-white" />
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                Free photos via LoremFlickr (Flickr Creative Commons).
+              </p>
             </div>
-            <div className="grid grid-cols-3 gap-2.5">
-              {BG_PRESETS.filter((p) => bgCat === "All" || p.category === bgCat).map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => update({ background: { ...bg, type: "image", image: p.image } })}
-                  title={p.name}
-                  className={`h-16 rounded-xl bg-cover bg-center ring-2 transition ${
-                    bg.image === p.image ? "ring-white" : "ring-transparent hover:ring-white/30"
-                  }`}
-                  style={{ backgroundImage: `url("${p.image}")` }}
-                />
-              ))}
+          ) : (
+            <div>
+              <p className="label">Explore</p>
+              <div className="scroll-thin -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+                {["All", ...BG_CATEGORIES].map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setBgCat(c)}
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                      bgCat === c ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300 hover:bg-white/10"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-2.5">
+                {BG_PRESETS.filter((p) => bgCat === "All" || p.category === bgCat).map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => update({ background: { ...bg, type: "image", image: p.image } })}
+                    title={p.name}
+                    className={`h-16 rounded-xl bg-cover bg-center ring-2 transition ${
+                      bg.image === p.image ? "ring-white" : "ring-transparent hover:ring-white/30"
+                    }`}
+                    style={{ backgroundImage: `url("${p.image}")` }}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           {bg.image && (
             <button
               onClick={() => update({ background: { ...bg, type: "gradient", image: null } })}
