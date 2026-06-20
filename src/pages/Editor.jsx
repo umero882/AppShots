@@ -675,7 +675,10 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
 const REPO_NOTICES = {
   "github-bad-url": "That doesn't look like a GitHub repo URL — generating from your prompt.",
   "github-not-found": "Couldn't find that repo — generating from your prompt.",
-  "github-rate-limit": "GitHub rate limit hit (60/hr) — generating from your prompt.",
+  "github-private":
+    "That repo is private (or doesn't exist). Add VITE_GITHUB_TOKEN to .env.local to read private repos — generating from your prompt for now.",
+  "github-bad-token": "Your GitHub token was rejected — generating from your prompt.",
+  "github-rate-limit": "GitHub rate limit hit — generating from your prompt.",
   "github-error": "Couldn't read that repo — generating from your prompt.",
 };
 
@@ -780,6 +783,9 @@ function AiBackgroundPanel({ state, update, bg, onScreen }) {
             className="input pl-9"
           />
         </div>
+        <p className="mt-1 text-[10px] text-slate-500">
+          Private repo? Add <code className="text-slate-400">VITE_GITHUB_TOKEN</code> to .env.local.
+        </p>
       </div>
 
       <div>

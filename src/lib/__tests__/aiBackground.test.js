@@ -181,9 +181,58 @@ describe("network wrappers (stubbed fetch)", () => {
     expect(ctx.hexColors).toContain("#6366f1");
   });
 
-  it("fetchRepoContext throws github-not-found on 404", async () => {
+  it("fetchRepoContext sends an Authorization header when a token is set", async () => {
+    vi.stubEnv("VITE_GITHUB_TOKEN", "ghp_test123");
+    const seen = [];
+    const fetchMock = vi.fn(async (url, opts) => {
+      seen.push(opts?.headers?.Authorization);
+      if (url.endsWith("/readme")) {
+        return { ok: true, status: 200, text: async () => "# Private readme" };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ name: "secret", description: "", topics: [], language: "TS" }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const ctx = await fetchRepoContext("https://github.com/owner/private-repo");
+    expect(ctx.name).toBe("secret");
+    expect(seen).toContain("Bearer ghp_test123");
+    // every request to the GitHub API carried the token
+    expect(seen.every((h) => h === "Bearer ghp_test123")).toBe(true);
+  });
+
+  it("fetchRepoContext omits Authorization when no token is set", async () => {
+    vi.stubEnv("VITE_GITHUB_TOKEN", "");
+    let authHeader = "unset";
+    const fetchMock = vi.fn(async (url, opts) => {
+      if (!url.endsWith("/readme")) authHeader = opts?.headers?.Authorization;
+      return url.endsWith("/readme")
+        ? { ok: true, status: 200, text: async () => "" }
+        : { ok: true, status: 200, json: async () => ({ name: "x", topics: [] }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchRepoContext("https://github.com/owner/repo");
+    expect(authHeader).toBeUndefined();
+  });
+
+  it("fetchRepoContext throws github-private on 404 with no token", async () => {
+    vi.stubEnv("VITE_GITHUB_TOKEN", "");
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404, json: async () => ({}) })));
+    await expect(fetchRepoContext("https://github.com/owner/repo")).rejects.toThrow(/github-private/);
+  });
+
+  it("fetchRepoContext throws github-not-found on 404 when a token IS set", async () => {
+    vi.stubEnv("VITE_GITHUB_TOKEN", "ghp_test123");
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404, json: async () => ({}) })));
     await expect(fetchRepoContext("https://github.com/owner/repo")).rejects.toThrow(/github-not-found/);
+  });
+
+  it("fetchRepoContext throws github-bad-token on 401", async () => {
+    vi.stubEnv("VITE_GITHUB_TOKEN", "ghp_bad");
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) })));
+    await expect(fetchRepoContext("https://github.com/owner/repo")).rejects.toThrow(/github-bad-token/);
   });
 
   it("fetchRepoContext throws github-rate-limit on 403", async () => {

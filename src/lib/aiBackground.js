@@ -23,6 +23,9 @@ const ONE_HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const anthropicKey = () => import.meta.env.VITE_ANTHROPIC_API_KEY;
 const openaiKey = () => import.meta.env.VITE_OPENAI_API_KEY;
 const stabilityKey = () => import.meta.env.VITE_STABILITY_API_KEY;
+// Optional GitHub token — lets the app read PRIVATE repos. Without it, only
+// public repos resolve (the API returns 404 for private repos when unauthed).
+const githubToken = () => import.meta.env.VITE_GITHUB_TOKEN;
 
 export const AI_MODELS = [
   { id: "claude-haiku-4-5-20251001", name: "Haiku (fast)" },
@@ -161,18 +164,30 @@ export function imageProvider() {
 
 const GH_API = "https://api.github.com";
 
-/** Fetch brand context for a repo from the public GitHub API (no auth). */
+/** GitHub headers, adding the token (for private repos) when configured. */
+function ghHeaders(accept) {
+  const headers = { Accept: accept };
+  const token = githubToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+/** Fetch brand context for a repo. Reads private repos when a token is set. */
 export async function fetchRepoContext(url) {
   const parsed = parseGithubUrl(url);
   if (!parsed) throw new Error("github-bad-url");
   const { owner, repo } = parsed;
 
   const repoResp = await fetch(`${GH_API}/repos/${owner}/${repo}`, {
-    headers: { Accept: "application/vnd.github+json" },
+    headers: ghHeaders("application/vnd.github+json"),
   });
   if (!repoResp.ok) {
-    if (repoResp.status === 404) throw new Error("github-not-found");
+    // 404 unauthed usually means the repo is private (not truly missing).
+    if (repoResp.status === 404) {
+      throw new Error(githubToken() ? "github-not-found" : "github-private");
+    }
     if (repoResp.status === 403) throw new Error("github-rate-limit");
+    if (repoResp.status === 401) throw new Error("github-bad-token");
     throw new Error("github-error");
   }
   const meta = await repoResp.json();
@@ -180,7 +195,7 @@ export async function fetchRepoContext(url) {
   let readme = "";
   try {
     const rmResp = await fetch(`${GH_API}/repos/${owner}/${repo}/readme`, {
-      headers: { Accept: "application/vnd.github.raw" },
+      headers: ghHeaders("application/vnd.github.raw"),
     });
     if (rmResp.ok) readme = (await rmResp.text()).slice(0, 4000);
   } catch {
