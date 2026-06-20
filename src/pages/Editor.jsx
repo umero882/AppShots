@@ -405,13 +405,22 @@ function BackgroundPanel({ state, update }) {
     setResults([]);
     try {
       const resp = await fetch(
-        `https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&page_size=20&mature=false`
+        `https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}` +
+          `&page_size=20&mature=false&category=photograph`
       );
       if (!resp.ok) throw new Error("bad status");
       const data = await resp.json();
+      // Rank results whose title actually matches the query first (the CC corpus
+      // is noisy — this keeps "baby" photos ahead of things merely tagged "baby").
+      const terms = term.toLowerCase().split(/\s+/).filter(Boolean);
+      const score = (title) => {
+        const t = (title || "").toLowerCase();
+        return terms.reduce((s, w) => s + (t.includes(w) ? 1 : 0), 0);
+      };
       const items = (data.results || [])
         .filter((r) => r.thumbnail)
-        .map((r) => ({ id: r.id, url: r.thumbnail, title: r.title || term }));
+        .map((r) => ({ id: r.id, url: r.thumbnail, title: r.title || term, s: score(r.title) }))
+        .sort((a, b) => b.s - a.s);
       setResults(items);
       if (items.length === 0) setSearchErr(`No results for “${term}”. Try another search.`);
     } catch {
