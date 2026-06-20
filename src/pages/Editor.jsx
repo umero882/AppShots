@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Plus, Download, Trash2, Copy, Check, Loader2,
-  Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate,
+  Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
 } from "lucide-react";
 import Logo from "../components/Logo";
+import TemplateGrid from "../components/TemplateGrid";
+import { applyTemplateStyle } from "../lib/galleryTemplates";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
@@ -15,6 +17,7 @@ import {
 import { exportNodeToPng, readFileAsDataURL } from "../lib/export";
 
 const TABS = [
+  { id: "templates", label: "Templates", icon: Sparkles },
   { id: "device", label: "Device", icon: Smartphone },
   { id: "background", label: "Background", icon: Palette },
   { id: "text", label: "Text", icon: Type },
@@ -224,6 +227,7 @@ export default function Editor() {
           </div>
 
           <div className="scroll-thin flex-1 overflow-y-auto p-4">
+            {tab === "templates" && <TemplatesPanel update={update} />}
             {tab === "device" && <DevicePanel state={state} update={update} />}
             {tab === "background" && <BackgroundPanel state={state} update={update} />}
             {tab === "text" && (
@@ -310,6 +314,21 @@ export default function Editor() {
 }
 
 /* ----------------------------- panels ----------------------------- */
+
+function TemplatesPanel({ update }) {
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-400">
+        Applies style to all screens · keeps your images.
+      </p>
+      <TemplateGrid
+        compact
+        thumbWidth={120}
+        onSelect={(t) => update((prev) => applyTemplateStyle(prev, t))}
+      />
+    </div>
+  );
+}
 
 function DevicePanel({ state, update }) {
   const grouped = {
