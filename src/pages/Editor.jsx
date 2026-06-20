@@ -10,6 +10,7 @@ import TemplateGrid from "../components/TemplateGrid";
 import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
+import { BG_PRESETS, BG_CATEGORIES } from "../lib/backgroundImages";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
@@ -365,10 +366,22 @@ function DevicePanel({ state, update }) {
 
 function BackgroundPanel({ state, update }) {
   const bg = state.background;
+  const fileRef = useRef(null);
+  const [bgCat, setBgCat] = useState("All");
   const suggested = suggestTextColor(bg);
   const lowContrast =
+    bg.type !== "image" &&
     state.text.color.toLowerCase() !== suggested.toLowerCase() &&
     worstContrast(state.text.color, bg) < 3;
+
+  async function onUploadBg(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataURL(file);
+    update({ background: { ...bg, type: "image", image: dataUrl } });
+    e.target.value = "";
+  }
+
   return (
     <div className="space-y-5">
       {lowContrast && (
@@ -388,7 +401,7 @@ function BackgroundPanel({ state, update }) {
         </button>
       )}
       <div className="flex gap-2">
-        {["gradient", "solid"].map((t) => (
+        {["gradient", "solid", "image"].map((t) => (
           <button
             key={t}
             onClick={() => update({ background: { ...bg, type: t } })}
@@ -401,7 +414,7 @@ function BackgroundPanel({ state, update }) {
         ))}
       </div>
 
-      {bg.type === "gradient" ? (
+      {bg.type === "gradient" && (
         <div>
           <p className="label">Gradient</p>
           <div className="grid grid-cols-4 gap-2.5">
@@ -418,7 +431,9 @@ function BackgroundPanel({ state, update }) {
             ))}
           </div>
         </div>
-      ) : (
+      )}
+
+      {bg.type === "solid" && (
         <div>
           <p className="label">Color</p>
           <div className="grid grid-cols-5 gap-2.5">
@@ -442,6 +457,52 @@ function BackgroundPanel({ state, update }) {
               className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
             />
           </div>
+        </div>
+      )}
+
+      {bg.type === "image" && (
+        <div className="space-y-4">
+          <button onClick={() => fileRef.current?.click()} className="btn-soft w-full justify-center">
+            <Upload size={15} /> Upload image
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUploadBg} />
+          <div>
+            <p className="label">Explore</p>
+            <div className="scroll-thin -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+              {["All", ...BG_CATEGORIES].map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setBgCat(c)}
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                    bgCat === c ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300 hover:bg-white/10"
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              {BG_PRESETS.filter((p) => bgCat === "All" || p.category === bgCat).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => update({ background: { ...bg, type: "image", image: p.image } })}
+                  title={p.name}
+                  className={`h-16 rounded-xl bg-cover bg-center ring-2 transition ${
+                    bg.image === p.image ? "ring-white" : "ring-transparent hover:ring-white/30"
+                  }`}
+                  style={{ backgroundImage: `url("${p.image}")` }}
+                />
+              ))}
+            </div>
+          </div>
+          {bg.image && (
+            <button
+              onClick={() => update({ background: { ...bg, type: "gradient", image: null } })}
+              className="text-xs text-slate-400 transition hover:text-white"
+            >
+              Remove image
+            </button>
+          )}
         </div>
       )}
     </div>

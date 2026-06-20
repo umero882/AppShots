@@ -2,8 +2,10 @@ import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
 import { legibilityHalo } from "../lib/contrast";
 
-function gradientCss(bg) {
+function backgroundCss(bg) {
   if (bg.type === "solid") return bg.solid;
+  // Image backgrounds are drawn as an <img> layer (below) so they export
+  // reliably; this gradient is just the fallback behind that layer.
   const g = GRADIENTS.find((x) => x.id === bg.gradient) || GRADIENTS[0];
   return `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})`;
 }
@@ -97,17 +99,28 @@ export default function ScreenCanvas({ state, screen, width = 280, innerRef }) {
       style={{
         width,
         height,
-        background: gradientCss(state.background),
+        background: backgroundCss(state.background),
         borderRadius: width * 0.04,
       }}
     >
+      {/* image background drawn as an <img> layer so it exports reliably */}
+      {state.background.type === "image" && state.background.image && (
+        <img
+          src={state.background.image}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
+          crossOrigin="anonymous"
+        />
+      )}
+
       {/* layout */}
       {textPos === "top" && (
-        <div className="pt-[8%] w-full flex justify-center">{TextBlock}</div>
+        <div className="relative z-10 pt-[8%] w-full flex justify-center">{TextBlock}</div>
       )}
 
       <div
-        className="flex-1 w-full flex items-center justify-center"
+        className="relative z-10 flex-1 w-full flex items-center justify-center"
         style={{ paddingTop: textPos === "bottom" ? "6%" : 0 }}
       >
         <DeviceFrame
@@ -119,7 +132,7 @@ export default function ScreenCanvas({ state, screen, width = 280, innerRef }) {
       </div>
 
       {textPos === "bottom" && (
-        <div className="pb-[8%] w-full flex justify-center">{TextBlock}</div>
+        <div className="relative z-10 pb-[8%] w-full flex justify-center">{TextBlock}</div>
       )}
     </div>
   );

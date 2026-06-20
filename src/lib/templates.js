@@ -45,7 +45,7 @@ export function defaultProjectState() {
   return {
     deviceId: "iphone-69",
     layoutId: "text-top",
-    background: { type: "gradient", gradient: "indigo", solid: "#6366f1" },
+    background: { type: "gradient", gradient: "indigo", solid: "#6366f1", image: null },
     text: {
       font: "inter",
       color: "#ffffff",
