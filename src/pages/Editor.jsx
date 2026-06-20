@@ -1,0 +1,556 @@
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+  ArrowLeft, Plus, Download, Trash2, Copy, Check, Loader2,
+  Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate,
+} from "lucide-react";
+import Logo from "../components/Logo";
+import ScreenCanvas from "../components/ScreenCanvas";
+import { useAuth } from "../lib/auth";
+import { backend } from "../lib/backend";
+import { DEVICES, getDevice } from "../lib/devices";
+import {
+  GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
+} from "../lib/templates";
+import { exportNodeToPng, readFileAsDataURL } from "../lib/export";
+
+const TABS = [
+  { id: "device", label: "Device", icon: Smartphone },
+  { id: "background", label: "Background", icon: Palette },
+  { id: "text", label: "Text", icon: Type },
+  { id: "layout", label: "Layout", icon: LayoutTemplate },
+];
+
+const layoutTextPos = {
+  "text-top": "top", "text-bottom": "bottom", "device-only": "none", centered: "top",
+};
+
+export default function Editor() {
+  const { id } = useParams();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [project, setProject] = useState(null);
+  const [state, setState] = useState(null);
+  const [name, setName] = useState("");
+  const [activeScreen, setActiveScreen] = useState(0);
+  const [tab, setTab] = useState("device");
+  const [saveState, setSaveState] = useState("saved"); // saved | saving | dirty
+  const [exporting, setExporting] = useState(false);
+
+  const canvasRef = useRef(null);
+  const fileRef = useRef(null);
+  const saveTimer = useRef(null);
+
+  // load
+  useEffect(() => {
+    let active = true;
+    backend.getProject(id).then((p) => {
+      if (!active) return;
+      if (!p || p.userId !== user.id) {
+        navigate("/dashboard");
+        return;
+      }
+      setProject(p);
+      setState(p.state || defaultProjectState());
+      setName(p.name);
+    });
+    return () => {
+      active = false;
+    };
+  }, [id, user.id, navigate]);
+
+  // debounced autosave
+  const scheduleSave = useCallback(
+    (nextState, nextName) => {
+      setSaveState("saving");
+      clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(async () => {
+        await backend.updateProject(id, {
+          name: nextName,
+          state: nextState,
+        });
+        setSaveState("saved");
+      }, 600);
+    },
+    [id]
+  );
+
+  function update(patch) {
+    setState((prev) => {
+      const next = typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
+      scheduleSave(next, name);
+      return next;
+    });
+  }
+
+  function updateName(value) {
+    setName(value);
+    scheduleSave(state, value);
+  }
+
+  function updateScreen(idx, patch) {
+    update((prev) => {
+      const screens = prev.screens.map((s, i) => (i === idx ? { ...s, ...patch } : s));
+      return { ...prev, screens };
+    });
+  }
+
+  async function onUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataURL(file);
+    updateScreen(activeScreen, { image: dataUrl });
+    e.target.value = "";
+  }
+
+  function addScreen() {
+    update((prev) => ({ ...prev, screens: [...prev.screens, defaultScreen()] }));
+    setActiveScreen(state.screens.length);
+  }
+
+  function duplicateScreen(idx) {
+    update((prev) => {
+      const copy = { ...prev.screens[idx], id: Math.random().toString(36).slice(2, 9) };
+      const screens = [...prev.screens];
+      screens.splice(idx + 1, 0, copy);
+      return { ...prev, screens };
+    });
+  }
+
+  function removeScreen(idx) {
+    if (state.screens.length === 1) return;
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.filter((_, i) => i !== idx),
+    }));
+    setActiveScreen((a) => Math.max(0, a > idx ? a - 1 : a));
+  }
+
+  async function exportOne() {
+    if (!canvasRef.current) return;
+    setExporting(true);
+    try {
+      const device = getDevice(state.deviceId);
+      await exportNodeToPng(
+        canvasRef.current,
+        device.canvas.w,
+        `${slug(name)}-${activeScreen + 1}.png`
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function exportAll() {
+    setExporting(true);
+    const device = getDevice(state.deviceId);
+    try {
+      for (let i = 0; i < state.screens.length; i++) {
+        setActiveScreen(i);
+        // wait a tick for the canvas to re-render the active screen
+        await new Promise((r) => setTimeout(r, 350));
+        if (canvasRef.current) {
+          await exportNodeToPng(
+            canvasRef.current,
+            device.canvas.w,
+            `${slug(name)}-${i + 1}.png`
+          );
+        }
+      }
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  if (!state) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-ink-950 text-slate-400">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
+  }
+
+  const textPos = layoutTextPos[state.layoutId] || "top";
+  const canvasState = { ...state, _textPos: textPos };
+  const screen = state.screens[activeScreen];
+  const showWatermark = user.plan === "free";
+
+  return (
+    <div className="flex h-screen flex-col bg-ink-950">
+      {/* top bar */}
+      <header className="flex items-center justify-between gap-4 border-b border-white/5 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link to="/dashboard" className="btn-ghost px-2.5 py-2">
+            <ArrowLeft size={16} />
+          </Link>
+          <Logo to="/dashboard" />
+          <span className="text-white/20">/</span>
+          <input
+            value={name}
+            onChange={(e) => updateName(e.target.value)}
+            className="min-w-0 rounded-lg bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none hover:bg-white/5 focus:bg-white/5"
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <SaveBadge state={saveState} />
+          <button onClick={exportAll} disabled={exporting} className="btn-ghost hidden sm:inline-flex">
+            {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            Export all
+          </button>
+          <button onClick={exportOne} disabled={exporting} className="btn-primary">
+            {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            Export PNG
+          </button>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {/* left controls */}
+        <aside className="flex w-[330px] shrink-0 flex-col border-r border-white/5 bg-ink-900">
+          <div className="flex border-b border-white/5">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex flex-1 flex-col items-center gap-1 py-3 text-[11px] font-semibold transition ${
+                  tab === t.id ? "bg-white/5 text-brand-300" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <t.icon size={17} />
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="scroll-thin flex-1 overflow-y-auto p-4">
+            {tab === "device" && <DevicePanel state={state} update={update} />}
+            {tab === "background" && <BackgroundPanel state={state} update={update} />}
+            {tab === "text" && (
+              <TextPanel
+                state={state}
+                update={update}
+                screen={screen}
+                onScreen={(p) => updateScreen(activeScreen, p)}
+              />
+            )}
+            {tab === "layout" && <LayoutPanel state={state} update={update} />}
+          </div>
+        </aside>
+
+        {/* center stage */}
+        <main className="flex min-w-0 flex-1 flex-col">
+          <div className="flex flex-1 items-center justify-center overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8">
+            <div className="relative">
+              <div ref={canvasRef} className="relative">
+                <ScreenCanvas state={canvasState} screen={screen} width={300} />
+                {showWatermark && (
+                  <div className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/40 px-2 py-0.5 text-[9px] font-semibold text-white/80 backdrop-blur">
+                    Made with AppShots
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="btn-soft absolute -bottom-12 left-1/2 -translate-x-1/2 whitespace-nowrap"
+              >
+                <Upload size={15} /> {screen.image ? "Replace screenshot" : "Upload screenshot"}
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUpload} />
+            </div>
+          </div>
+
+          {/* screen filmstrip */}
+          <div className="border-t border-white/5 bg-ink-900 p-3">
+            <div className="scroll-thin flex items-center gap-3 overflow-x-auto">
+              {state.screens.map((s, i) => (
+                <div key={s.id} className="group relative shrink-0">
+                  <button
+                    onClick={() => setActiveScreen(i)}
+                    className={`overflow-hidden rounded-lg border-2 transition ${
+                      i === activeScreen ? "border-brand-500" : "border-transparent hover:border-white/20"
+                    }`}
+                  >
+                    <ScreenCanvas state={canvasState} screen={s} width={56} />
+                  </button>
+                  <div className="absolute -top-1.5 -right-1.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      onClick={() => duplicateScreen(i)}
+                      className="grid h-5 w-5 place-items-center rounded-full bg-ink-800 text-slate-300 hover:text-white"
+                      title="Duplicate"
+                    >
+                      <Copy size={11} />
+                    </button>
+                    {state.screens.length > 1 && (
+                      <button
+                        onClick={() => removeScreen(i)}
+                        className="grid h-5 w-5 place-items-center rounded-full bg-ink-800 text-slate-300 hover:text-red-400"
+                        title="Delete"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <span className="mt-1 block text-center text-[10px] text-slate-500">{i + 1}</span>
+                </div>
+              ))}
+              <button
+                onClick={addScreen}
+                className="grid h-[100px] w-14 shrink-0 place-items-center rounded-lg border border-dashed border-white/15 text-slate-400 hover:border-brand-500/50 hover:text-brand-300"
+                title="Add screen"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------- panels ----------------------------- */
+
+function DevicePanel({ state, update }) {
+  const grouped = {
+    ios: DEVICES.filter((d) => d.store === "ios"),
+    android: DEVICES.filter((d) => d.store === "android"),
+  };
+  return (
+    <div className="space-y-5">
+      {Object.entries(grouped).map(([store, devices]) => (
+        <div key={store}>
+          <p className="label">{store === "ios" ? "App Store" : "Google Play"}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {devices.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => update({ deviceId: d.id })}
+                className={`rounded-xl border p-3 text-left text-sm transition ${
+                  state.deviceId === d.id
+                    ? "border-brand-500 bg-brand-500/10 text-white"
+                    : "border-white/10 bg-white/[0.02] text-slate-300 hover:border-white/20"
+                }`}
+              >
+                <p className="font-semibold">{d.name}</p>
+                <p className="text-[11px] text-slate-500">
+                  {d.canvas.w}×{d.canvas.h}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BackgroundPanel({ state, update }) {
+  const bg = state.background;
+  return (
+    <div className="space-y-5">
+      <div className="flex gap-2">
+        {["gradient", "solid"].map((t) => (
+          <button
+            key={t}
+            onClick={() => update({ background: { ...bg, type: t } })}
+            className={`flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition ${
+              bg.type === t ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {bg.type === "gradient" ? (
+        <div>
+          <p className="label">Gradient</p>
+          <div className="grid grid-cols-4 gap-2.5">
+            {GRADIENTS.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => update({ background: { ...bg, gradient: g.id } })}
+                title={g.name}
+                className={`h-12 rounded-xl ring-2 transition ${
+                  bg.gradient === g.id ? "ring-white" : "ring-transparent hover:ring-white/30"
+                }`}
+                style={{ background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})` }}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <p className="label">Color</p>
+          <div className="grid grid-cols-5 gap-2.5">
+            {SOLIDS.map((c) => (
+              <button
+                key={c}
+                onClick={() => update({ background: { ...bg, solid: c } })}
+                className={`h-10 rounded-xl ring-2 transition ${
+                  bg.solid === c ? "ring-white" : "ring-white/10 hover:ring-white/30"
+                }`}
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+          <div className="mt-3">
+            <p className="label">Custom</p>
+            <input
+              type="color"
+              value={bg.solid}
+              onChange={(e) => update({ background: { ...bg, solid: e.target.value } })}
+              className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TextPanel({ state, update, screen, onScreen }) {
+  const t = state.text;
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="label">Headline</p>
+        <input
+          className="input"
+          value={screen.heading}
+          placeholder="Your headline"
+          onChange={(e) => onScreen({ heading: e.target.value })}
+        />
+      </div>
+      <div>
+        <p className="label">Subheading</p>
+        <input
+          className="input"
+          value={screen.subheading || ""}
+          placeholder="Optional supporting line"
+          onChange={(e) => onScreen({ subheading: e.target.value })}
+        />
+      </div>
+      <div>
+        <p className="label">Font</p>
+        <div className="grid grid-cols-2 gap-2">
+          {FONTS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => update({ text: { ...t, font: f.id } })}
+              style={{ fontFamily: f.stack }}
+              className={`rounded-lg border py-2 text-sm transition ${
+                t.font === f.id ? "border-brand-500 bg-brand-500/10 text-white" : "border-white/10 text-slate-300"
+              }`}
+            >
+              {f.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="label">Size · {t.size}px</p>
+        <input
+          type="range"
+          min="36"
+          max="110"
+          value={t.size}
+          onChange={(e) => update({ text: { ...t, size: +e.target.value } })}
+          className="w-full accent-brand-500"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="label">Weight</p>
+          <select
+            className="input"
+            value={t.weight}
+            onChange={(e) => update({ text: { ...t, weight: +e.target.value } })}
+          >
+            {[400, 500, 600, 700, 800, 900].map((w) => (
+              <option key={w} value={w}>{w}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <p className="label">Align</p>
+          <select
+            className="input"
+            value={t.align}
+            onChange={(e) => update({ text: { ...t, align: e.target.value } })}
+          >
+            {["left", "center", "right"].map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div>
+        <p className="label">Color</p>
+        <input
+          type="color"
+          value={t.color}
+          onChange={(e) => update({ text: { ...t, color: e.target.value } })}
+          className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
+        />
+      </div>
+    </div>
+  );
+}
+
+function LayoutPanel({ state, update }) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="label">Layout</p>
+        <div className="grid grid-cols-2 gap-2">
+          {LAYOUTS.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => update({ layoutId: l.id, deviceScale: l.deviceScale })}
+              className={`rounded-xl border p-3 text-sm transition ${
+                state.layoutId === l.id
+                  ? "border-brand-500 bg-brand-500/10 text-white"
+                  : "border-white/10 text-slate-300 hover:border-white/20"
+              }`}
+            >
+              {l.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="label">Device size · {Math.round(state.deviceScale * 100)}%</p>
+        <input
+          type="range"
+          min="0.5"
+          max="1"
+          step="0.01"
+          value={state.deviceScale}
+          onChange={(e) => update({ deviceScale: +e.target.value })}
+          className="w-full accent-brand-500"
+        />
+      </div>
+    </div>
+  );
+}
+
+function SaveBadge({ state }) {
+  const map = {
+    saved: { icon: Check, text: "Saved", cls: "text-emerald-400" },
+    saving: { icon: Loader2, text: "Saving…", cls: "text-slate-400" },
+    dirty: { icon: Loader2, text: "Unsaved", cls: "text-amber-400" },
+  };
+  const { icon: Icon, text, cls } = map[state] || map.saved;
+  return (
+    <span className={`hidden items-center gap-1.5 text-xs font-medium sm:inline-flex ${cls}`}>
+      <Icon size={13} className={state === "saving" ? "animate-spin" : ""} />
+      {text}
+    </span>
+  );
+}
+
+function slug(s) {
+  return (s || "appshots").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "screen";
+}

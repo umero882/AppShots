@@ -1,0 +1,108 @@
+import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Menu, X, LogOut, LayoutGrid } from "lucide-react";
+import Logo from "./Logo";
+import { useAuth } from "../lib/auth";
+
+export default function Navbar() {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+
+  const links = [
+    { label: "Features", href: "/#features" },
+    { label: "How it works", href: "/#how" },
+    { label: "Pricing", href: "/pricing" },
+  ];
+
+  async function handleSignOut() {
+    await signOut();
+    navigate("/");
+  }
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-white/5 bg-ink-950/80 backdrop-blur-xl">
+      <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5">
+        <Logo />
+
+        <div className="hidden items-center gap-7 md:flex">
+          {links.map((l) => (
+            <a
+              key={l.label}
+              href={l.href}
+              className="text-sm font-medium text-slate-300 hover:text-white transition"
+            >
+              {l.label}
+            </a>
+          ))}
+        </div>
+
+        <div className="hidden items-center gap-3 md:flex">
+          {user ? (
+            <>
+              <Link to="/dashboard" className="btn-ghost">
+                <LayoutGrid size={16} /> Dashboard
+              </Link>
+              <button onClick={handleSignOut} className="btn-ghost">
+                <LogOut size={16} /> Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="text-sm font-semibold text-slate-200 hover:text-white px-3">
+                Log in
+              </Link>
+              <Link to="/signup" className="btn-primary">
+                Get started free
+              </Link>
+            </>
+          )}
+        </div>
+
+        <button
+          className="md:hidden text-slate-200"
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Toggle menu"
+        >
+          {open ? <X /> : <Menu />}
+        </button>
+      </nav>
+
+      {open && (
+        <div className="md:hidden border-t border-white/5 px-5 py-4 space-y-3">
+          {links.map((l) => (
+            <a
+              key={l.label}
+              href={l.href}
+              onClick={() => setOpen(false)}
+              className="block text-sm font-medium text-slate-300"
+            >
+              {l.label}
+            </a>
+          ))}
+          <div className="pt-2 flex flex-col gap-2">
+            {user ? (
+              <>
+                <Link to="/dashboard" className="btn-ghost" onClick={() => setOpen(false)}>
+                  Dashboard
+                </Link>
+                <button onClick={handleSignOut} className="btn-ghost">
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="btn-ghost" onClick={() => setOpen(false)}>
+                  Log in
+                </Link>
+                <Link to="/signup" className="btn-primary" onClick={() => setOpen(false)}>
+                  Get started free
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}
