@@ -573,9 +573,21 @@ function BackgroundPanel({ state, update }) {
                 </div>
               )}
               <p className="mt-2 text-[11px] text-slate-500">
-                {searchProvider() === "Pexels"
-                  ? "Studio photos via Pexels."
-                  : "Free images via Openverse (Creative Commons)."}
+                {searchProvider() === "Pexels" ? (
+                  <>
+                    Photos provided by{" "}
+                    <a
+                      href="https://www.pexels.com"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-brand-300 hover:text-brand-200"
+                    >
+                      Pexels
+                    </a>
+                  </>
+                ) : (
+                  "Free images via Openverse (Creative Commons)."
+                )}
               </p>
             </div>
           ) : (
