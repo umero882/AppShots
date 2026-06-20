@@ -109,7 +109,11 @@ export default function Editor() {
   }
 
   function addScreen() {
-    update((prev) => ({ ...prev, screens: [...prev.screens, defaultScreen()] }));
+    update((prev) => {
+      const base = prev.screens[activeScreen]?.background || prev.background;
+      const next = { ...defaultScreen(), background: base ? { ...base } : undefined };
+      return { ...prev, screens: [...prev.screens, next] };
+    });
     setActiveScreen(state.screens.length);
   }
 
@@ -230,7 +234,14 @@ export default function Editor() {
           <div className="scroll-thin flex-1 overflow-y-auto p-4">
             {tab === "templates" && <TemplatesPanel update={update} />}
             {tab === "device" && <DevicePanel state={state} update={update} />}
-            {tab === "background" && <BackgroundPanel state={state} update={update} />}
+            {tab === "background" && (
+              <BackgroundPanel
+                state={state}
+                update={update}
+                screen={screen}
+                onScreen={(p) => updateScreen(activeScreen, p)}
+              />
+            )}
             {tab === "text" && (
               <TextPanel
                 state={state}
@@ -365,8 +376,8 @@ function DevicePanel({ state, update }) {
   );
 }
 
-function BackgroundPanel({ state, update }) {
-  const bg = state.background;
+function BackgroundPanel({ state, update, screen, onScreen }) {
+  const bg = screen.background || state.background;
   const fileRef = useRef(null);
   const [bgCat, setBgCat] = useState("Gradient");
   const suggested = suggestTextColor(bg);
@@ -386,7 +397,7 @@ function BackgroundPanel({ state, update }) {
     const file = e.target.files?.[0];
     if (!file) return;
     const dataUrl = await readFileAsDataURL(file);
-    update({ background: { ...bg, type: "image", image: dataUrl } });
+    onScreen({ background: { ...bg, type: "image", image: dataUrl } });
     e.target.value = "";
   }
 
@@ -430,9 +441,9 @@ function BackgroundPanel({ state, update }) {
       const resp = await fetch(item.full, { mode: "cors" });
       const blob = await resp.blob();
       const dataUrl = await readFileAsDataURL(blob);
-      update({ background: { ...bg, type: "image", image: dataUrl } });
+      onScreen({ background: { ...bg, type: "image", image: dataUrl } });
     } catch {
-      update({ background: { ...bg, type: "image", image: item.full } });
+      onScreen({ background: { ...bg, type: "image", image: item.full } });
     } finally {
       setPicking(null);
     }
@@ -460,7 +471,7 @@ function BackgroundPanel({ state, update }) {
         {["gradient", "solid", "image"].map((t) => (
           <button
             key={t}
-            onClick={() => update({ background: { ...bg, type: t } })}
+            onClick={() => onScreen({ background: { ...bg, type: t } })}
             className={`flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition ${
               bg.type === t ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300"
             }`}
@@ -477,7 +488,7 @@ function BackgroundPanel({ state, update }) {
             {GRADIENTS.map((g) => (
               <button
                 key={g.id}
-                onClick={() => update({ background: { ...bg, gradient: g.id } })}
+                onClick={() => onScreen({ background: { ...bg, gradient: g.id } })}
                 title={g.name}
                 className={`h-12 rounded-xl ring-2 transition ${
                   bg.gradient === g.id ? "ring-white" : "ring-transparent hover:ring-white/30"
@@ -496,7 +507,7 @@ function BackgroundPanel({ state, update }) {
             {SOLIDS.map((c) => (
               <button
                 key={c}
-                onClick={() => update({ background: { ...bg, solid: c } })}
+                onClick={() => onScreen({ background: { ...bg, solid: c } })}
                 className={`h-10 rounded-xl ring-2 transition ${
                   bg.solid === c ? "ring-white" : "ring-white/10 hover:ring-white/30"
                 }`}
@@ -509,7 +520,7 @@ function BackgroundPanel({ state, update }) {
             <input
               type="color"
               value={bg.solid}
-              onChange={(e) => update({ background: { ...bg, solid: e.target.value } })}
+              onChange={(e) => onScreen({ background: { ...bg, solid: e.target.value } })}
               className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
             />
           </div>
@@ -610,7 +621,7 @@ function BackgroundPanel({ state, update }) {
                 {BG_PRESETS.filter((p) => bgCat === "All" || p.category === bgCat).map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => update({ background: { ...bg, type: "image", image: p.image } })}
+                    onClick={() => onScreen({ background: { ...bg, type: "image", image: p.image } })}
                     title={p.name}
                     className={`h-16 rounded-xl bg-cover bg-center ring-2 transition ${
                       bg.image === p.image ? "ring-white" : "ring-transparent hover:ring-white/30"
@@ -623,7 +634,7 @@ function BackgroundPanel({ state, update }) {
           )}
           {bg.image && (
             <button
-              onClick={() => update({ background: { ...bg, type: "gradient", image: null } })}
+              onClick={() => onScreen({ background: { ...bg, type: "gradient", image: null } })}
               className="text-xs text-slate-400 transition hover:text-white"
             >
               Remove image

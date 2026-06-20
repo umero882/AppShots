@@ -36,6 +36,9 @@ export default function ScreenCanvas({ state, screen, width = 280, innerRef }) {
   const device = getDevice(state.deviceId);
   const aspect = device.canvas.h / device.canvas.w;
   const height = width * aspect;
+  // Background is per-screen; fall back to the project background for older
+  // projects/templates that don't have one yet.
+  const background = screen.background || state.background;
   const font = FONTS.find((f) => f.id === state.text.font) || FONTS[0];
   const layoutTop = state.text && screen.heading;
   const textPos = state._textPos || "top";
@@ -99,14 +102,14 @@ export default function ScreenCanvas({ state, screen, width = 280, innerRef }) {
       style={{
         width,
         height,
-        background: backgroundCss(state.background),
+        background: backgroundCss(background),
         borderRadius: width * 0.04,
       }}
     >
       {/* image background drawn as an <img> layer so it exports reliably */}
-      {state.background.type === "image" && state.background.image && (
+      {background.type === "image" && background.image && (
         <img
-          src={state.background.image}
+          src={background.image}
           alt=""
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
