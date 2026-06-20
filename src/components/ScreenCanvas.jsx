@@ -2,8 +2,10 @@ import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
 import { legibilityHalo } from "../lib/contrast";
 
-function backgroundCss(bg) {
+export function backgroundCss(bg) {
   if (bg.type === "solid") return bg.solid;
+  // AI-generated gradients carry a precomputed pure-CSS string (exports cleanly).
+  if (bg.type === "gradient" && bg.aiGradient?.css) return bg.aiGradient.css;
   // Image backgrounds are drawn as an <img> layer (below) so they export
   // reliably; this gradient is just the fallback behind that layer.
   const g = GRADIENTS.find((x) => x.id === bg.gradient) || GRADIENTS[0];
