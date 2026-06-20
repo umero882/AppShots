@@ -377,6 +377,8 @@ function BackgroundPanel({ state, update }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchErr, setSearchErr] = useState("");
   const [picking, setPicking] = useState(null);
 
   async function onUploadBg(e) {
@@ -387,24 +389,43 @@ function BackgroundPanel({ state, update }) {
     e.target.value = "";
   }
 
-  function runSearch(e) {
+  // Comprehensive Creative-Commons image search via Openverse (no API key).
+  async function runSearch(e) {
     e?.preventDefault();
     const term = q.trim();
+    if (!term) {
+      setQuery("");
+      setResults([]);
+      setSearchErr("");
+      return;
+    }
     setQuery(term);
-    setResults(
-      term
-        ? Array.from({ length: 12 }, (_, i) => ({
-            id: String(i),
-            url: `https://loremflickr.com/600/1300/${encodeURIComponent(term)}?lock=${i + 1}`,
-          }))
-        : []
-    );
+    setSearching(true);
+    setSearchErr("");
+    setResults([]);
+    try {
+      const resp = await fetch(
+        `https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&page_size=20&mature=false`
+      );
+      if (!resp.ok) throw new Error("bad status");
+      const data = await resp.json();
+      const items = (data.results || [])
+        .filter((r) => r.thumbnail)
+        .map((r) => ({ id: r.id, url: r.thumbnail, title: r.title || term }));
+      setResults(items);
+      if (items.length === 0) setSearchErr(`No results for “${term}”. Try another search.`);
+    } catch {
+      setSearchErr("Search is unavailable right now — please try again.");
+    } finally {
+      setSearching(false);
+    }
   }
 
   function clearSearch() {
     setQ("");
     setQuery("");
     setResults([]);
+    setSearchErr("");
   }
 
   // Picking a web result: fetch it cross-origin and store as a data-URL so it
@@ -518,7 +539,9 @@ function BackgroundPanel({ state, update }) {
                 className="input pl-9"
               />
             </div>
-            <button type="submit" className="btn-soft">Search</button>
+            <button type="submit" disabled={searching} className="btn-soft">
+              {searching ? <Loader2 size={15} className="animate-spin" /> : "Search"}
+            </button>
           </form>
 
           {query ? (
@@ -529,25 +552,34 @@ function BackgroundPanel({ state, update }) {
                   Back to gallery
                 </button>
               </div>
-              <div className="grid grid-cols-3 gap-2.5">
-                {results.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => pickResult(r.url)}
-                    disabled={!!picking}
-                    className="relative h-16 overflow-hidden rounded-xl bg-ink-800 bg-cover bg-center ring-2 ring-transparent transition hover:ring-white/30 disabled:opacity-60"
-                    style={{ backgroundImage: `url("${r.url}")` }}
-                  >
-                    {picking === r.url && (
-                      <span className="absolute inset-0 grid place-items-center bg-black/50">
-                        <Loader2 size={16} className="animate-spin text-white" />
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
+              {searching ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-400">
+                  <Loader2 size={16} className="animate-spin" /> Searching…
+                </div>
+              ) : searchErr ? (
+                <p className="py-8 text-center text-sm text-slate-400">{searchErr}</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2.5">
+                  {results.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => pickResult(r.url)}
+                      disabled={!!picking}
+                      title={r.title}
+                      className="relative h-16 overflow-hidden rounded-xl bg-ink-800 bg-cover bg-center ring-2 ring-transparent transition hover:ring-white/30 disabled:opacity-60"
+                      style={{ backgroundImage: `url("${r.url}")` }}
+                    >
+                      {picking === r.url && (
+                        <span className="absolute inset-0 grid place-items-center bg-black/50">
+                          <Loader2 size={16} className="animate-spin text-white" />
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
               <p className="mt-2 text-[11px] text-slate-500">
-                Free photos via LoremFlickr (Flickr Creative Commons).
+                Free images via Openverse (Creative Commons).
               </p>
             </div>
           ) : (
