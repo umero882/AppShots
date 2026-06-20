@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Plus, Download, Trash2, Copy, Check, Loader2,
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
-  Contrast, Search,
+  Contrast, Search, Wand2, Github, AlertCircle,
 } from "lucide-react";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
@@ -12,6 +12,10 @@ import {
 } from "../lib/galleryTemplates";
 import { BG_PRESETS, BG_CATEGORIES } from "../lib/backgroundImages";
 import { searchImages, searchProvider } from "../lib/imageSearch";
+import {
+  aiProvider, imageProvider, fetchRepoContext, suggestBackgrounds,
+  generateImage, aiGradientCss, AI_MODELS,
+} from "../lib/aiBackground";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
@@ -380,6 +384,9 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
   const bg = screen.background || state.background;
   const fileRef = useRef(null);
   const [bgCat, setBgCat] = useState("Gradient");
+  // "view" lets the AI generator share the panel with the real background types.
+  const [view, setView] = useState(null);
+  const effView = view || bg.type;
   const suggested = suggestTextColor(bg);
   const lowContrast =
     bg.type !== "image" &&
@@ -468,30 +475,49 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
         </button>
       )}
       <div className="flex gap-2">
-        {["gradient", "solid", "image"].map((t) => (
-          <button
-            key={t}
-            onClick={() => onScreen({ background: { ...bg, type: t } })}
-            className={`flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition ${
-              bg.type === t ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+        {["gradient", "solid", "image", "ai"].map((t) => {
+          const active = t === "ai" ? effView === "ai" : effView === t;
+          return (
+            <button
+              key={t}
+              onClick={() => {
+                if (t === "ai") setView("ai");
+                else {
+                  setView(t);
+                  onScreen({ background: { ...bg, type: t } });
+                }
+              }}
+              className={`flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition ${
+                active ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300"
+              }`}
+            >
+              {t === "ai" ? (
+                <span className="flex items-center justify-center gap-1">
+                  <Sparkles size={13} /> AI
+                </span>
+              ) : (
+                t
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {bg.type === "gradient" && (
+      {effView === "ai" && (
+        <AiBackgroundPanel state={state} update={update} bg={bg} onScreen={onScreen} />
+      )}
+
+      {effView === "gradient" && (
         <div>
           <p className="label">Gradient</p>
           <div className="grid grid-cols-4 gap-2.5">
             {GRADIENTS.map((g) => (
               <button
                 key={g.id}
-                onClick={() => onScreen({ background: { ...bg, gradient: g.id } })}
+                onClick={() => onScreen({ background: { ...bg, gradient: g.id, aiGradient: null } })}
                 title={g.name}
                 className={`h-12 rounded-xl ring-2 transition ${
-                  bg.gradient === g.id ? "ring-white" : "ring-transparent hover:ring-white/30"
+                  bg.gradient === g.id && !bg.aiGradient ? "ring-white" : "ring-transparent hover:ring-white/30"
                 }`}
                 style={{ background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})` }}
               />
@@ -500,7 +526,7 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
         </div>
       )}
 
-      {bg.type === "solid" && (
+      {effView === "solid" && (
         <div>
           <p className="label">Color</p>
           <div className="grid grid-cols-5 gap-2.5">
@@ -527,7 +553,7 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
         </div>
       )}
 
-      {bg.type === "image" && (
+      {effView === "image" && (
         <div className="space-y-4">
           <button onClick={() => fileRef.current?.click()} className="btn-soft w-full justify-center">
             <Upload size={15} /> Upload image
@@ -641,6 +667,218 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
             </button>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+const REPO_NOTICES = {
+  "github-bad-url": "That doesn't look like a GitHub repo URL — generating from your prompt.",
+  "github-not-found": "Couldn't find that repo — generating from your prompt.",
+  "github-rate-limit": "GitHub rate limit hit (60/hr) — generating from your prompt.",
+  "github-error": "Couldn't read that repo — generating from your prompt.",
+};
+
+function AiBackgroundPanel({ state, update, bg, onScreen }) {
+  const provider = aiProvider();
+  const canImage = !!imageProvider();
+  const [url, setUrl] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [model, setModel] = useState(AI_MODELS[0].id);
+  const [loading, setLoading] = useState(false);
+  const [concepts, setConcepts] = useState([]);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [genId, setGenId] = useState(null);
+  const [imgErr, setImgErr] = useState("");
+
+  const canSuggest = !!provider && (url.trim() || prompt.trim()) && !loading;
+  const activeCss = bg.aiGradient?.css;
+
+  async function onSuggest() {
+    if (!canSuggest) return;
+    setLoading(true);
+    setError("");
+    setNotice("");
+    setImgErr("");
+    setConcepts([]);
+    let repoContext = null;
+    if (url.trim()) {
+      try {
+        repoContext = await fetchRepoContext(url.trim());
+      } catch (e) {
+        setNotice(REPO_NOTICES[e.message] || REPO_NOTICES["github-error"]);
+      }
+    }
+    try {
+      const out = await suggestBackgrounds({ repoContext, prompt: prompt.trim(), model });
+      setConcepts(out);
+    } catch (e) {
+      setError(
+        e.message === "no-llm-key"
+          ? "Add VITE_ANTHROPIC_API_KEY to .env.local and restart the dev server."
+          : "Couldn't reach the AI — please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function applyGradient(c) {
+    onScreen({
+      background: {
+        ...bg,
+        type: "gradient",
+        gradient: null,
+        image: null,
+        aiGradient: {
+          css: aiGradientCss(c),
+          name: c.name,
+          style: c.style,
+          angle: c.angle,
+          stops: c.stops,
+        },
+      },
+    });
+  }
+
+  async function applyImage(c) {
+    if (!canImage) return;
+    setGenId(c.name);
+    setImgErr("");
+    try {
+      const dataUrl = await generateImage({ concept: c, prompt: prompt.trim() });
+      onScreen({ background: { ...bg, type: "image", image: dataUrl } });
+    } catch {
+      setImgErr("Image generation failed — try again.");
+    } finally {
+      setGenId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {!provider && (
+        <div className="flex gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          <span>
+            Add <code className="rounded bg-black/30 px-1">VITE_ANTHROPIC_API_KEY</code> to{" "}
+            <code className="rounded bg-black/30 px-1">.env.local</code> and restart the dev
+            server to enable AI suggestions.
+          </span>
+        </div>
+      )}
+
+      <div>
+        <p className="label">GitHub repo URL (optional)</p>
+        <div className="relative">
+          <Github size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="github.com/owner/repo"
+            className="input pl-9"
+          />
+        </div>
+      </div>
+
+      <div>
+        <p className="label">Prompt (optional)</p>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="e.g. dark, premium, calm — the mood you want"
+          rows={2}
+          className="input resize-none"
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          className="input w-auto flex-1"
+          title="Model"
+        >
+          {AI_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
+        </select>
+        <button onClick={onSuggest} disabled={!canSuggest} className="btn-primary shrink-0">
+          {loading ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
+          {concepts.length ? "Suggest 2 more" : "Suggest"}
+        </button>
+      </div>
+
+      {notice && <p className="text-[11px] text-amber-300/90">{notice}</p>}
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      {imgErr && <p className="text-xs text-red-400">{imgErr}</p>}
+
+      {loading && (
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400">
+          <Loader2 size={16} className="animate-spin" /> Designing 2 on-brand backgrounds…
+        </div>
+      )}
+
+      {!loading &&
+        concepts.map((c) => {
+          const css = aiGradientCss(c);
+          const isActive = activeCss === css;
+          return (
+            <div
+              key={c.name}
+              className={`rounded-xl border p-3 transition ${
+                isActive ? "border-brand-500 bg-brand-500/5" : "border-white/10 bg-white/[0.02]"
+              }`}
+            >
+              <div className="flex gap-3">
+                <div
+                  className="h-16 w-12 shrink-0 rounded-lg ring-1 ring-white/10"
+                  style={{ background: css }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-white">{c.name}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-400">{c.rationale}</p>
+                </div>
+              </div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <button onClick={() => applyGradient(c)} className="btn-soft px-2.5 py-1 text-xs">
+                  {isActive ? <Check size={13} /> : null} Use as background
+                </button>
+                <button
+                  onClick={() => applyImage(c)}
+                  disabled={!canImage || !!genId}
+                  title={canImage ? "Generate a real image" : "Add an image-gen API key to enable"}
+                  className="btn-ghost px-2.5 py-1 text-xs disabled:opacity-40"
+                >
+                  {genId === c.name ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <ImageIcon size={13} />
+                  )}
+                  Generate image
+                </button>
+                <button
+                  onClick={() => update({ text: { ...state.text, color: c.suggestedTextColor } })}
+                  title="Apply suggested text color"
+                  className="ml-auto flex items-center gap-1 rounded-md border border-white/10 px-1.5 py-1 text-[11px] text-slate-300 hover:border-white/30"
+                >
+                  <span
+                    className="h-3 w-3 rounded-full ring-1 ring-white/30"
+                    style={{ background: c.suggestedTextColor }}
+                  />
+                  Text
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+      {concepts.length > 0 && !canImage && (
+        <p className="text-[11px] text-slate-500">
+          “Generate image” needs an image-gen key (VITE_OPENAI_API_KEY or
+          VITE_STABILITY_API_KEY). Gradients work with just the Anthropic key.
+        </p>
       )}
     </div>
   );
