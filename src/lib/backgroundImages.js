@@ -57,16 +57,24 @@ function twill(c1, c2) {
   );
 }
 
-// Royalty-free photo (Lorem Picsum / Unsplash) served from public/backgrounds.
-const photo = (n, name, category) => ({
-  id: `photo-${n}`,
-  name,
-  category,
-  image: `/backgrounds/id-${n}.jpg`,
-});
+// Royalty-free photos (Flickr Creative Commons via LoremFlickr), 16 per
+// category, served from public/backgrounds/{key}-{n}.jpg.
+const PHOTO_CATS = [
+  ["Nature", "nature"], ["Beach", "beach"], ["City", "city"],
+  ["Abstract", "abstract"], ["Minimal", "minimal"], ["Tech", "tech"], ["Food", "food"],
+];
+const PER_CAT = 16;
+const PHOTOS = PHOTO_CATS.flatMap(([category, key]) =>
+  Array.from({ length: PER_CAT }, (_, i) => ({
+    id: `photo-${key}-${i + 1}`,
+    name: `${category} ${i + 1}`,
+    category,
+    image: `/backgrounds/${key}-${i + 1}.jpg`,
+  }))
+);
 
 export const BG_CATEGORIES = [
-  "Gradient", "Pattern", "Nature", "Beach", "City", "Abstract", "Minimal",
+  "Gradient", "Pattern", "Nature", "Beach", "City", "Abstract", "Minimal", "Tech", "Food",
 ];
 
 export const BG_PRESETS = [
@@ -86,25 +94,6 @@ export const BG_PRESETS = [
   { id: "grid-ink", name: "Ink Grid", category: "Pattern", image: grid("#111827", "rgba(255,255,255,0.07)") },
   { id: "twill-indigo", name: "Indigo Twill", category: "Pattern", image: twill("#4338ca", "#7c3aed") },
   { id: "twill-sunset", name: "Sunset Twill", category: "Pattern", image: twill("#be123c", "#f97316") },
-  // --- Royalty-free photos ---
-  photo(10, "Pines", "Nature"),
-  photo(16, "Mountains", "Nature"),
-  photo(29, "Snow Peaks", "Nature"),
-  photo(82, "Blossom", "Nature"),
-  photo(110, "Golden Hour", "Nature"),
-  photo(190, "Forest Path", "Nature"),
-  photo(199, "Lake", "Nature"),
-  photo(13, "Shore", "Beach"),
-  photo(37, "Coast", "Beach"),
-  photo(244, "Pier", "Beach"),
-  photo(58, "Lighthouse", "City"),
-  photo(142, "Château", "City"),
-  photo(164, "Canal", "City"),
-  photo(257, "Venice", "City"),
-  photo(33, "Bokeh", "Abstract"),
-  photo(96, "Eclipse", "Abstract"),
-  photo(239, "Seedhead", "Abstract"),
-  photo(20, "Studio", "Minimal"),
-  photo(180, "Desk", "Minimal"),
-  photo(225, "Coffee", "Minimal"),
+  // --- Royalty-free photos (16 per category) ---
+  ...PHOTOS,
 ];

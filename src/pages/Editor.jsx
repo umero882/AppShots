@@ -367,7 +367,7 @@ function DevicePanel({ state, update }) {
 function BackgroundPanel({ state, update }) {
   const bg = state.background;
   const fileRef = useRef(null);
-  const [bgCat, setBgCat] = useState("All");
+  const [bgCat, setBgCat] = useState("Gradient");
   const suggested = suggestTextColor(bg);
   const lowContrast =
     bg.type !== "image" &&
