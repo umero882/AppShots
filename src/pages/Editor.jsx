@@ -240,8 +240,8 @@ export default function Editor() {
 
         {/* center stage */}
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-1 items-center justify-center overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8">
-            <div className="relative">
+          <div className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16">
+            <div className="relative m-auto">
               <div ref={canvasRef} className="relative">
                 <ScreenCanvas state={canvasState} screen={screen} width={300} />
                 {showWatermark && (
