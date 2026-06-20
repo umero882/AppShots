@@ -11,6 +11,7 @@ import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
 import { BG_PRESETS, BG_CATEGORIES } from "../lib/backgroundImages";
+import { searchImages, searchProvider } from "../lib/imageSearch";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
@@ -389,7 +390,7 @@ function BackgroundPanel({ state, update }) {
     e.target.value = "";
   }
 
-  // Comprehensive Creative-Commons image search via Openverse (no API key).
+  // Image search — Pexels when configured, else Openverse (see lib/imageSearch).
   async function runSearch(e) {
     e?.preventDefault();
     const term = q.trim();
@@ -404,23 +405,7 @@ function BackgroundPanel({ state, update }) {
     setSearchErr("");
     setResults([]);
     try {
-      const resp = await fetch(
-        `https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}` +
-          `&page_size=20&mature=false&category=photograph`
-      );
-      if (!resp.ok) throw new Error("bad status");
-      const data = await resp.json();
-      // Rank results whose title actually matches the query first (the CC corpus
-      // is noisy — this keeps "baby" photos ahead of things merely tagged "baby").
-      const terms = term.toLowerCase().split(/\s+/).filter(Boolean);
-      const score = (title) => {
-        const t = (title || "").toLowerCase();
-        return terms.reduce((s, w) => s + (t.includes(w) ? 1 : 0), 0);
-      };
-      const items = (data.results || [])
-        .filter((r) => r.thumbnail)
-        .map((r) => ({ id: r.id, url: r.thumbnail, title: r.title || term, s: score(r.title) }))
-        .sort((a, b) => b.s - a.s);
+      const items = await searchImages(term);
       setResults(items);
       if (items.length === 0) setSearchErr(`No results for “${term}”. Try another search.`);
     } catch {
@@ -437,17 +422,17 @@ function BackgroundPanel({ state, update }) {
     setSearchErr("");
   }
 
-  // Picking a web result: fetch it cross-origin and store as a data-URL so it
-  // persists and exports cleanly (LoremFlickr is CORS-enabled).
-  async function pickResult(url) {
-    setPicking(url);
+  // Picking a result: fetch the full image cross-origin and store as a data-URL
+  // so it persists and exports cleanly.
+  async function pickResult(item) {
+    setPicking(item.id);
     try {
-      const resp = await fetch(url, { mode: "cors" });
+      const resp = await fetch(item.full, { mode: "cors" });
       const blob = await resp.blob();
       const dataUrl = await readFileAsDataURL(blob);
       update({ background: { ...bg, type: "image", image: dataUrl } });
     } catch {
-      update({ background: { ...bg, type: "image", image: url } });
+      update({ background: { ...bg, type: "image", image: item.full } });
     } finally {
       setPicking(null);
     }
@@ -572,13 +557,13 @@ function BackgroundPanel({ state, update }) {
                   {results.map((r) => (
                     <button
                       key={r.id}
-                      onClick={() => pickResult(r.url)}
+                      onClick={() => pickResult(r)}
                       disabled={!!picking}
                       title={r.title}
                       className="relative h-16 overflow-hidden rounded-xl bg-ink-800 bg-cover bg-center ring-2 ring-transparent transition hover:ring-white/30 disabled:opacity-60"
-                      style={{ backgroundImage: `url("${r.url}")` }}
+                      style={{ backgroundImage: `url("${r.thumb}")` }}
                     >
-                      {picking === r.url && (
+                      {picking === r.id && (
                         <span className="absolute inset-0 grid place-items-center bg-black/50">
                           <Loader2 size={16} className="animate-spin text-white" />
                         </span>
@@ -588,7 +573,9 @@ function BackgroundPanel({ state, update }) {
                 </div>
               )}
               <p className="mt-2 text-[11px] text-slate-500">
-                Free images via Openverse (Creative Commons).
+                {searchProvider() === "Pexels"
+                  ? "Studio photos via Pexels."
+                  : "Free images via Openverse (Creative Commons)."}
               </p>
             </div>
           ) : (
