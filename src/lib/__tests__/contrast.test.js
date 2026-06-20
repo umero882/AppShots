@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { contrastRatio, passesAA, passesLargeAA } from "../contrast.js";
+import { contrastRatio, passesAA, passesLargeAA, legibilityHalo } from "../contrast.js";
 
 describe("contrastRatio", () => {
   it("returns 21 for black on white", () => {
@@ -33,5 +33,16 @@ describe("thresholds", () => {
     expect(ratio).toBeLessThan(4.5);
     expect(passesLargeAA("#ffffff", "#6366f1")).toBe(true);
     expect(passesAA("#ffffff", "#6366f1")).toBe(false);
+  });
+});
+
+describe("legibilityHalo", () => {
+  it("returns a dark halo for light text", () => {
+    expect(legibilityHalo("#ffffff")).toBe("0,0,0");
+    expect(legibilityHalo("#f3f4f6")).toBe("0,0,0");
+  });
+  it("returns a light halo for dark text", () => {
+    expect(legibilityHalo("#111827")).toBe("255,255,255");
+    expect(legibilityHalo("#000000")).toBe("255,255,255");
   });
 });

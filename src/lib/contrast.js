@@ -31,3 +31,15 @@ export function passesAA(fg, bg) {
 export function passesLargeAA(fg, bg) {
   return contrastRatio(fg, bg) >= 3;
 }
+
+/**
+ * RGB triplet (e.g. "0,0,0") for a halo/shadow that contrasts the given text
+ * color, so headline text stays legible on ANY background — including a
+ * background whose color matches the text (dark-on-dark / light-on-light).
+ * Light text → dark halo; dark text → light halo.
+ */
+export function legibilityHalo(textColor) {
+  return contrastRatio(textColor, "#000000") >= contrastRatio(textColor, "#ffffff")
+    ? "0,0,0"
+    : "255,255,255";
+}

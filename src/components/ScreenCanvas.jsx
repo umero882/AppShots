@@ -1,5 +1,6 @@
 import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
+import { legibilityHalo } from "../lib/contrast";
 
 function gradientCss(bg) {
   if (bg.type === "solid") return bg.solid;
@@ -39,6 +40,12 @@ export default function ScreenCanvas({ state, screen, width = 280, innerRef }) {
 
   const scaledFont = (state.text.size / device.canvas.w) * width;
 
+  // Keep headline/subheading legible on ANY background (incl. dark-on-dark or
+  // light-on-light) with an adaptive opposite-luminance halo.
+  const halo = legibilityHalo(state.text.color);
+  const haloR = Math.max(1, scaledFont * 0.07);
+  const textShadow = `0 0 ${haloR}px rgba(${halo},0.6), 0 0 ${haloR * 2}px rgba(${halo},0.45)`;
+
   const TextBlock = screen.heading ? (
     <div
       className="px-[8%] text-center"
@@ -47,6 +54,7 @@ export default function ScreenCanvas({ state, screen, width = 280, innerRef }) {
         color: state.text.color,
         fontWeight: state.text.weight,
         textAlign: state.text.align,
+        textShadow,
       }}
     >
       <div style={{ fontSize: scaledFont, lineHeight: 1.1, letterSpacing: "-0.02em" }}>
