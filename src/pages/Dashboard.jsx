@@ -6,6 +6,8 @@ import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
 import { defaultProjectState } from "../lib/templates";
+import TemplatePicker from "../components/TemplatePicker";
+import { templateToProjectState } from "../lib/galleryTemplates";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -13,6 +15,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -27,12 +30,13 @@ export default function Dashboard() {
     };
   }, [user.id]);
 
-  async function createProject() {
+  async function createFrom(template) {
+    setPickerOpen(false);
     setCreating(true);
     try {
       const project = await backend.createProject(user.id, {
-        name: "Untitled project",
-        state: defaultProjectState(),
+        name: template ? template.name : "Untitled project",
+        state: template ? templateToProjectState(template) : defaultProjectState(),
       });
       navigate(`/editor/${project.id}`);
     } finally {
@@ -73,7 +77,7 @@ export default function Dashboard() {
               </span>
             </p>
           </div>
-          <button onClick={createProject} disabled={creating} className="btn-primary">
+          <button onClick={() => setPickerOpen(true)} disabled={creating} className="btn-primary">
             <Plus size={18} /> {creating ? "Creating…" : "New project"}
           </button>
         </div>
@@ -81,7 +85,7 @@ export default function Dashboard() {
         {loading ? (
           <div className="mt-16 text-center text-slate-400">Loading projects…</div>
         ) : projects.length === 0 ? (
-          <EmptyState onCreate={createProject} creating={creating} />
+          <EmptyState onCreate={() => setPickerOpen(true)} creating={creating} />
         ) : (
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {projects.map((p) => (
@@ -118,6 +122,11 @@ export default function Dashboard() {
             ))}
           </div>
         )}
+        <TemplatePicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onPick={createFrom}
+        />
       </main>
     </div>
   );
