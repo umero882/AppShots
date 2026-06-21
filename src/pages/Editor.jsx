@@ -517,6 +517,8 @@ export default function Editor() {
                 onDelete={deleteElement}
                 onChange={changeElement}
                 onDuplicate={duplicateSelectedElement}
+                twemoji={!!state.twemoji}
+                onToggleTwemoji={() => update({ twemoji: !state.twemoji })}
               />
             )}
           </div>
@@ -1423,7 +1425,7 @@ function LayerBtn({ label, onClick, disabled, children }) {
   );
 }
 
-function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onDelete, onChange, onDuplicate }) {
+function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onDelete, onChange, onDuplicate, twemoji = false, onToggleTwemoji }) {
   const CATS = ["Badges", "Shapes", "Arrows", "Emoji", "Icons", "Photos"];
   const [cat, setCat] = useState("Badges");
 
@@ -1637,6 +1639,17 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
 
       {cat === "Emoji" && (
         <div className="space-y-2">
+          <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+            <span className="text-[11px] text-slate-300">
+              Cross-platform emoji <span className="text-slate-500">(Twemoji, needs internet)</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={twemoji}
+              onChange={onToggleTwemoji}
+              className="h-4 w-4 accent-brand-500"
+            />
+          </label>
           <div className="relative">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input

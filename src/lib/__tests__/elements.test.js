@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   clamp01, fracDelta, angleFromCenter, distance, scaleFromResize, snapToCenter,
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
-  reorderElements, duplicateElement,
+  reorderElements, duplicateElement, twemojiCodepoints, twemojiUrl,
   BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
 } from "../elements.js";
 
@@ -110,6 +110,22 @@ describe("reorderElements", () => {
   });
   it("unknown id is a no-op", () => {
     expect(ids(reorderElements(list, "zz", "front"))).toBe("abcd");
+  });
+});
+
+describe("twemojiCodepoints", () => {
+  it("maps a simple emoji to its codepoint", () => {
+    expect(twemojiCodepoints("🚀")).toBe("1f680");
+    expect(twemojiCodepoints("⭐")).toBe("2b50");
+  });
+  it("drops the FE0F variation selector for non-ZWJ emoji", () => {
+    expect(twemojiCodepoints("❤️")).toBe("2764");
+  });
+  it("keeps the full ZWJ sequence", () => {
+    expect(twemojiCodepoints("👨‍👩‍👧")).toBe("1f468-200d-1f469-200d-1f467");
+  });
+  it("twemojiUrl builds a jsdelivr svg path", () => {
+    expect(twemojiUrl("🚀")).toMatch(/jsdelivr\.net.*\/1f680\.svg$/);
   });
 });
 

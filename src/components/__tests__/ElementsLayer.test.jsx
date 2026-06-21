@@ -26,8 +26,14 @@ describe("ElementsLayer rendering", () => {
     expect(html.match(/data:image\/svg\+xml/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("renders an emoji glyph", () => {
+  it("renders an emoji glyph by default", () => {
     expect(render([makeEmojiElement("🚀")])).toContain("🚀");
+  });
+
+  it("renders emoji as a Twemoji image when enabled", () => {
+    const html = render([makeEmojiElement("🚀")], { twemoji: true });
+    expect(html).toContain("jsdelivr");
+    expect(html).toContain("1f680.svg");
   });
 
   it("renders an icon as an inline svg", () => {

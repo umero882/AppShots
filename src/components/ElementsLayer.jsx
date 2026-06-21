@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { X, RotateCw, Maximize2 } from "lucide-react";
-import { elementSvg, fracDelta, clamp01, angleFromCenter, distance, scaleFromResize, snapToCenter } from "../lib/elements";
+import { elementSvg, fracDelta, clamp01, angleFromCenter, distance, scaleFromResize, snapToCenter, twemojiUrl } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
 
 /**
@@ -20,6 +20,7 @@ export default function ElementsLayer({
   onSelect,
   onChange,
   onDelete,
+  twemoji = false,
 }) {
   const rootRef = useRef(null);
   const drag = useRef(null);
@@ -123,7 +124,7 @@ export default function ElementsLayer({
               opacity: el.opacity ?? 1,
             }}
           >
-            <ElementContent el={el} elW={elW} width={width} />
+            <ElementContent el={el} elW={elW} width={width} twemoji={twemoji} />
 
             {selected && (
               <>
@@ -164,11 +165,22 @@ export default function ElementsLayer({
   );
 }
 
-function ElementContent({ el, elW, width }) {
+function ElementContent({ el, elW, width, twemoji }) {
   if (el.kind === "shape" || el.kind === "arrow") {
     return <img src={elementSvg(el)} alt="" className="block w-full select-none" draggable={false} />;
   }
   if (el.kind === "emoji") {
+    if (twemoji) {
+      return (
+        <img
+          src={twemojiUrl(el.emoji)}
+          alt={el.emoji}
+          crossOrigin="anonymous"
+          draggable={false}
+          className="block w-full select-none"
+        />
+      );
+    }
     return (
       <div style={{ fontSize: elW, lineHeight: 1 }} className="select-none leading-none">
         {el.emoji}

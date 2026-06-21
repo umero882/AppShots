@@ -263,6 +263,23 @@ export function duplicateElement(el, offset = 0.04) {
   return { ...el, id: freshId(), x: clamp01((el.x ?? 0.5) + offset), y: clamp01((el.y ?? 0.4) + offset) };
 }
 
+/* ----------------------------- twemoji ----------------------------- */
+// Optional cross-platform emoji via the Twemoji CDN (jdecked fork). Off by
+// default; the project sets `twemoji: true` to opt in.
+
+/** Codepoint sequence for a Twemoji filename (matches twemoji's FE0F/ZWJ rule). */
+export function twemojiCodepoints(str) {
+  const hasZwj = str.includes("‍"); // zero-width joiner
+  const src = hasZwj ? str : str.replace(/️/g, ""); // variation selector
+  const cps = [];
+  for (const ch of src) cps.push(ch.codePointAt(0).toString(16));
+  return cps.join("-");
+}
+
+export function twemojiUrl(emoji) {
+  return `https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/svg/${twemojiCodepoints(emoji)}.svg`;
+}
+
 /** Return the SVG data-URI for shape/arrow elements (used by the renderer). */
 export function elementSvg(el) {
   if (el.kind === "shape") return shapeSvg(el.variant, el.color);
