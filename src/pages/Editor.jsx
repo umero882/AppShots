@@ -30,7 +30,10 @@ import { elementIcon } from "../lib/elementIcons";
 import {
   GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
 } from "../lib/templates";
-import { exportNode, copyNodeToClipboard, readFileAsDataURL } from "../lib/export";
+import {
+  exportNode, copyNodeToClipboard, readFileAsDataURL, renderNode, dataUrlToBytes, triggerDownload,
+} from "../lib/export";
+import { createZip } from "../lib/zip";
 import { pushPast, undoStacks, redoStacks } from "../lib/history";
 import { moveItem } from "../lib/reorder";
 
@@ -368,17 +371,22 @@ export default function Editor() {
     setExporting(true);
     setSelectedEl(null);
     const device = getDevice(state.deviceId);
+    const ext = format === "jpeg" ? "jpg" : "png";
     try {
+      const files = [];
       for (let i = 0; i < state.screens.length; i++) {
         setActiveScreen(i);
         // wait a tick for the canvas to re-render the active screen
         await new Promise((r) => setTimeout(r, 350));
         if (canvasRef.current) {
-          await exportNode(canvasRef.current, device.canvas.w, {
-            filename: `${slug(name)}-${i + 1}`,
-            format,
-          });
+          const dataUrl = await renderNode(canvasRef.current, device.canvas.w, { format });
+          files.push({ name: `${slug(name)}-${i + 1}.${ext}`, data: await dataUrlToBytes(dataUrl) });
         }
+      }
+      if (files.length) {
+        const url = URL.createObjectURL(createZip(files));
+        triggerDownload(url, `${slug(name)}.zip`);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
       }
     } finally {
       setExporting(false);
@@ -451,9 +459,9 @@ export default function Editor() {
             {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
             {copied ? "Copied" : "Copy"}
           </button>
-          <button onClick={exportAll} disabled={exporting} className="btn-ghost hidden sm:inline-flex">
+          <button onClick={exportAll} disabled={exporting} className="btn-ghost hidden sm:inline-flex" title="Download all screens as a .zip">
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            Export all
+            Export .zip
           </button>
           <button onClick={exportOne} disabled={exporting} className="btn-primary">
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}

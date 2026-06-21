@@ -45,6 +45,12 @@ export function triggerDownload(dataUrl, filename) {
   a.remove();
 }
 
+/** Convert a data-URL (or blob URL) to raw bytes for zipping. */
+export async function dataUrlToBytes(dataUrl) {
+  const blob = await (await fetch(dataUrl)).blob();
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 export function readFileAsDataURL(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

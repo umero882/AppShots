@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Trash2, Image as ImageIcon, Crown } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Crown, Copy } from "lucide-react";
 import Navbar from "../components/Navbar";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
@@ -50,6 +50,16 @@ export default function Dashboard() {
     if (!confirm("Delete this project? This can't be undone.")) return;
     await backend.deleteProject(id);
     setProjects((p) => p.filter((x) => x.id !== id));
+  }
+
+  async function duplicate(e, p) {
+    e.preventDefault();
+    e.stopPropagation();
+    const copy = await backend.createProject(user.id, {
+      name: `${p.name} copy`,
+      state: JSON.parse(JSON.stringify(p.state)),
+    });
+    setProjects((list) => [copy, ...list]);
   }
 
   return (
@@ -110,13 +120,24 @@ export default function Dashboard() {
                       {new Date(p.updatedAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <button
-                    onClick={(e) => remove(e, p.id)}
-                    className="rounded-lg p-2 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                    aria-label="Delete project"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      onClick={(e) => duplicate(e, p)}
+                      className="rounded-lg p-2 text-slate-500 transition hover:bg-white/5 hover:text-white"
+                      aria-label="Duplicate project"
+                      title="Duplicate"
+                    >
+                      <Copy size={16} />
+                    </button>
+                    <button
+                      onClick={(e) => remove(e, p.id)}
+                      className="rounded-lg p-2 text-slate-500 transition hover:bg-red-500/10 hover:text-red-400"
+                      aria-label="Delete project"
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               </Link>
             ))}
