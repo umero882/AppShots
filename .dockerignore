@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+*.log
+.vscode
+.idea
+docs
+coverage
+**/__tests__
+**/*.test.js
+**/*.test.jsx
+.firecrawl

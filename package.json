@@ -8,8 +8,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "node server/index.js",
+    "serve": "npm run build && node server/index.js",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "framer-motion": "^10.16.4",
