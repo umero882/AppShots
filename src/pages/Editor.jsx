@@ -11,10 +11,9 @@ import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
 import { BG_PRESETS, BG_CATEGORIES } from "../lib/backgroundImages";
-import { searchImages, searchProvider } from "../lib/imageSearch";
+import { searchImages } from "../lib/imageSearch";
 import {
-  aiProvider, imageProvider, fetchRepoContext, suggestBackgrounds,
-  generateImage, aiGradientCss, AI_MODELS,
+  getCapabilities, suggestBackgrounds, generateImage, aiGradientCss, AI_MODELS,
 } from "../lib/aiBackground";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
@@ -396,9 +395,15 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
+  const [provider, setProvider] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchErr, setSearchErr] = useState("");
   const [picking, setPicking] = useState(null);
+  const [caps, setCaps] = useState(null);
+
+  useEffect(() => {
+    getCapabilities().then(setCaps);
+  }, []);
 
   async function onUploadBg(e) {
     const file = e.target.files?.[0];
@@ -423,8 +428,9 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
     setSearchErr("");
     setResults([]);
     try {
-      const items = await searchImages(term);
+      const { results: items, provider: prov } = await searchImages(term);
       setResults(items);
+      setProvider(prov);
       if (items.length === 0) setSearchErr(`No results for “${term}”. Try another search.`);
     } catch {
       setSearchErr("Search is unavailable right now — please try again.");
@@ -504,7 +510,7 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
       </div>
 
       {effView === "ai" && (
-        <AiBackgroundPanel state={state} update={update} bg={bg} onScreen={onScreen} />
+        <AiBackgroundPanel state={state} update={update} bg={bg} onScreen={onScreen} caps={caps} />
       )}
 
       {effView === "gradient" && (
@@ -610,7 +616,7 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
                 </div>
               )}
               <p className="mt-2 text-[11px] text-slate-500">
-                {searchProvider() === "Pexels" ? (
+                {provider === "Pexels" ? (
                   <>
                     Photos provided by{" "}
                     <a
@@ -676,15 +682,15 @@ const REPO_NOTICES = {
   "github-bad-url": "That doesn't look like a GitHub repo URL — generating from your prompt.",
   "github-not-found": "Couldn't find that repo — generating from your prompt.",
   "github-private":
-    "That repo is private (or doesn't exist). Add VITE_GITHUB_TOKEN to .env.local to read private repos — generating from your prompt for now.",
+    "That repo is private (or doesn't exist). Add GITHUB_TOKEN to .env.local to read private repos — generating from your prompt for now.",
   "github-bad-token": "Your GitHub token was rejected — generating from your prompt.",
   "github-rate-limit": "GitHub rate limit hit — generating from your prompt.",
   "github-error": "Couldn't read that repo — generating from your prompt.",
 };
 
-function AiBackgroundPanel({ state, update, bg, onScreen }) {
-  const provider = aiProvider();
-  const canImage = !!imageProvider();
+function AiBackgroundPanel({ state, update, bg, onScreen, caps }) {
+  const hasAi = caps?.ai;
+  const canImage = !!caps?.image;
   const [url, setUrl] = useState("");
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState(AI_MODELS[0].id);
@@ -695,7 +701,7 @@ function AiBackgroundPanel({ state, update, bg, onScreen }) {
   const [genId, setGenId] = useState(null);
   const [imgErr, setImgErr] = useState("");
 
-  const canSuggest = !!provider && (url.trim() || prompt.trim()) && !loading;
+  const canSuggest = !!hasAi && (url.trim() || prompt.trim()) && !loading;
   const activeCss = bg.aiGradient?.css;
 
   async function onSuggest() {
@@ -705,21 +711,18 @@ function AiBackgroundPanel({ state, update, bg, onScreen }) {
     setNotice("");
     setImgErr("");
     setConcepts([]);
-    let repoContext = null;
-    if (url.trim()) {
-      try {
-        repoContext = await fetchRepoContext(url.trim());
-      } catch (e) {
-        setNotice(REPO_NOTICES[e.message] || REPO_NOTICES["github-error"]);
-      }
-    }
     try {
-      const out = await suggestBackgrounds({ repoContext, prompt: prompt.trim(), model });
+      const { concepts: out, repoNotice } = await suggestBackgrounds({
+        url: url.trim(),
+        prompt: prompt.trim(),
+        model,
+      });
+      if (repoNotice) setNotice(REPO_NOTICES[repoNotice] || REPO_NOTICES["github-error"]);
       setConcepts(out);
     } catch (e) {
       setError(
         e.message === "no-llm-key"
-          ? "Add VITE_ANTHROPIC_API_KEY to .env.local and restart the dev server."
+          ? "Set ANTHROPIC_API_KEY in .env.local and restart the dev server."
           : "Couldn't reach the AI — please try again."
       );
     } finally {
@@ -761,11 +764,11 @@ function AiBackgroundPanel({ state, update, bg, onScreen }) {
 
   return (
     <div className="space-y-3">
-      {!provider && (
+      {caps && !hasAi && (
         <div className="flex gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
           <AlertCircle size={15} className="mt-0.5 shrink-0" />
           <span>
-            Add <code className="rounded bg-black/30 px-1">VITE_ANTHROPIC_API_KEY</code> to{" "}
+            Add <code className="rounded bg-black/30 px-1">ANTHROPIC_API_KEY</code> to{" "}
             <code className="rounded bg-black/30 px-1">.env.local</code> and restart the dev
             server to enable AI suggestions.
           </span>
@@ -784,7 +787,7 @@ function AiBackgroundPanel({ state, update, bg, onScreen }) {
           />
         </div>
         <p className="mt-1 text-[10px] text-slate-500">
-          Private repo? Add <code className="text-slate-400">VITE_GITHUB_TOKEN</code> to .env.local.
+          Private repo? Add <code className="text-slate-400">GITHUB_TOKEN</code> to .env.local.
         </p>
       </div>
 
@@ -882,8 +885,8 @@ function AiBackgroundPanel({ state, update, bg, onScreen }) {
 
       {concepts.length > 0 && !canImage && (
         <p className="text-[11px] text-slate-500">
-          “Generate image” needs an image-gen key (VITE_OPENAI_API_KEY or
-          VITE_STABILITY_API_KEY). Gradients work with just the Anthropic key.
+          “Generate image” needs an image-gen key (OPENAI_API_KEY or
+          STABILITY_API_KEY) in .env.local. Gradients work with just the Anthropic key.
         </p>
       )}
     </div>
