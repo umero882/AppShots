@@ -2,6 +2,8 @@
  * Device frame definitions. Each frame is drawn purely with CSS/SVG (no image
  * assets) so it scales crisply and exports cleanly. Sizes are the canonical
  * store screenshot dimensions; the editor scales them down to fit.
+ *
+ * `buttons: true` draws side buttons (phones); tablets omit them.
  */
 
 export const STORES = {
@@ -18,6 +20,17 @@ export const DEVICES = [
     screen: { radius: 60, inset: 16 },
     bezel: { radius: 76, color: "#0b0b0e" },
     notch: "dynamic-island",
+    buttons: true,
+  },
+  {
+    id: "iphone-61",
+    store: "ios",
+    name: 'iPhone 6.1"',
+    canvas: { w: 1179, h: 2556 },
+    screen: { radius: 55, inset: 15 },
+    bezel: { radius: 70, color: "#0b0b0e" },
+    notch: "dynamic-island",
+    buttons: true,
   },
   {
     id: "iphone-65",
@@ -27,15 +40,37 @@ export const DEVICES = [
     screen: { radius: 52, inset: 14 },
     bezel: { radius: 66, color: "#0b0b0e" },
     notch: "notch",
+    buttons: true,
+  },
+  {
+    id: "iphone-55",
+    store: "ios",
+    name: 'iPhone 5.5"',
+    canvas: { w: 1242, h: 2208 },
+    screen: { radius: 8, inset: 10 },
+    bezel: { radius: 26, color: "#0b0b0e" },
+    notch: "none",
+    buttons: true,
   },
   {
     id: "ipad-13",
     store: "ios",
-    name: 'iPad 13"',
+    name: 'iPad 12.9"',
     canvas: { w: 2048, h: 2732 },
     screen: { radius: 24, inset: 28 },
     bezel: { radius: 40, color: "#0b0b0e" },
     notch: "none",
+    buttons: false,
+  },
+  {
+    id: "ipad-11",
+    store: "ios",
+    name: 'iPad 11"',
+    canvas: { w: 1668, h: 2388 },
+    screen: { radius: 22, inset: 24 },
+    bezel: { radius: 36, color: "#0b0b0e" },
+    notch: "none",
+    buttons: false,
   },
   {
     id: "pixel-8",
@@ -45,6 +80,17 @@ export const DEVICES = [
     screen: { radius: 44, inset: 12 },
     bezel: { radius: 54, color: "#0b0b0e" },
     notch: "punch-hole",
+    buttons: true,
+  },
+  {
+    id: "galaxy-s24",
+    store: "android",
+    name: "Galaxy S24",
+    canvas: { w: 1080, h: 2340 },
+    screen: { radius: 40, inset: 11 },
+    bezel: { radius: 50, color: "#0b0b0e" },
+    notch: "punch-hole",
+    buttons: true,
   },
   {
     id: "android-phone",
@@ -54,6 +100,17 @@ export const DEVICES = [
     screen: { radius: 36, inset: 12 },
     bezel: { radius: 46, color: "#0b0b0e" },
     notch: "punch-hole",
+    buttons: true,
+  },
+  {
+    id: "android-tablet",
+    store: "android",
+    name: "Android Tablet",
+    canvas: { w: 1600, h: 2560 },
+    screen: { radius: 22, inset: 22 },
+    bezel: { radius: 34, color: "#0b0b0e" },
+    notch: "none",
+    buttons: false,
   },
 ];
 

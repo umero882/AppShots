@@ -173,11 +173,30 @@ export default function ScreenCanvas({
   );
 }
 
+function SideButtons({ w, h }) {
+  // power (right), volume up/down (left) — small rounded rects on the bezel edge.
+  const bw = Math.max(2, w * 0.012);
+  const btn = (style) => (
+    <div
+      className="absolute"
+      style={{ width: bw, background: "#26262b", borderRadius: bw, ...style }}
+    />
+  );
+  return (
+    <>
+      {btn({ right: -bw * 0.6, top: h * 0.22, height: h * 0.09 })}
+      {btn({ left: -bw * 0.6, top: h * 0.18, height: h * 0.06 })}
+      {btn({ left: -bw * 0.6, top: h * 0.26, height: h * 0.1 })}
+    </>
+  );
+}
+
 function DeviceFrame({ device, image, scale, frameWidth }) {
   const w = frameWidth * scale;
   const aspect = device.canvas.h / device.canvas.w;
   const h = w * aspect;
   const bezel = Math.max(4, w * 0.035);
+  const radius = w * 0.13;
 
   return (
     <div
@@ -186,14 +205,18 @@ function DeviceFrame({ device, image, scale, frameWidth }) {
         width: w,
         height: h,
         background: device.bezel.color,
-        borderRadius: w * 0.13,
+        borderRadius: radius,
         padding: bezel,
         boxShadow: "0 25px 60px -15px rgba(0,0,0,0.55)",
+        // subtle metallic edge highlight on the bezel
+        outline: `${Math.max(1, w * 0.004)}px solid rgba(255,255,255,0.10)`,
+        outlineOffset: -Math.max(1, w * 0.004),
       }}
     >
+      {device.buttons && <SideButtons w={w} h={h} />}
       <div
         className="relative w-full h-full overflow-hidden bg-white"
-        style={{ borderRadius: w * 0.1 }}
+        style={{ borderRadius: radius - bezel * 0.6 }}
       >
         <Notch type={device.notch} />
         {image ? (
