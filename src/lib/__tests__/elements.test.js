@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  clamp01, fracDelta, angleFromCenter, distance, scaleFromResize,
+  clamp01, fracDelta, angleFromCenter, distance, scaleFromResize, snapToCenter,
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
   reorderElements, duplicateElement,
   BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
@@ -30,6 +30,13 @@ describe("geometry", () => {
     expect(scaleFromResize(1, 100, 0)).toBeGreaterThanOrEqual(0.15); // clamped low
     expect(scaleFromResize(1, 100, 100000)).toBeLessThanOrEqual(6); // clamped high
     expect(scaleFromResize(2, 0, 50)).toBe(2); // no start distance
+  });
+  it("snapToCenter snaps within threshold and flags the guides", () => {
+    expect(snapToCenter(0.505, 0.3)).toMatchObject({ x: 0.5, snapX: true, snapY: false });
+    expect(snapToCenter(0.3, 0.49)).toMatchObject({ y: 0.5, snapX: false, snapY: true });
+    expect(snapToCenter(0.5, 0.5)).toMatchObject({ x: 0.5, y: 0.5, snapX: true, snapY: true });
+    const far = snapToCenter(0.2, 0.8);
+    expect(far).toMatchObject({ x: 0.2, y: 0.8, snapX: false, snapY: false });
   });
 });
 

@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { X, RotateCw, Maximize2 } from "lucide-react";
-import { elementSvg, fracDelta, clamp01, angleFromCenter, distance, scaleFromResize } from "../lib/elements";
+import { elementSvg, fracDelta, clamp01, angleFromCenter, distance, scaleFromResize, snapToCenter } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
 
 /**
@@ -23,6 +23,7 @@ export default function ElementsLayer({
 }) {
   const rootRef = useRef(null);
   const drag = useRef(null);
+  const [guides, setGuides] = useState({ x: false, y: false });
 
   function canvasRect() {
     return rootRef.current?.getBoundingClientRect();
@@ -74,7 +75,9 @@ export default function ElementsLayer({
     if (!d) return;
     if (d.mode === "move") {
       const { dx, dy } = fracDelta(e.clientX - d.startX, e.clientY - d.startY, d.rect.width, d.rect.height);
-      onChange?.(d.id, { x: clamp01(d.ox + dx), y: clamp01(d.oy + dy) });
+      const snap = snapToCenter(clamp01(d.ox + dx), clamp01(d.oy + dy));
+      onChange?.(d.id, { x: snap.x, y: snap.y });
+      setGuides({ x: snap.snapX, y: snap.snapY });
     } else if (d.mode === "resize") {
       const dist = distance(d.cx, d.cy, e.clientX, e.clientY);
       onChange?.(d.id, { scale: scaleFromResize(d.baseScale, d.startDist, dist) });
@@ -86,6 +89,7 @@ export default function ElementsLayer({
 
   function endDrag() {
     drag.current = null;
+    setGuides({ x: false, y: false });
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", endDrag);
   }
@@ -97,6 +101,12 @@ export default function ElementsLayer({
 
   return (
     <div ref={rootRef} className="pointer-events-none absolute inset-0 z-30">
+      {editable && guides.x && (
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 z-40 w-px -translate-x-1/2 bg-brand-400/80" />
+      )}
+      {editable && guides.y && (
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-40 h-px -translate-y-1/2 bg-brand-400/80" />
+      )}
       {elements.map((el) => {
         const elW = width * el.baseWidth * el.scale;
         const selected = editable && selectedId === el.id;

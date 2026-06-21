@@ -45,6 +45,16 @@ export function scaleFromResize(baseScale, startDist, currentDist) {
   return Math.max(0.15, Math.min(6, next));
 }
 
+/**
+ * Snap a dragged position to the canvas center when it's within `threshold`.
+ * @returns { x, y, snapX, snapY } — snapX/snapY drive the alignment guides.
+ */
+export function snapToCenter(x, y, threshold = 0.02) {
+  const snapX = Math.abs(x - 0.5) <= threshold;
+  const snapY = Math.abs(y - 0.5) <= threshold;
+  return { x: snapX ? 0.5 : x, y: snapY ? 0.5 : y, snapX, snapY };
+}
+
 /* ----------------------------- SVG helpers ----------------------------- */
 
 const svgUri = (svg) =>
