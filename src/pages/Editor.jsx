@@ -4,6 +4,7 @@ import {
   ArrowLeft, Plus, Download, Trash2, Copy, Check, Loader2,
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
+  BringToFront, SendToBack, ArrowUp, ArrowDown,
 } from "lucide-react";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
@@ -21,7 +22,7 @@ import { backend } from "../lib/backend";
 import { DEVICES, getDevice } from "../lib/devices";
 import {
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
-  BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
+  reorderElements, BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
 } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
 import {
@@ -140,6 +141,20 @@ export default function Editor() {
       ),
     }));
     setSelectedEl((cur) => (cur === id ? null : cur));
+  }
+
+  function selectElement(id) {
+    setSelectedEl(id);
+    if (id) setTab("elements"); // surface the element's layer/delete controls
+  }
+
+  function reorderElement(id, op) {
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, i) =>
+        i === activeScreen ? { ...s, elements: reorderElements(s.elements || [], id, op) } : s
+      ),
+    }));
   }
 
   async function onUpload(e) {
@@ -296,7 +311,15 @@ export default function Editor() {
               />
             )}
             {tab === "layout" && <LayoutPanel state={state} update={update} />}
-            {tab === "elements" && <ElementsPanel onAdd={addElement} />}
+            {tab === "elements" && (
+              <ElementsPanel
+                onAdd={addElement}
+                elements={screen.elements || []}
+                selectedId={selectedEl}
+                onReorder={reorderElement}
+                onDelete={deleteElement}
+              />
+            )}
           </div>
         </aside>
 
@@ -311,7 +334,7 @@ export default function Editor() {
                   width={300}
                   editableElements={!exporting}
                   selectedElement={selectedEl}
-                  onSelectElement={setSelectedEl}
+                  onSelectElement={selectElement}
                   onChangeElement={changeElement}
                   onDeleteElement={deleteElement}
                 />
@@ -1119,9 +1142,27 @@ function LayoutPanel({ state, update }) {
   );
 }
 
-function ElementsPanel({ onAdd }) {
+function LayerBtn({ label, onClick, disabled, children }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      className="grid place-items-center rounded-lg border border-white/10 bg-white/[0.03] py-2 text-slate-200 transition hover:border-white/25 disabled:opacity-30"
+    >
+      {children}
+    </button>
+  );
+}
+
+function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onDelete }) {
   const CATS = ["Badges", "Shapes", "Arrows", "Emoji", "Icons", "Photos"];
   const [cat, setCat] = useState("Badges");
+
+  const selIndex = elements.findIndex((e) => e.id === selectedId);
+  const selected = selIndex >= 0 ? elements[selIndex] : null;
+  const isBottom = selIndex <= 0;
+  const isTop = selIndex === elements.length - 1;
   const [emojiQ, setEmojiQ] = useState("");
 
   // photo browser state
@@ -1169,8 +1210,52 @@ function ElementsPanel({ onAdd }) {
     ? EMOJI.filter((x) => x.k.includes(emojiQ.trim().toLowerCase()))
     : EMOJI;
 
+  const elLabel = (el) =>
+    el.kind === "badge"
+      ? el.text
+      : el.kind === "emoji"
+      ? el.emoji
+      : el.kind === "icon"
+      ? el.icon
+      : el.kind === "image"
+      ? "Photo"
+      : el.variant || el.kind;
+
   return (
     <div className="space-y-4">
+      {selected && (
+        <div className="rounded-xl border border-brand-500/40 bg-brand-500/5 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="truncate text-xs font-semibold text-white">
+              Selected: <span className="text-brand-200">{elLabel(selected)}</span>
+            </p>
+            <span className="text-[10px] text-slate-500">
+              layer {selIndex + 1}/{elements.length}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            <LayerBtn label="To back" onClick={() => onReorder(selected.id, "back")} disabled={isBottom}>
+              <SendToBack size={15} />
+            </LayerBtn>
+            <LayerBtn label="Backward" onClick={() => onReorder(selected.id, "backward")} disabled={isBottom}>
+              <ArrowDown size={15} />
+            </LayerBtn>
+            <LayerBtn label="Forward" onClick={() => onReorder(selected.id, "forward")} disabled={isTop}>
+              <ArrowUp size={15} />
+            </LayerBtn>
+            <LayerBtn label="To front" onClick={() => onReorder(selected.id, "front")} disabled={isTop}>
+              <BringToFront size={15} />
+            </LayerBtn>
+          </div>
+          <button
+            onClick={() => onDelete(selected.id)}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-500/30 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          >
+            <Trash2 size={13} /> Delete element
+          </button>
+        </div>
+      )}
+
       <p className="text-xs text-slate-400">
         Click to add to the active screen, then drag · resize · rotate on the canvas.
       </p>

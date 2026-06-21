@@ -60,6 +60,14 @@ describe("ElementsLayer rendering", () => {
     expect(html).not.toContain("Rotate");
   });
 
+  it("renders elements in array order (later = painted on top)", () => {
+    const back = { ...makeEmojiElement("🅱️"), id: "back" };
+    const front = { ...makeEmojiElement("🅵"), id: "front" };
+    const html = render([back, front]);
+    // the later array item must appear later in the markup (higher stacking)
+    expect(html.indexOf("🅱️")).toBeLessThan(html.indexOf("🅵"));
+  });
+
   it("positions an element by fractional coords", () => {
     const el = { ...makeElement(SHAPES[0]), x: 0.25, y: 0.75 };
     const html = render([el]);

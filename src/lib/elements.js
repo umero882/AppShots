@@ -253,3 +253,21 @@ export function elementSvg(el) {
   if (el.kind === "arrow") return arrowSvg(el.variant, el.color);
   return null;
 }
+
+/* ----------------------------- z-order ----------------------------- */
+// Elements stack by array order (later = on top, via DOM order). Reordering the
+// array is what changes layering.
+
+/** Returns a NEW array with `id` moved per op: "front" | "back" | "forward" | "backward". */
+export function reorderElements(list, id, op) {
+  const arr = [...(list || [])];
+  const i = arr.findIndex((e) => e.id === id);
+  if (i === -1) return arr;
+  const [el] = arr.splice(i, 1);
+  if (op === "front") arr.push(el);
+  else if (op === "back") arr.unshift(el);
+  else if (op === "forward") arr.splice(Math.min(arr.length, i + 1), 0, el);
+  else if (op === "backward") arr.splice(Math.max(0, i - 1), 0, el);
+  else arr.splice(i, 0, el); // unknown op → no change
+  return arr;
+}

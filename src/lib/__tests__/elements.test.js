@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   clamp01, fracDelta, angleFromCenter, distance, scaleFromResize,
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
+  reorderElements,
   BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
 } from "../elements.js";
 
@@ -70,6 +71,37 @@ describe("makeElement", () => {
     expect(makeEmojiElement("🚀")).toMatchObject({ kind: "emoji", emoji: "🚀" });
     expect(makeIconElement("Star")).toMatchObject({ kind: "icon", icon: "Star" });
     expect(makeImageElement("data:img")).toMatchObject({ kind: "image", image: "data:img" });
+  });
+});
+
+describe("reorderElements", () => {
+  const list = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+  const ids = (l) => l.map((e) => e.id).join("");
+  it("front moves to end (top)", () => {
+    expect(ids(reorderElements(list, "b", "front"))).toBe("acdb");
+  });
+  it("back moves to start (bottom)", () => {
+    expect(ids(reorderElements(list, "c", "back"))).toBe("cabd");
+  });
+  it("forward swaps with the next", () => {
+    expect(ids(reorderElements(list, "b", "forward"))).toBe("acbd");
+  });
+  it("backward swaps with the previous", () => {
+    expect(ids(reorderElements(list, "c", "backward"))).toBe("acbd");
+  });
+  it("forward at the top is a no-op", () => {
+    expect(ids(reorderElements(list, "d", "forward"))).toBe("abcd");
+  });
+  it("backward at the bottom is a no-op", () => {
+    expect(ids(reorderElements(list, "a", "backward"))).toBe("abcd");
+  });
+  it("returns a new array and leaves the original untouched", () => {
+    const out = reorderElements(list, "a", "front");
+    expect(out).not.toBe(list);
+    expect(ids(list)).toBe("abcd");
+  });
+  it("unknown id is a no-op", () => {
+    expect(ids(reorderElements(list, "zz", "front"))).toBe("abcd");
   });
 });
 
