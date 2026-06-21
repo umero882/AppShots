@@ -710,6 +710,17 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
     e.target.value = "";
   }
 
+  // Custom gradient builder — stores a built CSS string in aiGradient (reuses the
+  // same render path as AI gradients), plus from/to/angle so the UI is editable.
+  function setCustomGradient(patch) {
+    const cur = bg.aiGradient?.custom
+      ? bg.aiGradient
+      : { from: "#6366f1", to: "#8b5cf6", angle: 135 };
+    const next = { ...cur, ...patch, custom: true };
+    next.css = aiGradientCss({ style: "linear", angle: next.angle, stops: [next.from, next.to] });
+    onScreen({ background: { ...bg, type: "gradient", gradient: null, aiGradient: next } });
+  }
+
   // Image search — Pexels when configured, else Openverse (see lib/imageSearch).
   async function runSearch(e) {
     e?.preventDefault();
@@ -825,6 +836,45 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
                 style={{ background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})` }}
               />
             ))}
+          </div>
+
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="label mb-0">Custom gradient</p>
+              <div
+                className="h-5 w-10 rounded ring-1 ring-white/15"
+                style={{ background: bg.aiGradient?.custom ? bg.aiGradient.css : "transparent" }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="label">From</p>
+                <input
+                  type="color"
+                  value={bg.aiGradient?.from || "#6366f1"}
+                  onChange={(e) => setCustomGradient({ from: e.target.value })}
+                  className="h-9 w-full cursor-pointer rounded-lg bg-transparent"
+                />
+              </div>
+              <div>
+                <p className="label">To</p>
+                <input
+                  type="color"
+                  value={bg.aiGradient?.to || "#8b5cf6"}
+                  onChange={(e) => setCustomGradient({ to: e.target.value })}
+                  className="h-9 w-full cursor-pointer rounded-lg bg-transparent"
+                />
+              </div>
+            </div>
+            <p className="label mt-2">Angle · {bg.aiGradient?.angle ?? 135}°</p>
+            <input
+              type="range"
+              min="0"
+              max="360"
+              value={bg.aiGradient?.angle ?? 135}
+              onChange={(e) => setCustomGradient({ angle: +e.target.value })}
+              className="w-full accent-brand-500"
+            />
           </div>
         </div>
       )}
