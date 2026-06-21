@@ -5,6 +5,7 @@ import {
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
   BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
@@ -31,6 +32,7 @@ import {
 } from "../lib/templates";
 import { exportNode, copyNodeToClipboard, readFileAsDataURL } from "../lib/export";
 import { pushPast, undoStacks, redoStacks } from "../lib/history";
+import { moveItem } from "../lib/reorder";
 
 const TABS = [
   { id: "templates", label: "Templates", icon: Sparkles },
@@ -317,6 +319,12 @@ export default function Editor() {
     });
   }
 
+  function moveScreen(from, to) {
+    if (to < 0 || to >= state.screens.length) return;
+    update((prev) => ({ ...prev, screens: moveItem(prev.screens, from, to) }));
+    setActiveScreen(to);
+  }
+
   function removeScreen(idx) {
     if (state.screens.length === 1) return;
     update((prev) => ({
@@ -568,6 +576,26 @@ export default function Editor() {
                       </button>
                     )}
                   </div>
+                  {state.screens.length > 1 && (
+                    <>
+                      <button
+                        onClick={() => moveScreen(i, i - 1)}
+                        disabled={i === 0}
+                        title="Move left"
+                        className="absolute left-0 top-1/2 z-10 grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-ink-800 text-slate-200 opacity-0 shadow transition hover:text-white disabled:opacity-0 group-hover:opacity-100 group-hover:disabled:opacity-20"
+                      >
+                        <ChevronLeft size={12} />
+                      </button>
+                      <button
+                        onClick={() => moveScreen(i, i + 1)}
+                        disabled={i === state.screens.length - 1}
+                        title="Move right"
+                        className="absolute right-0 top-1/2 z-10 grid h-5 w-5 translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-ink-800 text-slate-200 opacity-0 shadow transition hover:text-white disabled:opacity-0 group-hover:opacity-100 group-hover:disabled:opacity-20"
+                      >
+                        <ChevronRight size={12} />
+                      </button>
+                    </>
+                  )}
                   <span className="mt-1 block text-center text-[10px] text-slate-500">{i + 1}</span>
                 </div>
               ))}
