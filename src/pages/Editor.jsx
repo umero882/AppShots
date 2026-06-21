@@ -29,7 +29,7 @@ import { elementIcon } from "../lib/elementIcons";
 import {
   GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
 } from "../lib/templates";
-import { exportNodeToPng, readFileAsDataURL } from "../lib/export";
+import { exportNode, copyNodeToClipboard, readFileAsDataURL } from "../lib/export";
 import { pushPast, undoStacks, redoStacks } from "../lib/history";
 
 const TABS = [
@@ -54,6 +54,8 @@ export default function Editor() {
   const [saveState, setSaveState] = useState("saved"); // saved | saving | dirty
   const [exporting, setExporting] = useState(false);
   const [selectedEl, setSelectedEl] = useState(null);
+  const [format, setFormat] = useState("png"); // png | jpeg
+  const [copied, setCopied] = useState(false);
 
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
@@ -331,13 +333,26 @@ export default function Editor() {
     await new Promise((r) => setTimeout(r, 60)); // let selection chrome clear
     try {
       const device = getDevice(state.deviceId);
-      await exportNodeToPng(
-        canvasRef.current,
-        device.canvas.w,
-        `${slug(name)}-${activeScreen + 1}.png`
-      );
+      await exportNode(canvasRef.current, device.canvas.w, {
+        filename: `${slug(name)}-${activeScreen + 1}`,
+        format,
+      });
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function copyCurrent() {
+    if (!canvasRef.current) return;
+    setSelectedEl(null);
+    await new Promise((r) => setTimeout(r, 60));
+    try {
+      const device = getDevice(state.deviceId);
+      await copyNodeToClipboard(canvasRef.current, device.canvas.w);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard may be blocked (permissions / insecure context) — ignore
     }
   }
 
@@ -351,11 +366,10 @@ export default function Editor() {
         // wait a tick for the canvas to re-render the active screen
         await new Promise((r) => setTimeout(r, 350));
         if (canvasRef.current) {
-          await exportNodeToPng(
-            canvasRef.current,
-            device.canvas.w,
-            `${slug(name)}-${i + 1}.png`
-          );
+          await exportNode(canvasRef.current, device.canvas.w, {
+            filename: `${slug(name)}-${i + 1}`,
+            format,
+          });
         }
       }
     } finally {
@@ -412,13 +426,30 @@ export default function Editor() {
             </button>
           </div>
           <SaveBadge state={saveState} />
+          <div className="hidden overflow-hidden rounded-lg border border-white/10 sm:flex">
+            {["png", "jpeg"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFormat(f)}
+                className={`px-2.5 py-1.5 text-[11px] font-semibold uppercase transition ${
+                  format === f ? "bg-white/10 text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {f === "jpeg" ? "JPG" : "PNG"}
+              </button>
+            ))}
+          </div>
+          <button onClick={copyCurrent} disabled={exporting} className="btn-ghost hidden md:inline-flex" title="Copy current screen to clipboard">
+            {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
           <button onClick={exportAll} disabled={exporting} className="btn-ghost hidden sm:inline-flex">
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             Export all
           </button>
           <button onClick={exportOne} disabled={exporting} className="btn-primary">
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            Export PNG
+            Export {format === "jpeg" ? "JPG" : "PNG"}
           </button>
         </div>
       </header>
