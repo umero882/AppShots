@@ -110,6 +110,7 @@ export default function ElementsLayer({
               top: `${el.y * 100}%`,
               transform: `translate(-50%, -50%) rotate(${el.rotation}deg)`,
               width: el.kind === "badge" ? "auto" : elW,
+              opacity: el.opacity ?? 1,
             }}
           >
             <ElementContent el={el} elW={elW} width={width} />

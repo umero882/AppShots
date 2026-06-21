@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   clamp01, fracDelta, angleFromCenter, distance, scaleFromResize,
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
-  reorderElements,
+  reorderElements, duplicateElement,
   BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
 } from "../elements.js";
 
@@ -57,6 +57,7 @@ describe("makeElement", () => {
     expect(el.x).toBe(0.5);
     expect(el.scale).toBe(1);
     expect(el.rotation).toBe(0);
+    expect(el.opacity).toBe(1);
     expect(el.baseWidth).toBeGreaterThan(0);
   });
   it("honors a position", () => {
@@ -102,6 +103,23 @@ describe("reorderElements", () => {
   });
   it("unknown id is a no-op", () => {
     expect(ids(reorderElements(list, "zz", "front"))).toBe("abcd");
+  });
+});
+
+describe("duplicateElement", () => {
+  it("gives a fresh id, keeps props, and offsets position", () => {
+    const el = makeElement(SHAPES[0], { x: 0.5, y: 0.5 });
+    const copy = duplicateElement(el);
+    expect(copy.id).not.toBe(el.id);
+    expect(copy.kind).toBe(el.kind);
+    expect(copy.x).toBeCloseTo(0.54);
+    expect(copy.y).toBeCloseTo(0.54);
+  });
+  it("clamps the offset within the canvas", () => {
+    const el = makeElement(SHAPES[0], { x: 0.99, y: 0.99 });
+    const copy = duplicateElement(el);
+    expect(copy.x).toBeLessThanOrEqual(1);
+    expect(copy.y).toBeLessThanOrEqual(1);
   });
 });
 

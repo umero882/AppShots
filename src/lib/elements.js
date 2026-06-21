@@ -220,6 +220,7 @@ export function makeElement(item, { x = 0.5, y = 0.4 } = {}) {
     y,
     scale: 1,
     rotation: 0,
+    opacity: 1,
     baseWidth: BASE_WIDTH[item.kind] || 0.3,
     // kind-specific props (only the relevant ones are used by the renderer)
     badge: item.badge,
@@ -245,6 +246,11 @@ export function makeIconElement(icon, opts) {
 
 export function makeImageElement(image, opts) {
   return makeElement({ kind: "image", image }, opts);
+}
+
+/** Copy an element with a fresh id, nudged slightly so it's visible on top. */
+export function duplicateElement(el, offset = 0.04) {
+  return { ...el, id: freshId(), x: clamp01((el.x ?? 0.5) + offset), y: clamp01((el.y ?? 0.4) + offset) };
 }
 
 /** Return the SVG data-URI for shape/arrow elements (used by the renderer). */

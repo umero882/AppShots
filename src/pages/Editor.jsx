@@ -22,7 +22,8 @@ import { backend } from "../lib/backend";
 import { DEVICES, getDevice } from "../lib/devices";
 import {
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
-  reorderElements, BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
+  reorderElements, duplicateElement, clamp01,
+  BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
 } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
 import {
@@ -74,6 +75,62 @@ export default function Editor() {
       active = false;
     };
   }, [id, user.id, navigate]);
+
+  // Keyboard shortcuts for the selected element (ignored while typing in a field).
+  useEffect(() => {
+    function onKey(e) {
+      if (!selectedEl) return;
+      const t = e.target;
+      const tag = (t?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable) return;
+      const el = state?.screens?.[activeScreen]?.elements?.find((x) => x.id === selectedEl);
+      if (!el) return;
+      const step = e.shiftKey ? 0.05 : 0.01;
+      switch (e.key) {
+        case "Delete":
+        case "Backspace":
+          e.preventDefault();
+          deleteElement(selectedEl);
+          break;
+        case "Escape":
+          setSelectedEl(null);
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          changeElement(selectedEl, { x: clamp01(el.x - step) });
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          changeElement(selectedEl, { x: clamp01(el.x + step) });
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          changeElement(selectedEl, { y: clamp01(el.y - step) });
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          changeElement(selectedEl, { y: clamp01(el.y + step) });
+          break;
+        case "[":
+          reorderElement(selectedEl, "backward");
+          break;
+        case "]":
+          reorderElement(selectedEl, "forward");
+          break;
+        case "d":
+        case "D":
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            duplicateSelectedElement();
+          }
+          break;
+        default:
+          break;
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedEl, state, activeScreen]);
 
   // debounced autosave
   const scheduleSave = useCallback(
@@ -155,6 +212,11 @@ export default function Editor() {
         i === activeScreen ? { ...s, elements: reorderElements(s.elements || [], id, op) } : s
       ),
     }));
+  }
+
+  function duplicateSelectedElement() {
+    const el = state?.screens[activeScreen]?.elements?.find((x) => x.id === selectedEl);
+    if (el) addElement(duplicateElement(el));
   }
 
   async function onUpload(e) {
@@ -318,6 +380,8 @@ export default function Editor() {
                 selectedId={selectedEl}
                 onReorder={reorderElement}
                 onDelete={deleteElement}
+                onChange={changeElement}
+                onDuplicate={duplicateSelectedElement}
               />
             )}
           </div>
@@ -1155,7 +1219,7 @@ function LayerBtn({ label, onClick, disabled, children }) {
   );
 }
 
-function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onDelete }) {
+function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onDelete, onChange, onDuplicate }) {
   const CATS = ["Badges", "Shapes", "Arrows", "Emoji", "Icons", "Photos"];
   const [cat, setCat] = useState("Badges");
 
@@ -1247,12 +1311,63 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
               <BringToFront size={15} />
             </LayerBtn>
           </div>
-          <button
-            onClick={() => onDelete(selected.id)}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-500/30 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
-          >
-            <Trash2 size={13} /> Delete element
-          </button>
+
+          {/* properties */}
+          <div className="mt-3 space-y-2.5">
+            <div>
+              <p className="label mb-1">Opacity · {Math.round((selected.opacity ?? 1) * 100)}%</p>
+              <input
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.05"
+                value={selected.opacity ?? 1}
+                onChange={(e) => onChange(selected.id, { opacity: +e.target.value })}
+                className="w-full accent-brand-500"
+              />
+            </div>
+
+            {(selected.kind === "shape" || selected.kind === "arrow" || selected.kind === "icon") && (
+              <div>
+                <p className="label mb-1">Color</p>
+                <input
+                  type="color"
+                  value={selected.color || "#111827"}
+                  onChange={(e) => onChange(selected.id, { color: e.target.value })}
+                  className="h-8 w-full cursor-pointer rounded-lg bg-transparent"
+                />
+              </div>
+            )}
+
+            {selected.kind === "badge" && selected.text != null && (
+              <div>
+                <p className="label mb-1">Text</p>
+                <input
+                  value={selected.text}
+                  onChange={(e) => onChange(selected.id, { text: e.target.value })}
+                  className="input"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onDuplicate(selected.id)}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-white/10 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/5"
+            >
+              <Copy size={13} /> Duplicate
+            </button>
+            <button
+              onClick={() => onDelete(selected.id)}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-500/30 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-slate-500">
+            Tip: arrow keys nudge · ⌫ delete · ⌘/Ctrl+D duplicate · [ ] layer · Esc deselect
+          </p>
         </div>
       )}
 

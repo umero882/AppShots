@@ -68,6 +68,11 @@ describe("ElementsLayer rendering", () => {
     expect(html.indexOf("🅱️")).toBeLessThan(html.indexOf("🅵"));
   });
 
+  it("applies element opacity", () => {
+    const el = { ...makeEmojiElement("🚀"), opacity: 0.4 };
+    expect(render([el])).toContain("opacity:0.4");
+  });
+
   it("positions an element by fractional coords", () => {
     const el = { ...makeElement(SHAPES[0]), x: 0.25, y: 0.75 };
     const html = render([el]);
