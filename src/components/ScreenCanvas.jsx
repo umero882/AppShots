@@ -1,6 +1,7 @@
 import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
 import { legibilityHalo } from "../lib/contrast";
+import { textEffectStyle } from "../lib/textEffects";
 import ElementsLayer from "./ElementsLayer";
 
 export function backgroundCss(bg) {
@@ -88,6 +89,7 @@ export default function ScreenCanvas({
           color: state.text.color,
           fontWeight: state.text.weight,
           textShadow: haloFor(state.text.color, scaledFont),
+          ...textEffectStyle(state.text, scaledFont),
         }}
       >
         {screen.heading}
@@ -180,6 +182,7 @@ export default function ScreenCanvas({
           onSelect={onSelectElement}
           onChange={onChangeElement}
           onDelete={onDeleteElement}
+          twemoji={state.twemoji}
         />
       ) : null}
     </div>

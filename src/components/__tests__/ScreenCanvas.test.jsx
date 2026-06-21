@@ -20,6 +20,21 @@ describe("ScreenCanvas overflow clipping", () => {
   });
 });
 
+describe("ScreenCanvas text effects", () => {
+  const headed = { ...defaultScreen(), heading: "Hello" };
+  it("applies a gradient text effect to the headline", () => {
+    const st = { ...state, text: { ...state.text, effect: "gradient", gradientFrom: "#112233", gradientTo: "#445566" } };
+    const html = renderToStaticMarkup(<ScreenCanvas state={st} screen={headed} width={300} />);
+    expect(html).toContain("background-clip:text");
+    expect(html).toContain("#112233");
+  });
+  it("applies an outline stroke effect", () => {
+    const st = { ...state, text: { ...state.text, effect: "outline", color: "#ffffff" } };
+    const html = renderToStaticMarkup(<ScreenCanvas state={st} screen={headed} width={300} />);
+    expect(html).toMatch(/-webkit-text-stroke|text-stroke/i);
+  });
+});
+
 describe("ScreenCanvas image background blur + overlay", () => {
   const imgScreen = {
     ...defaultScreen(),

@@ -27,6 +27,7 @@ import {
   BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
 } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
+import { TEXT_EFFECTS } from "../lib/textEffects";
 import {
   GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
 } from "../lib/templates";
@@ -1330,6 +1331,47 @@ function TextPanel({ state, update, screen, onScreen }) {
           onChange={(e) => update({ text: { ...t, color: e.target.value } })}
           className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
         />
+      </div>
+
+      <div>
+        <p className="label">Effect</p>
+        <div className="grid grid-cols-5 gap-1.5">
+          {TEXT_EFFECTS.map((e) => (
+            <button
+              key={e.id}
+              onClick={() => update({ text: { ...t, effect: e.id } })}
+              className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                (t.effect || "none") === e.id
+                  ? "border-brand-500 bg-brand-500/10 text-white"
+                  : "border-white/10 text-slate-300 hover:border-white/20"
+              }`}
+            >
+              {e.name}
+            </button>
+          ))}
+        </div>
+        {t.effect === "gradient" && (
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <div>
+              <p className="label">From</p>
+              <input
+                type="color"
+                value={t.gradientFrom || "#ffffff"}
+                onChange={(e) => update({ text: { ...t, gradientFrom: e.target.value } })}
+                className="h-9 w-full cursor-pointer rounded-lg bg-transparent"
+              />
+            </div>
+            <div>
+              <p className="label">To</p>
+              <input
+                type="color"
+                value={t.gradientTo || "#a5b4fc"}
+                onChange={(e) => update({ text: { ...t, gradientTo: e.target.value } })}
+                className="h-9 w-full cursor-pointer rounded-lg bg-transparent"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-4 border-t border-white/10 pt-4">
