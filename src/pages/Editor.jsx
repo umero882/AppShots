@@ -951,6 +951,55 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
             </div>
           )}
           {bg.image && (
+            <div className="space-y-3 border-t border-white/10 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Adjust · improves text legibility
+              </p>
+              <div>
+                <p className="label">Blur · {bg.blur || 0}</p>
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  value={bg.blur || 0}
+                  onChange={(e) => onScreen({ background: { ...bg, blur: +e.target.value } })}
+                  className="w-full accent-brand-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="label">Overlay</p>
+                  <input
+                    type="color"
+                    value={bg.overlay || "#000000"}
+                    onChange={(e) =>
+                      onScreen({ background: { ...bg, overlay: e.target.value } })
+                    }
+                    className="h-9 w-full cursor-pointer rounded-lg bg-transparent"
+                  />
+                </div>
+                <div>
+                  <p className="label">Strength · {Math.round((bg.overlayOpacity || 0) * 100)}%</p>
+                  <input
+                    type="range"
+                    min="0"
+                    max="0.8"
+                    step="0.05"
+                    value={bg.overlayOpacity || 0}
+                    onChange={(e) =>
+                      onScreen({
+                        background: { ...bg, overlay: bg.overlay || "#000000", overlayOpacity: +e.target.value },
+                      })
+                    }
+                    className="w-full accent-brand-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {bg.image && (
             <button
               onClick={() => onScreen({ background: { ...bg, type: "gradient", image: null } })}
               className="text-xs text-slate-400 transition hover:text-white"

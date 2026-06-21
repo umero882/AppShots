@@ -127,14 +127,27 @@ export default function ScreenCanvas({
     >
       {/* image background drawn as an <img> layer so it exports reliably */}
       {background.type === "image" && background.image && (
-        <img
-          src={background.image}
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
-          crossOrigin="anonymous"
-          style={{ borderRadius: radius }}
-        />
+        <>
+          <img
+            src={background.image}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
+            crossOrigin="anonymous"
+            style={{
+              borderRadius: radius,
+              filter: background.blur ? `blur(${(background.blur / 100) * width}px)` : undefined,
+              // scale up slightly so blur doesn't reveal the clipped edges
+              transform: background.blur ? "scale(1.08)" : undefined,
+            }}
+          />
+          {background.overlay && background.overlayOpacity > 0 && (
+            <div
+              className="pointer-events-none absolute inset-0 z-[1]"
+              style={{ background: background.overlay, opacity: background.overlayOpacity, borderRadius: radius }}
+            />
+          )}
+        </>
       )}
 
       {/* layout */}

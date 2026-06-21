@@ -19,3 +19,35 @@ describe("ScreenCanvas overflow clipping", () => {
     expect(html).not.toContain("overflow:hidden");
   });
 });
+
+describe("ScreenCanvas image background blur + overlay", () => {
+  const imgScreen = {
+    ...defaultScreen(),
+    background: {
+      type: "image",
+      image: "data:image/png;base64,ZZ",
+      blur: 5,
+      overlay: "#000000",
+      overlayOpacity: 0.4,
+    },
+  };
+  const renderImg = () =>
+    renderToStaticMarkup(<ScreenCanvas state={state} screen={imgScreen} width={300} />);
+
+  it("applies a blur filter to the background image", () => {
+    expect(renderImg()).toContain("filter:blur(");
+  });
+  it("renders the overlay scrim with its opacity", () => {
+    expect(renderImg()).toContain("opacity:0.4");
+  });
+  it("omits blur/overlay when not set", () => {
+    const plain = renderToStaticMarkup(
+      <ScreenCanvas
+        state={state}
+        screen={{ ...defaultScreen(), background: { type: "image", image: "data:x" } }}
+        width={300}
+      />
+    );
+    expect(plain).not.toContain("filter:blur(");
+  });
+});
