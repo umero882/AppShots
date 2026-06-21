@@ -108,15 +108,21 @@ export default function ScreenCanvas({
     </div>
   ) : null;
 
+  const radius = width * 0.04;
+
   return (
     <div
       ref={innerRef}
-      className="relative overflow-hidden flex flex-col items-center"
+      className="relative flex flex-col items-center"
       style={{
         width,
         height,
         background: backgroundCss(background),
-        borderRadius: width * 0.04,
+        borderRadius: radius,
+        // Clip content for thumbnails + export, but let selection handles spill
+        // out while editing so they stay reachable near the canvas edges.
+        // (Selection is always cleared before export, so handles never rasterize.)
+        overflow: editableElements ? "visible" : "hidden",
       }}
     >
       {/* image background drawn as an <img> layer so it exports reliably */}
@@ -127,6 +133,7 @@ export default function ScreenCanvas({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
           crossOrigin="anonymous"
+          style={{ borderRadius: radius }}
         />
       )}
 
