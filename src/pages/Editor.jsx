@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Download, Trash2, Copy, Check, Loader2,
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
-  BringToFront, SendToBack, ArrowUp, ArrowDown,
+  BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
 } from "lucide-react";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
@@ -30,6 +30,7 @@ import {
   GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
 } from "../lib/templates";
 import { exportNodeToPng, readFileAsDataURL } from "../lib/export";
+import { pushPast, undoStacks, redoStacks } from "../lib/history";
 
 const TABS = [
   { id: "templates", label: "Templates", icon: Sparkles },
@@ -57,6 +58,13 @@ export default function Editor() {
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
   const saveTimer = useRef(null);
+
+  // Undo/redo history. Snapshots of `state`; rapid edits (typing/dragging) within
+  // a short window coalesce into one step.
+  const past = useRef([]);
+  const future = useRef([]);
+  const lastPush = useRef(0);
+  const [, setHistTick] = useState(0);
 
   // load
   useEffect(() => {
@@ -132,6 +140,25 @@ export default function Editor() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedEl, state, activeScreen]);
 
+  // Undo / redo (Cmd/Ctrl+Z, Shift to redo; Ctrl+Y). Ignored while typing.
+  useEffect(() => {
+    function onKey(e) {
+      const t = e.target;
+      const tag = (t?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        e.shiftKey ? redo() : undo();
+      } else if (mod && (e.key === "y" || e.key === "Y")) {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state, name]);
+
   // debounced autosave
   const scheduleSave = useCallback(
     (nextState, nextName) => {
@@ -148,12 +175,55 @@ export default function Editor() {
     [id]
   );
 
+  function pushHistory(snapshot) {
+    if (!snapshot) return;
+    const now = Date.now();
+    const { past: np, pushed } = pushPast(past.current, snapshot, { now, last: lastPush.current });
+    past.current = np;
+    if (pushed) {
+      future.current = [];
+      setHistTick((v) => v + 1);
+    }
+    lastPush.current = now;
+  }
+
   function update(patch) {
     setState((prev) => {
+      pushHistory(prev);
       const next = typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
       scheduleSave(next, name);
       return next;
     });
+  }
+
+  function undo() {
+    if (!past.current.length) return;
+    setState((cur) => {
+      const r = undoStacks(past.current, future.current, cur);
+      if (!r) return cur;
+      past.current = r.past;
+      future.current = r.future;
+      scheduleSave(r.present, name);
+      return r.present;
+    });
+    setSelectedEl(null);
+    lastPush.current = 0;
+    setHistTick((v) => v + 1);
+  }
+
+  function redo() {
+    if (!future.current.length) return;
+    setState((cur) => {
+      const r = redoStacks(past.current, future.current, cur);
+      if (!r) return cur;
+      past.current = r.past;
+      future.current = r.future;
+      scheduleSave(r.present, name);
+      return r.present;
+    });
+    setSelectedEl(null);
+    lastPush.current = 0;
+    setHistTick((v) => v + 1);
   }
 
   function updateName(value) {
@@ -323,6 +393,24 @@ export default function Editor() {
           />
         </div>
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={undo}
+              disabled={!past.current.length}
+              title="Undo (Ctrl/Cmd+Z)"
+              className="btn-ghost px-2 py-2 disabled:opacity-30"
+            >
+              <Undo2 size={16} />
+            </button>
+            <button
+              onClick={redo}
+              disabled={!future.current.length}
+              title="Redo (Ctrl/Cmd+Shift+Z)"
+              className="btn-ghost px-2 py-2 disabled:opacity-30"
+            >
+              <Redo2 size={16} />
+            </button>
+          </div>
           <SaveBadge state={saveState} />
           <button onClick={exportAll} disabled={exporting} className="btn-ghost hidden sm:inline-flex">
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
