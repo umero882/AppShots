@@ -8,8 +8,24 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setUser(backend.getCurrentUser());
-    setLoading(false);
+    let mounted = true;
+    // getCurrentUser is async on the Supabase backend, sync-ish on local —
+    // Promise.resolve handles both.
+    Promise.resolve(backend.getCurrentUser()).then((u) => {
+      if (mounted) {
+        setUser(u);
+        setLoading(false);
+      }
+    });
+    const unsub = backend.onAuthChange
+      ? backend.onAuthChange((u) => {
+          if (mounted) setUser(u);
+        })
+      : null;
+    return () => {
+      mounted = false;
+      if (unsub) unsub();
+    };
   }, []);
 
   const signIn = useCallback(async (creds) => {

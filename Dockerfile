@@ -1,5 +1,13 @@
 # ---- build stage: compile the SPA ----
 FROM node:20-alpine AS build
+# VITE_* vars are inlined into the bundle at build time, so they must be present
+# HERE (as build args), not just at runtime. The Supabase anon key is public
+# (RLS-protected) — safe to ship in the client. Set these as BUILD variables in
+# Coolify. The proxy keys (ANTHROPIC_API_KEY etc.) are runtime-only — NOT here.
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci

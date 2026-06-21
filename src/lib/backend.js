@@ -69,12 +69,17 @@ const localBackend = {
     localStorage.removeItem(LS.session);
   },
 
-  getCurrentUser() {
+  async getCurrentUser() {
     const session = read(LS.session, null);
     if (!session) return null;
     const users = read(LS.users, []);
     const user = users.find((u) => u.id === session.userId);
     return user ? this._publicUser(user) : null;
+  },
+
+  // No external auth changes for localStorage; return a no-op unsubscribe.
+  onAuthChange() {
+    return () => {};
   },
 
   async upgradePlan(plan) {
@@ -149,25 +154,148 @@ const localBackend = {
 };
 
 /* ------------------------------- Supabase backend ------------------------------- *
- * To switch to a real backend:
- *   1) npm i @supabase/supabase-js
- *   2) fill VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY in .env.local
- *   3) create a `projects` table (see README) with RLS
- *   4) implement the same method surface as localBackend using the client below
- *
- * import { createClient } from "@supabase/supabase-js";
- * const supabase = createClient(
- *   import.meta.env.VITE_SUPABASE_URL,
- *   import.meta.env.VITE_SUPABASE_ANON_KEY
- * );
- * ...map each method to supabase.auth / supabase.from("projects")...
+ * Real backend (auth + projects) backed by the self-hosted Supabase on Coolify.
+ * Enabled automatically when VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are set.
+ * The `projects` table + RLS schema lives in supabase/schema.sql. `name` and
+ * `plan` are stored in the auth user's metadata (no separate profiles table).
  */
+import { createClient } from "@supabase/supabase-js";
 
-const hasSupabase =
-  !!import.meta.env.VITE_SUPABASE_URL &&
-  !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const hasSupabase = !!SUPABASE_URL && !!SUPABASE_ANON_KEY;
 
-export const BACKEND_MODE = hasSupabase ? "supabase (configure in backend.js)" : "local";
+/** Map a Supabase auth user → the app's user shape. (pure, exported for tests) */
+export function userFromAuthUser(u) {
+  if (!u) return null;
+  const meta = u.user_metadata || {};
+  return {
+    id: u.id,
+    email: u.email,
+    name: meta.name || (u.email ? u.email.split("@")[0] : "User"),
+    plan: meta.plan || "free",
+  };
+}
 
-// Always export localBackend for now; wire Supabase when ready.
-export const backend = localBackend;
+/** Map a `projects` row (snake_case, ISO dates) → the app's project shape. */
+export function rowToProject(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    userId: r.user_id,
+    name: r.name,
+    state: r.state,
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+    updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : Date.now(),
+  };
+}
+
+function makeSupabaseBackend() {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  return {
+    async signUp({ name, email, password }) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name: name || email.split("@")[0], plan: "free" } },
+      });
+      if (error) throw new Error(error.message);
+      // With email confirmation off, a session is returned. If it's on, try to
+      // sign in immediately so the user lands in the app.
+      if (!data.session) {
+        const si = await supabase.auth.signInWithPassword({ email, password });
+        if (si.error) throw new Error("Account created — confirm your email, then sign in.");
+        return userFromAuthUser(si.data.user);
+      }
+      return userFromAuthUser(data.user);
+    },
+
+    async signIn({ email, password }) {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw new Error("Invalid email or password.");
+      return userFromAuthUser(data.user);
+    },
+
+    async signOut() {
+      await supabase.auth.signOut();
+    },
+
+    async getCurrentUser() {
+      const { data } = await supabase.auth.getUser();
+      return userFromAuthUser(data?.user || null);
+    },
+
+    onAuthChange(cb) {
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        cb(userFromAuthUser(session?.user || null));
+      });
+      return () => data.subscription.unsubscribe();
+    },
+
+    async upgradePlan(plan) {
+      const { data, error } = await supabase.auth.updateUser({ data: { plan } });
+      if (error) throw new Error(error.message);
+      return userFromAuthUser(data.user);
+    },
+
+    async listProjects() {
+      // RLS scopes rows to the signed-in user, so no explicit user filter needed.
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .order("updated_at", { ascending: false });
+      if (error) throw new Error(error.message);
+      return (data || []).map(rowToProject);
+    },
+
+    async getProject(id) {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return rowToProject(data);
+    },
+
+    async createProject(userId, payload) {
+      const { data, error } = await supabase
+        .from("projects")
+        .insert({
+          user_id: userId,
+          name: payload.name || "Untitled project",
+          state: payload.state || {},
+        })
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return rowToProject(data);
+    },
+
+    async updateProject(id, patch) {
+      const upd = { updated_at: new Date().toISOString() };
+      if (patch.name !== undefined) upd.name = patch.name;
+      if (patch.state !== undefined) upd.state = patch.state;
+      const { data, error } = await supabase
+        .from("projects")
+        .update(upd)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return rowToProject(data);
+    },
+
+    async deleteProject(id) {
+      const { error } = await supabase.from("projects").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return true;
+    },
+  };
+}
+
+export const BACKEND_MODE = hasSupabase ? "supabase" : "local";
+
+// Use Supabase when configured, else the zero-setup localStorage backend.
+export const backend = hasSupabase ? makeSupabaseBackend() : localBackend;

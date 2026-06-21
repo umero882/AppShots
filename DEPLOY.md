@@ -21,8 +21,19 @@ AppShots is a static SPA served by a tiny Node server that also hosts the
 
 3. **Port:** set the application port to **3000**.
 
-4. **Environment variables** (Settings → Environment Variables). These are
-   **runtime, server-only** — do NOT use a `VITE_` prefix, and never commit them:
+4. **Environment variables.** Two groups — the distinction matters:
+
+   **a) Build-time (`VITE_*`)** — inlined into the browser bundle, so they must be
+   set as **Build Variables** in Coolify (passed to `docker build`). The Supabase
+   anon key is public (protected by Row Level Security), so this is expected:
+
+   | Build variable | Purpose |
+   |---|---|
+   | `VITE_SUPABASE_URL` | your Coolify Supabase URL |
+   | `VITE_SUPABASE_ANON_KEY` | Supabase anon (public) key |
+
+   **b) Runtime, server-only** (no `VITE_` prefix) — read by the `/api` proxy in
+   the container; never reach the browser:
 
    | Variable | Purpose |
    |---|---|
@@ -31,9 +42,10 @@ AppShots is a static SPA served by a tiny Node server that also hosts the
    | `GITHUB_TOKEN` | read private repos in the AI tab (optional) |
    | `PEXELS_API_KEY` | image search (optional; falls back to Openverse) |
 
-   Paste the values you have in `.env.local` (the same keys, minus the `VITE_`
-   prefix — they're already named correctly there). Mark them as runtime
-   (not build-time) variables.
+   The proxy keys are the same values as in `.env.local` (minus `VITE_`).
+
+   > Get `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` from your Coolify Supabase
+   > service → **API** (or its env). They configure AppShots' real backend.
 
 5. **Domain + SSL.** Set the FQDN under Settings → Domains; Coolify provisions a
    Let's Encrypt certificate automatically via its proxy.
@@ -43,12 +55,26 @@ AppShots is a static SPA served by a tiny Node server that also hosts the
 7. **Deploy.** Click **Deploy**. Coolify builds the image and starts the
    container. Subsequent pushes to `main` auto-deploy if you enable the webhook.
 
+## Supabase backend (one-time)
+
+AppShots uses the Supabase running on your Coolify for auth + project storage.
+
+1. **Create the schema.** In Supabase → **SQL Editor**, run
+   [`supabase/schema.sql`](supabase/schema.sql) (creates the `projects` table +
+   Row Level Security so each user only sees their own projects).
+2. **Disable email confirmation** (or configure SMTP): Supabase → Authentication
+   → Sign-In/Providers → turn **off** "Confirm email", so sign-up logs the user
+   straight in. Otherwise new accounts can't sign in until they confirm.
+3. **Allow the app origin:** Supabase → Authentication → URL Configuration → add
+   your AppShots domain (and the self-hosted Supabase should allow CORS from it).
+4. Set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` as **Build Variables**
+   (step 4a above). With them present, AppShots auto-switches from the
+   localStorage backend to Supabase (`BACKEND_MODE === "supabase"`).
+
 ## Notes
 
-- **No database to host.** Projects currently live in the browser
-  (`localStorage`). The "backend" here is the key proxy + static serving. If you
-  want projects to sync across devices, that's a separate task (wire `backend.js`
-  to Firebase/Supabase) — ask and I'll scope it.
+- **Without the `VITE_SUPABASE_*` vars**, AppShots falls back to the localStorage
+  backend (browser-only, no sync) — handy for a quick preview deploy.
 - **Keys never ship to the browser.** The client calls same-origin `/api/*`;
   only the container's env holds the secrets. Verified: `dist/` contains no key
   strings.
