@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Plus, Download, Trash2, Copy, Check, Loader2,
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
-  Contrast, Search, Wand2, Github, AlertCircle,
+  Contrast, Search, Wand2, Github, AlertCircle, Shapes,
 } from "lucide-react";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
@@ -20,6 +20,11 @@ import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
 import { DEVICES, getDevice } from "../lib/devices";
 import {
+  makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
+  BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
+} from "../lib/elements";
+import { elementIcon } from "../lib/elementIcons";
+import {
   GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
 } from "../lib/templates";
 import { exportNodeToPng, readFileAsDataURL } from "../lib/export";
@@ -30,6 +35,7 @@ const TABS = [
   { id: "background", label: "Background", icon: Palette },
   { id: "text", label: "Text", icon: Type },
   { id: "layout", label: "Layout", icon: LayoutTemplate },
+  { id: "elements", label: "Elements", icon: Shapes },
 ];
 
 export default function Editor() {
@@ -44,6 +50,7 @@ export default function Editor() {
   const [tab, setTab] = useState("device");
   const [saveState, setSaveState] = useState("saved"); // saved | saving | dirty
   const [exporting, setExporting] = useState(false);
+  const [selectedEl, setSelectedEl] = useState(null);
 
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
@@ -103,6 +110,38 @@ export default function Editor() {
     });
   }
 
+  function addElement(el) {
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, i) =>
+        i === activeScreen ? { ...s, elements: [...(s.elements || []), el] } : s
+      ),
+    }));
+    setSelectedEl(el.id);
+    setTab("elements");
+  }
+
+  function changeElement(id, patch) {
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, i) =>
+        i === activeScreen
+          ? { ...s, elements: (s.elements || []).map((e) => (e.id === id ? { ...e, ...patch } : e)) }
+          : s
+      ),
+    }));
+  }
+
+  function deleteElement(id) {
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, i) =>
+        i === activeScreen ? { ...s, elements: (s.elements || []).filter((e) => e.id !== id) } : s
+      ),
+    }));
+    setSelectedEl((cur) => (cur === id ? null : cur));
+  }
+
   async function onUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -141,6 +180,8 @@ export default function Editor() {
   async function exportOne() {
     if (!canvasRef.current) return;
     setExporting(true);
+    setSelectedEl(null);
+    await new Promise((r) => setTimeout(r, 60)); // let selection chrome clear
     try {
       const device = getDevice(state.deviceId);
       await exportNodeToPng(
@@ -155,6 +196,7 @@ export default function Editor() {
 
   async function exportAll() {
     setExporting(true);
+    setSelectedEl(null);
     const device = getDevice(state.deviceId);
     try {
       for (let i = 0; i < state.screens.length; i++) {
@@ -219,12 +261,12 @@ export default function Editor() {
       <div className="flex min-h-0 flex-1">
         {/* left controls */}
         <aside className="flex w-[330px] shrink-0 flex-col border-r border-white/5 bg-ink-900">
-          <div className="flex border-b border-white/5">
+          <div className="scroll-thin flex overflow-x-auto border-b border-white/5">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex flex-1 flex-col items-center gap-1 py-3 text-[11px] font-semibold transition ${
+                className={`flex min-w-[60px] flex-1 shrink-0 flex-col items-center gap-1 px-1 py-3 text-[11px] font-semibold transition ${
                   tab === t.id ? "bg-white/5 text-brand-300" : "text-slate-400 hover:text-slate-200"
                 }`}
               >
@@ -254,6 +296,7 @@ export default function Editor() {
               />
             )}
             {tab === "layout" && <LayoutPanel state={state} update={update} />}
+            {tab === "elements" && <ElementsPanel onAdd={addElement} />}
           </div>
         </aside>
 
@@ -261,8 +304,17 @@ export default function Editor() {
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16">
             <div className="relative m-auto">
-              <div ref={canvasRef} className="relative">
-                <ScreenCanvas state={canvasState} screen={screen} width={300} />
+              <div ref={canvasRef} className="relative" onPointerDown={() => setSelectedEl(null)}>
+                <ScreenCanvas
+                  state={canvasState}
+                  screen={screen}
+                  width={300}
+                  editableElements={!exporting}
+                  selectedElement={selectedEl}
+                  onSelectElement={setSelectedEl}
+                  onChangeElement={changeElement}
+                  onDeleteElement={deleteElement}
+                />
                 {showWatermark && (
                   <div className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/40 px-2 py-0.5 text-[9px] font-semibold text-white/80 backdrop-blur">
                     Made with AppShots
@@ -1063,6 +1115,240 @@ function LayoutPanel({ state, update }) {
           className="w-full accent-brand-500"
         />
       </div>
+    </div>
+  );
+}
+
+function ElementsPanel({ onAdd }) {
+  const CATS = ["Badges", "Shapes", "Arrows", "Emoji", "Icons", "Photos"];
+  const [cat, setCat] = useState("Badges");
+  const [emojiQ, setEmojiQ] = useState("");
+
+  // photo browser state
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [picking, setPicking] = useState(null);
+  const [photoErr, setPhotoErr] = useState("");
+  const [provider, setProvider] = useState("");
+
+  async function runSearch(term) {
+    const t = (term || "").trim();
+    if (!t) return;
+    setQ(t);
+    setSearching(true);
+    setPhotoErr("");
+    setResults([]);
+    try {
+      const { results: items, provider: prov } = await searchImages(t);
+      setResults(items);
+      setProvider(prov);
+      if (!items.length) setPhotoErr(`No results for “${t}”.`);
+    } catch {
+      setPhotoErr("Search is unavailable right now.");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function pickPhoto(item) {
+    setPicking(item.id);
+    try {
+      const resp = await fetch(item.full, { mode: "cors" });
+      const blob = await resp.blob();
+      const dataUrl = await readFileAsDataURL(blob);
+      onAdd(makeImageElement(dataUrl));
+    } catch {
+      onAdd(makeImageElement(item.full));
+    } finally {
+      setPicking(null);
+    }
+  }
+
+  const filteredEmoji = emojiQ.trim()
+    ? EMOJI.filter((x) => x.k.includes(emojiQ.trim().toLowerCase()))
+    : EMOJI;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-400">
+        Click to add to the active screen, then drag · resize · rotate on the canvas.
+      </p>
+
+      <div className="scroll-thin -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {CATS.map((c) => (
+          <button
+            key={c}
+            onClick={() => setCat(c)}
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+              cat === c ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+
+      {cat === "Badges" && (
+        <div className="grid grid-cols-2 gap-2">
+          {BADGES.map((b) => (
+            <button
+              key={b.id}
+              onClick={() => onAdd(makeElement(b))}
+              className="flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] p-2 transition hover:border-white/25"
+            >
+              <span
+                className="flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-bold"
+                style={{ background: b.bg, color: b.fg }}
+              >
+                {b.badge === "rating" && <span style={{ color: b.color }}>{"★".repeat(b.stars || 5)}</span>}
+                {b.emoji && <span>{b.emoji}</span>}
+                {b.text}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {(cat === "Shapes" || cat === "Arrows") && (
+        <div className="grid grid-cols-4 gap-2">
+          {(cat === "Shapes" ? SHAPES : ARROWS).map((s) => (
+            <button
+              key={s.id}
+              onClick={() => onAdd(makeElement(s))}
+              title={s.label}
+              className="grid h-14 place-items-center rounded-lg border border-white/10 bg-white/[0.02] p-2 transition hover:border-white/25"
+            >
+              {s.kind === "badge" ? (
+                <span className="rounded bg-ink-900 px-1.5 py-1 text-[8px] font-bold text-white">
+                  {s.text}
+                </span>
+              ) : (
+                <img src={elementSvg(makeElement(s))} alt={s.label} className="max-h-9 max-w-9" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {cat === "Emoji" && (
+        <div className="space-y-2">
+          <div className="relative">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              value={emojiQ}
+              onChange={(e) => setEmojiQ(e.target.value)}
+              placeholder="Search emoji"
+              className="input pl-9"
+            />
+          </div>
+          <div className="grid grid-cols-6 gap-1.5">
+            {filteredEmoji.map((x) => (
+              <button
+                key={x.e}
+                onClick={() => onAdd(makeEmojiElement(x.e))}
+                title={x.k}
+                className="grid h-10 place-items-center rounded-lg text-xl transition hover:bg-white/10"
+              >
+                {x.e}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {cat === "Icons" && (
+        <div className="grid grid-cols-6 gap-1.5">
+          {ICONS.map((name, i) => {
+            const Icon = elementIcon(name);
+            return (
+              <button
+                key={name + i}
+                onClick={() => onAdd(makeIconElement(name))}
+                title={name}
+                className="grid h-10 place-items-center rounded-lg text-slate-200 transition hover:bg-white/10"
+              >
+                <Icon size={20} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {cat === "Photos" && (
+        <div className="space-y-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              runSearch(q);
+            }}
+            className="flex gap-2"
+          >
+            <div className="relative flex-1">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search people, food, travel…"
+                className="input pl-9"
+              />
+            </div>
+            <button type="submit" disabled={searching} className="btn-soft">
+              {searching ? <Loader2 size={15} className="animate-spin" /> : "Search"}
+            </button>
+          </form>
+
+          <div className="scroll-thin -mx-1 flex flex-wrap gap-1.5 px-1">
+            {PHOTO_CATEGORIES.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => runSearch(p.q)}
+                className="shrink-0 rounded-full bg-white/5 px-2 py-1 text-[10px] font-medium text-slate-300 transition hover:bg-white/10"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {searching ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400">
+              <Loader2 size={16} className="animate-spin" /> Searching…
+            </div>
+          ) : photoErr ? (
+            <p className="py-6 text-center text-sm text-slate-400">{photoErr}</p>
+          ) : results.length ? (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                {results.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => pickPhoto(r)}
+                    disabled={!!picking}
+                    title={r.title}
+                    className="relative h-16 overflow-hidden rounded-lg bg-ink-800 bg-cover bg-center ring-2 ring-transparent transition hover:ring-white/30 disabled:opacity-60"
+                    style={{ backgroundImage: `url("${r.thumb}")` }}
+                  >
+                    {picking === r.id && (
+                      <span className="absolute inset-0 grid place-items-center bg-black/50">
+                        <Loader2 size={16} className="animate-spin text-white" />
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {provider && (
+                <p className="text-[11px] text-slate-500">
+                  {provider === "Pexels" ? "Photos via Pexels." : "Images via Openverse (CC)."}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="py-6 text-center text-xs text-slate-500">
+              Pick a category or search to add a photo element.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

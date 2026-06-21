@@ -1,6 +1,7 @@
 import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
 import { legibilityHalo } from "../lib/contrast";
+import ElementsLayer from "./ElementsLayer";
 
 export function backgroundCss(bg) {
   if (bg.type === "solid") return bg.solid;
@@ -34,7 +35,17 @@ function Notch({ type }) {
  * Renders a single store screenshot (background + text + framed device).
  * `width` controls the on-screen size; aspect ratio comes from the device.
  */
-export default function ScreenCanvas({ state, screen, width = 280, innerRef }) {
+export default function ScreenCanvas({
+  state,
+  screen,
+  width = 280,
+  innerRef,
+  editableElements = false,
+  selectedElement = null,
+  onSelectElement,
+  onChangeElement,
+  onDeleteElement,
+}) {
   const device = getDevice(state.deviceId);
   const aspect = device.canvas.h / device.canvas.w;
   const height = width * aspect;
@@ -139,6 +150,18 @@ export default function ScreenCanvas({ state, screen, width = 280, innerRef }) {
       {textPos === "bottom" && (
         <div className="relative z-10 pb-[8%] w-full flex justify-center">{TextBlock}</div>
       )}
+
+      {screen.elements?.length ? (
+        <ElementsLayer
+          elements={screen.elements}
+          width={width}
+          editable={editableElements}
+          selectedId={selectedElement}
+          onSelect={onSelectElement}
+          onChange={onChangeElement}
+          onDelete={onDeleteElement}
+        />
+      ) : null}
     </div>
   );
 }
