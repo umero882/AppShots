@@ -1,9 +1,31 @@
 import { describe, it, expect } from "vitest";
-import { textEffectStyle, TEXT_EFFECTS, GRADIENT_DEFAULT } from "../textEffects.js";
+import { textEffectStyle, TEXT_EFFECTS, GRADIENT_DEFAULT, TEXT_PRESETS } from "../textEffects.js";
 
 describe("TEXT_EFFECTS", () => {
   it("offers the expected presets", () => {
     expect(TEXT_EFFECTS.map((e) => e.id)).toEqual(["none", "shadow", "glow", "outline", "gradient"]);
+  });
+});
+
+describe("TEXT_PRESETS", () => {
+  it("each preset has an id, name, and a valid text config", () => {
+    expect(TEXT_PRESETS.length).toBeGreaterThanOrEqual(5);
+    const effects = TEXT_EFFECTS.map((e) => e.id);
+    for (const p of TEXT_PRESETS) {
+      expect(p.id && p.name).toBeTruthy();
+      expect(p.text.size).toBeGreaterThan(0);
+      expect(p.text.weight).toBeGreaterThan(0);
+      expect(effects).toContain(p.text.effect);
+    }
+  });
+  it("the gradient preset carries gradient colors", () => {
+    const g = TEXT_PRESETS.find((p) => p.text.effect === "gradient");
+    expect(g.text.gradientFrom).toMatch(/^#/);
+    expect(g.text.gradientTo).toMatch(/^#/);
+  });
+  it("preset ids are unique", () => {
+    const ids = TEXT_PRESETS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
 

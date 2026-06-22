@@ -27,7 +27,7 @@ import {
   BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
 } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
-import { TEXT_EFFECTS } from "../lib/textEffects";
+import { TEXT_EFFECTS, TEXT_PRESETS } from "../lib/textEffects";
 import {
   GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
 } from "../lib/templates";
@@ -1301,6 +1301,20 @@ function TextPanel({ state, update, screen, onScreen }) {
   const setSub = (patch) => update({ subtext: { ...sub, ...patch } });
   return (
     <div className="space-y-5">
+      <div>
+        <p className="label">Style presets</p>
+        <div className="scroll-thin -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          {TEXT_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => update({ text: { ...t, ...p.text } })}
+              className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-slate-200 transition hover:bg-white/10"
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      </div>
       <div>
         <p className="label">Headline</p>
         <input
