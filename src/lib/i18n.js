@@ -40,6 +40,14 @@ export const LOCALES = [
 
 const LOCALE_BY_CODE = Object.fromEntries(LOCALES.map((l) => [l.code, l]));
 
+// Right-to-left scripts — their captions must render with dir="rtl".
+const RTL_CODES = new Set(["ar", "he", "fa", "ur"]);
+
+/** True when a locale's script reads right-to-left (Arabic, Hebrew, …). */
+export function isRtl(code) {
+  return RTL_CODES.has(code);
+}
+
 export function localeName(code) {
   return LOCALE_BY_CODE[code]?.name || code;
 }

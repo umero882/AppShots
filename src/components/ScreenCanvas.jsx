@@ -1,7 +1,7 @@
 import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
 import { orientedCanvas, screenDevices, isFreeMode, panoramaStyle } from "../lib/deviceLayout";
-import { localizeScreen } from "../lib/i18n";
+import { localizeScreen, isRtl } from "../lib/i18n";
 import { legibilityHalo } from "../lib/contrast";
 import { textEffectStyle } from "../lib/textEffects";
 import ElementsLayer from "./ElementsLayer";
@@ -93,10 +93,12 @@ export default function ScreenCanvas({
     return `0 0 ${r}px rgba(${h},0.6), 0 0 ${r * 2}px rgba(${h},0.45)`;
   };
 
+  const rtl = isRtl(locale);
   const TextBlock = lscreen.heading ? (
     <div
       className="px-[8%] text-center"
-      style={{ fontFamily: font.stack, textAlign: state.text.align }}
+      dir={rtl ? "rtl" : undefined}
+      style={{ fontFamily: font.stack, textAlign: state.text.align, direction: rtl ? "rtl" : undefined }}
     >
       <div
         style={{

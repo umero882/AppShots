@@ -1,8 +1,26 @@
 import { describe, it, expect } from "vitest";
 import {
   BASE_LOCALE, LOCALES, localeName, projectLocales,
-  localizeScreen, setLocaleText, baseStrings, applyLocaleStrings,
+  localizeScreen, setLocaleText, baseStrings, applyLocaleStrings, isRtl,
 } from "../i18n.js";
+
+describe("isRtl", () => {
+  it("flags right-to-left scripts", () => {
+    expect(isRtl("ar")).toBe(true);
+    expect(isRtl("he")).toBe(true);
+  });
+  it("is false for left-to-right and base", () => {
+    expect(isRtl("en")).toBe(false);
+    expect(isRtl("es")).toBe(false);
+    expect(isRtl(null)).toBe(false);
+  });
+});
+
+describe("Arabic is a selectable locale", () => {
+  it("appears in the catalog", () => {
+    expect(LOCALES.find((l) => l.code === "ar")?.name).toBe("Arabic");
+  });
+});
 
 describe("locale catalog", () => {
   it("includes English as the base plus common store languages", () => {

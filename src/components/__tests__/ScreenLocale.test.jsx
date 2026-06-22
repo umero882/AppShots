@@ -29,3 +29,22 @@ describe("ScreenCanvas localization", () => {
     expect(render("fr")).toContain("Track your day");
   });
 });
+
+describe("ScreenCanvas RTL", () => {
+  const ar = {
+    ...defaultScreen(),
+    heading: "Hello",
+    i18n: { ar: { heading: "مرحبا", subheading: "" } },
+  };
+  const r = (locale) =>
+    renderToStaticMarkup(<ScreenCanvas state={state} screen={ar} width={300} locale={locale} />);
+  it("renders Arabic right-to-left", () => {
+    const html = r("ar");
+    expect(html).toContain('dir="rtl"');
+    expect(html).toContain("direction:rtl");
+    expect(html).toContain("مرحبا");
+  });
+  it("keeps left-to-right for English", () => {
+    expect(r("en")).not.toContain('dir="rtl"');
+  });
+});
