@@ -223,7 +223,7 @@ export const TEMPLATES = [
   ]),
 
   // ---------- extra variety (proven WCAG-safe combos, new devices) ----------
-  mk("minimal-frost", "Frost", "Minimal", "#6366f1", solidBg("#f3f4f6"), "#111827", "inter", "text-bottom", "iphone-61", [
+  mk("minimal-frost", "Frost", "Minimal", "#6366f1", solidBg("#f3f4f6"), "#111827", "inter", "text-bottom", "iphone-69", [
     scr(mockOnboarding("#6366f1"), "Effortless from day one"),
     scr(mockDashboard("#6366f1"), "Clarity, by default"),
   ]),
@@ -231,7 +231,7 @@ export const TEMPLATES = [
     scr(mockStats("#a5b4fc", { dark: true }), "Built to perform"),
     scr(mockFeed("#a5b4fc", { dark: true }), "Front and center"),
   ]),
-  mk("dark-space", "Space", "Dark", "#818cf8", solidBg("#0b1020"), "#ffffff", "inter", "text-bottom", "iphone-61", [
+  mk("dark-space", "Space", "Dark", "#818cf8", solidBg("#0b1020"), "#ffffff", "inter", "text-bottom", "iphone-69", [
     scr(mockMusic("#818cf8", { dark: true }), "Made for the dark"),
     scr(mockStats("#818cf8", { dark: true }), "Signal over noise"),
   ]),
@@ -243,7 +243,7 @@ export const TEMPLATES = [
     scr(mockFeed("#92400e"), "The long read"),
     scr(mockProfile("#92400e"), "Ideas worth keeping"),
   ]),
-  mk("playful-bubble", "Bubble", "Playful", "#065f46", gradBg("mint", "#14b8a6"), "#064e3b", "inter", "text-top", "iphone-61", [
+  mk("playful-bubble", "Bubble", "Playful", "#065f46", gradBg("mint", "#14b8a6"), "#064e3b", "inter", "text-top", "iphone-69", [
     scr(mockChat("#065f46"), "Say more"),
     scr(mockOnboarding("#065f46"), "Pop in anytime"),
   ]),

@@ -23,12 +23,13 @@ export const DEVICES = [
     buttons: true,
   },
   {
-    id: "iphone-61",
+    id: "iphone-69-max",
     store: "ios",
-    name: 'iPhone 6.1"',
-    canvas: { w: 1179, h: 2556 },
-    screen: { radius: 55, inset: 15 },
-    bezel: { radius: 70, color: "#0b0b0e" },
+    name: 'iPhone 6.9" Max',
+    // iPhone 16 Pro Max — the other App Store-accepted 6.9" size.
+    canvas: { w: 1320, h: 2868 },
+    screen: { radius: 62, inset: 16 },
+    bezel: { radius: 78, color: "#0b0b0e" },
     notch: "dynamic-island",
     buttons: true,
   },
@@ -55,7 +56,19 @@ export const DEVICES = [
   {
     id: "ipad-13",
     store: "ios",
+    name: 'iPad 13"',
+    // iPad Pro 13" (M4) — the current App Store-required iPad size.
+    canvas: { w: 2064, h: 2752 },
+    screen: { radius: 24, inset: 28 },
+    bezel: { radius: 40, color: "#0b0b0e" },
+    notch: "none",
+    buttons: false,
+  },
+  {
+    id: "ipad-129",
+    store: "ios",
     name: 'iPad 12.9"',
+    // Legacy iPad Pro 12.9" — still accepted by the App Store.
     canvas: { w: 2048, h: 2732 },
     screen: { radius: 24, inset: 28 },
     bezel: { radius: 40, color: "#0b0b0e" },

@@ -29,3 +29,40 @@ describe("devices", () => {
     expect(getDevice("nope")).toBe(DEVICES[0]);
   });
 });
+
+describe("store screenshot-spec compliance", () => {
+  // Apple App Store Connect accepted portrait screenshot dimensions (2025/26).
+  const APPLE_OK = new Set([
+    "1290x2796", "1320x2868", // iPhone 6.9"
+    "1242x2688", "1284x2778", // iPhone 6.5"
+    "1242x2208",              // iPhone 5.5"
+    "2064x2752", "2048x2732", // iPad 13" / 12.9"
+    "1668x2388", "1640x2360", // iPad 11"
+  ]);
+  const dim = (d) => `${d.canvas.w}x${d.canvas.h}`;
+
+  it("every iOS device is an Apple-accepted screenshot size", () => {
+    for (const d of DEVICES.filter((x) => x.store === "ios")) {
+      expect(APPLE_OK.has(dim(d)), `${d.name} (${dim(d)}) is not an accepted App Store size`).toBe(true);
+    }
+  });
+
+  it("no longer offers the invalid iPhone 6.1\" (1179×2556) upload size", () => {
+    expect(DEVICES.some((d) => dim(d) === "1179x2556")).toBe(false);
+  });
+
+  it("includes the now-required iPhone 6.9\" and iPad 13\" sizes", () => {
+    const ios = DEVICES.filter((d) => d.store === "ios").map(dim);
+    expect(ios).toContain("1290x2796"); // 6.9"
+    expect(ios).toContain("2064x2752"); // iPad 13"
+  });
+
+  it("every Android device fits Google Play's 320–3840px bounds", () => {
+    for (const d of DEVICES.filter((x) => x.store === "android")) {
+      for (const side of [d.canvas.w, d.canvas.h]) {
+        expect(side).toBeGreaterThanOrEqual(320);
+        expect(side).toBeLessThanOrEqual(3840);
+      }
+    }
+  });
+});
