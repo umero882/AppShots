@@ -19,9 +19,13 @@ import {
   getCapabilities, suggestBackgrounds, generateImage, aiGradientCss, AI_MODELS,
 } from "../lib/aiBackground";
 import ScreenCanvas from "../components/ScreenCanvas";
+import DevicePanel from "../components/DevicePanel";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
-import { DEVICES, getDevice } from "../lib/devices";
+import { getDevice } from "../lib/devices";
+import {
+  orientedCanvas, makeDeviceInstance, duplicateDeviceInstance, isFreeMode, screenDevices,
+} from "../lib/deviceLayout";
 import {
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
   reorderElements, duplicateElement, clamp01,
@@ -61,6 +65,7 @@ export default function Editor() {
   const [saveState, setSaveState] = useState("saved"); // saved | saving | dirty
   const [exporting, setExporting] = useState(false);
   const [selectedEl, setSelectedEl] = useState(null);
+  const [selectedDevice, setSelectedDevice] = useState(null);
   const [format, setFormat] = useState("png"); // png | jpeg
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -286,7 +291,10 @@ export default function Editor() {
 
   function selectElement(id) {
     setSelectedEl(id);
-    if (id) setTab("elements"); // surface the element's layer/delete controls
+    if (id) {
+      setSelectedDevice(null);
+      setTab("elements"); // surface the element's layer/delete controls
+    }
   }
 
   function reorderElement(id, op) {
@@ -303,11 +311,110 @@ export default function Editor() {
     if (el) addElement(duplicateElement(el));
   }
 
+  /* -------- device mockups (free position / 3D tilt / multi / landscape) -------- */
+
+  // Materialize a legacy single-device screen into an explicit instance list so
+  // it can be freely positioned. No-op once the screen is already in free mode.
+  function devicesOf(prev, s) {
+    if (isFreeMode(s)) return s.devices;
+    return [
+      makeDeviceInstance(prev.deviceId, {
+        image: s.image ?? null,
+        scale: prev.deviceScale ?? 0.78,
+        orientation: prev.orientation ?? "portrait",
+      }),
+    ];
+  }
+
+  function withDevices(idx, fn) {
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, i) =>
+        i === idx ? { ...s, devices: fn(devicesOf(prev, s), prev, s) } : s
+      ),
+    }));
+  }
+
+  function promoteToFree() {
+    const s = state.screens[activeScreen];
+    if (isFreeMode(s)) return s.devices[0]?.id;
+    const inst = makeDeviceInstance(state.deviceId, {
+      image: s.image ?? null,
+      scale: state.deviceScale ?? 0.78,
+      orientation: state.orientation ?? "portrait",
+    });
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((sc, i) =>
+        i === activeScreen ? { ...sc, devices: isFreeMode(sc) ? sc.devices : [inst] } : sc
+      ),
+    }));
+    setSelectedDevice(inst.id);
+    return inst.id;
+  }
+
+  function addDevice(deviceId) {
+    const inst = makeDeviceInstance(deviceId, {
+      scale: state.deviceScale ?? 0.78,
+      orientation: state.orientation ?? "portrait",
+      x: 0.5,
+      y: 0.5,
+    });
+    withDevices(activeScreen, (list) => [...list, inst]);
+    setSelectedDevice(inst.id);
+  }
+
+  function changeDevice(id, patch) {
+    withDevices(activeScreen, (list) => list.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  }
+
+  function deleteDevice(id) {
+    // Removing the last mockup drops the screen back to the legacy single-device flow.
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, i) => {
+        if (i !== activeScreen) return s;
+        const next = devicesOf(prev, s).filter((d) => d.id !== id);
+        if (!next.length) {
+          const { devices, ...rest } = s;
+          return { ...rest, image: null };
+        }
+        return { ...s, devices: next };
+      }),
+    }));
+    setSelectedDevice((cur) => (cur === id ? null : cur));
+  }
+
+  function duplicateDevice(id) {
+    const list = screenDevices(state.screens[activeScreen], state);
+    const src = list.find((d) => d.id === id);
+    if (!src) return;
+    const copy = duplicateDeviceInstance(src);
+    withDevices(activeScreen, (l) => [...l, copy]);
+    setSelectedDevice(copy.id);
+  }
+
+  function selectDevice(id) {
+    setSelectedDevice(id);
+    setSelectedEl(null);
+    if (id) setTab("device");
+  }
+
   async function onUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     const dataUrl = await readFileAsDataURL(file);
-    updateScreen(activeScreen, { image: dataUrl });
+    const s = state.screens[activeScreen];
+    // In free mode the upload fills the selected mockup (or the first one);
+    // legacy screens keep the single screen image.
+    if (isFreeMode(s)) {
+      const target = selectedDevice && s.devices.some((d) => d.id === selectedDevice)
+        ? selectedDevice
+        : s.devices[0]?.id;
+      if (target) changeDevice(target, { image: dataUrl });
+    } else {
+      updateScreen(activeScreen, { image: dataUrl });
+    }
     e.target.value = "";
   }
 
@@ -348,10 +455,11 @@ export default function Editor() {
     if (!canvasRef.current) return;
     setExporting(true);
     setSelectedEl(null);
+    setSelectedDevice(null);
     await new Promise((r) => setTimeout(r, 60)); // let selection chrome clear
     try {
-      const device = getDevice(state.deviceId);
-      await exportNode(canvasRef.current, device.canvas.w, {
+      const outW = orientedCanvas(getDevice(state.deviceId), state.orientation).w;
+      await exportNode(canvasRef.current, outW, {
         filename: `${slug(name)}-${activeScreen + 1}`,
         format,
       });
@@ -363,10 +471,11 @@ export default function Editor() {
   async function copyCurrent() {
     if (!canvasRef.current) return;
     setSelectedEl(null);
+    setSelectedDevice(null);
     await new Promise((r) => setTimeout(r, 60));
     try {
-      const device = getDevice(state.deviceId);
-      await copyNodeToClipboard(canvasRef.current, device.canvas.w);
+      const outW = orientedCanvas(getDevice(state.deviceId), state.orientation).w;
+      await copyNodeToClipboard(canvasRef.current, outW);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -377,7 +486,8 @@ export default function Editor() {
   async function exportAll() {
     setExporting(true);
     setSelectedEl(null);
-    const device = getDevice(state.deviceId);
+    setSelectedDevice(null);
+    const outW = orientedCanvas(getDevice(state.deviceId), state.orientation).w;
     const ext = format === "jpeg" ? "jpg" : "png";
     try {
       const files = [];
@@ -386,7 +496,7 @@ export default function Editor() {
         // wait a tick for the canvas to re-render the active screen
         await new Promise((r) => setTimeout(r, 350));
         if (canvasRef.current) {
-          const dataUrl = await renderNode(canvasRef.current, device.canvas.w, { format });
+          const dataUrl = await renderNode(canvasRef.current, outW, { format });
           files.push({ name: `${slug(name)}-${i + 1}.${ext}`, data: await dataUrlToBytes(dataUrl) });
         }
       }
@@ -412,6 +522,13 @@ export default function Editor() {
   const canvasState = { ...state, _textPos: textPos };
   const screen = state.screens[activeScreen];
   const showWatermark = user.plan === "free";
+  // What "Upload/Replace screenshot" targets: the selected mockup in free mode,
+  // else the legacy single screen image.
+  const uploadTargetImage = isFreeMode(screen)
+    ? (screen.devices.find((d) => d.id === selectedDevice) || screen.devices[0])?.image
+    : screen.image;
+  // Connected panorama spans the first screen's background across all screens.
+  const panoramaBg = state.screens[0]?.background || state.background;
 
   return (
     <div className="flex h-screen flex-col bg-ink-950">
@@ -504,7 +621,20 @@ export default function Editor() {
 
           <div className="scroll-thin flex-1 overflow-y-auto p-4">
             {tab === "templates" && <TemplatesPanel update={update} />}
-            {tab === "device" && <DevicePanel state={state} update={update} />}
+            {tab === "device" && (
+              <DevicePanel
+                state={state}
+                update={update}
+                screen={screen}
+                selectedDevice={selectedDevice}
+                onAdd={addDevice}
+                onChange={changeDevice}
+                onDelete={deleteDevice}
+                onDuplicate={duplicateDevice}
+                onSelect={selectDevice}
+                onPromote={promoteToFree}
+              />
+            )}
             {tab === "background" && (
               <BackgroundPanel
                 state={state}
@@ -542,16 +672,31 @@ export default function Editor() {
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16">
             <div className="relative m-auto">
-              <div ref={canvasRef} className="relative" onPointerDown={() => setSelectedEl(null)}>
+              <div
+                ref={canvasRef}
+                className="relative"
+                onPointerDown={() => {
+                  setSelectedEl(null);
+                  setSelectedDevice(null);
+                }}
+              >
                 <ScreenCanvas
                   state={canvasState}
                   screen={screen}
                   width={300}
+                  screenIndex={activeScreen}
+                  screenCount={state.screens.length}
+                  panoramaBg={panoramaBg}
                   editableElements={!exporting}
                   selectedElement={selectedEl}
                   onSelectElement={selectElement}
                   onChangeElement={changeElement}
                   onDeleteElement={deleteElement}
+                  editableDevices={!exporting}
+                  selectedDevice={selectedDevice}
+                  onSelectDevice={selectDevice}
+                  onChangeDevice={changeDevice}
+                  onDeleteDevice={deleteDevice}
                 />
                 {showWatermark && (
                   <div className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/40 px-2 py-0.5 text-[9px] font-semibold text-white/80 backdrop-blur">
@@ -563,7 +708,7 @@ export default function Editor() {
                 onClick={() => fileRef.current?.click()}
                 className="btn-soft absolute -bottom-12 left-1/2 -translate-x-1/2 whitespace-nowrap"
               >
-                <Upload size={15} /> {screen.image ? "Replace screenshot" : "Upload screenshot"}
+                <Upload size={15} /> {uploadTargetImage ? "Replace screenshot" : "Upload screenshot"}
               </button>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUpload} />
             </div>
@@ -582,7 +727,7 @@ export default function Editor() {
                       i === activeScreen ? "border-brand-500" : "border-transparent hover:border-white/20"
                     }`}
                   >
-                    <ScreenCanvas state={canvasState} screen={s} width={56} />
+                    <ScreenCanvas state={canvasState} screen={s} width={56} screenIndex={i} screenCount={state.screens.length} panoramaBg={panoramaBg} />
                   </button>
                   <div className="absolute -top-1.5 -right-1.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
                     <button
@@ -657,39 +802,6 @@ function TemplatesPanel({ update }) {
   );
 }
 
-function DevicePanel({ state, update }) {
-  const grouped = {
-    ios: DEVICES.filter((d) => d.store === "ios"),
-    android: DEVICES.filter((d) => d.store === "android"),
-  };
-  return (
-    <div className="space-y-5">
-      {Object.entries(grouped).map(([store, devices]) => (
-        <div key={store}>
-          <p className="label">{store === "ios" ? "App Store" : "Google Play"}</p>
-          <div className="grid grid-cols-2 gap-2">
-            {devices.map((d) => (
-              <button
-                key={d.id}
-                onClick={() => update({ deviceId: d.id })}
-                className={`rounded-xl border p-3 text-left text-sm transition ${
-                  state.deviceId === d.id
-                    ? "border-brand-500 bg-brand-500/10 text-white"
-                    : "border-white/10 bg-white/[0.02] text-slate-300 hover:border-white/20"
-                }`}
-              >
-                <p className="font-semibold">{d.name}</p>
-                <p className="text-[11px] text-slate-500">
-                  {d.canvas.w}×{d.canvas.h}
-                </p>
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function BackgroundPanel({ state, update, screen, onScreen }) {
   const bg = screen.background || state.background;

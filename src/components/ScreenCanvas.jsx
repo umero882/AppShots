@@ -1,8 +1,10 @@
 import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
+import { orientedCanvas, screenDevices, isFreeMode, panoramaStyle } from "../lib/deviceLayout";
 import { legibilityHalo } from "../lib/contrast";
 import { textEffectStyle } from "../lib/textEffects";
 import ElementsLayer from "./ElementsLayer";
+import { DeviceMockup, DevicesLayer } from "./DeviceMockup";
 
 export function backgroundCss(bg) {
   if (bg.type === "solid") return bg.solid;
@@ -14,48 +16,59 @@ export function backgroundCss(bg) {
   return `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})`;
 }
 
-function Notch({ type }) {
-  if (type === "none") return null;
-  if (type === "dynamic-island") {
-    return (
-      <div className="absolute left-1/2 top-[1.5%] -translate-x-1/2 h-[3.5%] aspect-[2.6] rounded-full bg-black z-20" />
-    );
-  }
-  if (type === "notch") {
-    return (
-      <div className="absolute left-1/2 top-0 -translate-x-1/2 h-[3%] w-[42%] rounded-b-2xl bg-black z-20" />
-    );
-  }
-  // punch-hole
-  return (
-    <div className="absolute left-1/2 top-[1.4%] -translate-x-1/2 h-[1.6%] aspect-square rounded-full bg-black z-20" />
-  );
+// A background value usable as a CSS `background-image` (for the panorama layer,
+// which needs background-size/position). Images become url(); gradients pass
+// through; a solid has no image to span so we return none.
+function backgroundImageCss(bg) {
+  if (bg.type === "image" && bg.image) return `url("${bg.image}")`;
+  if (bg.type === "solid") return "none";
+  return backgroundCss(bg);
 }
 
 /**
- * Renders a single store screenshot (background + text + framed device).
- * `width` controls the on-screen size; aspect ratio comes from the device.
+ * Renders a single store screenshot: background + headline + framed device(s) +
+ * elements. `width` controls on-screen size; aspect ratio comes from the output
+ * device honoring `state.orientation`. `screenIndex`/`screenCount` drive the
+ * connected-panorama slice.
  */
 export default function ScreenCanvas({
   state,
   screen,
   width = 280,
   innerRef,
+  screenIndex = 0,
+  screenCount = 1,
+  panoramaBg = null,
   editableElements = false,
   selectedElement = null,
   onSelectElement,
   onChangeElement,
   onDeleteElement,
+  editableDevices = false,
+  selectedDevice = null,
+  onSelectDevice,
+  onChangeDevice,
+  onDeleteDevice,
 }) {
   const device = getDevice(state.deviceId);
-  const aspect = device.canvas.h / device.canvas.w;
+  const canvas = orientedCanvas(device, state.orientation);
+  const aspect = canvas.h / canvas.w;
   const height = width * aspect;
   // Background is per-screen; fall back to the project background for older
   // projects/templates that don't have one yet.
   const background = screen.background || state.background;
   const font = FONTS.find((f) => f.id === state.text.font) || FONTS[0];
-  const layoutTop = state.text && screen.heading;
   const textPos = state._textPos || "top";
+
+  const free = isFreeMode(screen);
+  const devices = screenDevices(screen, state);
+
+  // Connected panorama: one shared design spanning every screen. The design is
+  // the first screen's background (passed in), so editing screen 1's background
+  // drives the whole panorama.
+  const pano = !!state.panorama?.enabled && screenCount > 1;
+  const panoDesign = panoramaBg || state.background;
+  const paneStyle = pano ? panoramaStyle(screenIndex, screenCount) : null;
 
   const scaledFont = (state.text.size / device.canvas.w) * width;
 
@@ -119,16 +132,25 @@ export default function ScreenCanvas({
       style={{
         width,
         height,
-        background: backgroundCss(background),
+        background: pano ? "#0b0b0e" : backgroundCss(background),
         borderRadius: radius,
         // Clip content for thumbnails + export, but let selection handles spill
         // out while editing so they stay reachable near the canvas edges.
         // (Selection is always cleared before export, so handles never rasterize.)
-        overflow: editableElements ? "visible" : "hidden",
+        overflow: editableElements || editableDevices ? "visible" : "hidden",
       }}
     >
-      {/* image background drawn as an <img> layer so it exports reliably */}
-      {background.type === "image" && background.image && (
+      {/* connected-panorama design layer — one image/gradient spanning screens */}
+      {pano && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{ backgroundImage: backgroundImageCss(panoDesign), borderRadius: radius, ...paneStyle }}
+        />
+      )}
+
+      {/* per-screen image background drawn as an <img> layer so it exports reliably */}
+      {!pano && background.type === "image" && background.image && (
         <>
           <img
             src={background.image}
@@ -152,25 +174,41 @@ export default function ScreenCanvas({
         </>
       )}
 
-      {/* layout */}
+      {/* layout: headline above / below, device in the middle band (legacy flow) */}
       {textPos === "top" && (
-        <div className="relative z-10 pt-[8%] w-full flex justify-center">{TextBlock}</div>
+        <div className="relative z-20 pt-[8%] w-full flex justify-center">{TextBlock}</div>
       )}
 
       <div
         className="relative z-10 flex-1 w-full flex items-center justify-center"
         style={{ paddingTop: textPos === "bottom" ? "6%" : 0 }}
       >
-        <DeviceFrame
-          device={device}
-          image={screen.image}
-          scale={state.deviceScale}
-          frameWidth={width}
-        />
+        {!free && (
+          <DeviceMockup
+            device={device}
+            image={screen.image}
+            width={width * (state.deviceScale ?? 0.78)}
+            orientation={state.orientation}
+          />
+        )}
       </div>
 
       {textPos === "bottom" && (
-        <div className="relative z-10 pb-[8%] w-full flex justify-center">{TextBlock}</div>
+        <div className="relative z-20 pb-[8%] w-full flex justify-center">{TextBlock}</div>
+      )}
+
+      {/* free-positioned device mockups (multi / tilt / rotate / off-canvas) */}
+      {free && (
+        <DevicesLayer
+          devices={devices}
+          width={width}
+          getDevice={getDevice}
+          editable={editableDevices}
+          selectedId={selectedDevice}
+          onSelect={onSelectDevice}
+          onChange={onChangeDevice}
+          onDelete={onDeleteDevice}
+        />
       )}
 
       {screen.elements?.length ? (
@@ -185,76 +223,6 @@ export default function ScreenCanvas({
           twemoji={state.twemoji}
         />
       ) : null}
-    </div>
-  );
-}
-
-function SideButtons({ w, h }) {
-  // power (right), volume up/down (left) — small rounded rects on the bezel edge.
-  const bw = Math.max(2, w * 0.012);
-  const btn = (style) => (
-    <div
-      className="absolute"
-      style={{ width: bw, background: "#26262b", borderRadius: bw, ...style }}
-    />
-  );
-  return (
-    <>
-      {btn({ right: -bw * 0.6, top: h * 0.22, height: h * 0.09 })}
-      {btn({ left: -bw * 0.6, top: h * 0.18, height: h * 0.06 })}
-      {btn({ left: -bw * 0.6, top: h * 0.26, height: h * 0.1 })}
-    </>
-  );
-}
-
-function DeviceFrame({ device, image, scale, frameWidth }) {
-  const w = frameWidth * scale;
-  const aspect = device.canvas.h / device.canvas.w;
-  const h = w * aspect;
-  const bezel = Math.max(4, w * 0.035);
-  const radius = w * 0.13;
-
-  return (
-    <div
-      className="relative shadow-2xl"
-      style={{
-        width: w,
-        height: h,
-        background: device.bezel.color,
-        borderRadius: radius,
-        padding: bezel,
-        boxShadow: "0 25px 60px -15px rgba(0,0,0,0.55)",
-        // subtle metallic edge highlight on the bezel
-        outline: `${Math.max(1, w * 0.004)}px solid rgba(255,255,255,0.10)`,
-        outlineOffset: -Math.max(1, w * 0.004),
-      }}
-    >
-      {device.buttons && <SideButtons w={w} h={h} />}
-      <div
-        className="relative w-full h-full overflow-hidden bg-white"
-        style={{ borderRadius: radius - bezel * 0.6 }}
-      >
-        <Notch type={device.notch} />
-        {image ? (
-          <img
-            src={image}
-            alt="app screenshot"
-            className="w-full h-full object-cover"
-            crossOrigin="anonymous"
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200 text-slate-400">
-            <svg width="28%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="m21 15-5-5L5 21" />
-            </svg>
-            <span className="mt-2 text-[10px] font-medium uppercase tracking-wider">
-              Upload screenshot
-            </span>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
