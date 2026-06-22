@@ -17,15 +17,27 @@ describe("DeviceMockup", () => {
     const html = renderToStaticMarkup(<DeviceMockup device={ios} image={null} width={200} />);
     expect(html).toContain("Upload screenshot");
   });
-  it("paints the bezel with a custom frame color", () => {
+  it("paints the metal rail with a custom frame color", () => {
     const html = renderToStaticMarkup(<DeviceMockup device={ios} width={200} color="#d6d6d8" />);
-    expect(html).toContain("background:#d6d6d8");
+    expect(html).toContain("#d6d6d8"); // base color appears in the rail gradient
   });
-  it("hides the notch in landscape orientation", () => {
+  it("hides the camera cutout in landscape orientation", () => {
     const portrait = renderToStaticMarkup(<DeviceMockup device={ios} width={200} orientation="portrait" />);
     const landscape = renderToStaticMarkup(<DeviceMockup device={ios} width={200} orientation="landscape" />);
-    // the dynamic-island/notch is a black pill div present in portrait only
-    expect(portrait.match(/bg-black/g)?.length || 0).toBeGreaterThan(landscape.match(/bg-black/g)?.length || 0);
+    expect(portrait).toContain("background:#000"); // island present
+    expect(landscape).not.toContain("background:#000");
+  });
+  it("renders family-distinct frames (iPhone island vs iPad lens)", () => {
+    const iph = renderToStaticMarkup(<DeviceMockup device={getDevice("iphone-69")} width={200} />);
+    const ipd = renderToStaticMarkup(<DeviceMockup device={getDevice("ipad-13")} width={200} />);
+    expect(iph).toContain("background:#000"); // dynamic island
+    expect(ipd).toContain("bg-slate-700"); // tiny iPad front lens, not a black pill
+    expect(ipd).not.toContain("background:#000");
+  });
+  it("applies a 3D perspective tilt inside the mockup", () => {
+    const html = renderToStaticMarkup(<DeviceMockup device={ios} width={200} tiltY={20} />);
+    expect(html).toContain("perspective(");
+    expect(html).toContain("rotateY(20deg)");
   });
 });
 

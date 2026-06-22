@@ -3,99 +3,203 @@ import { X, RotateCw, Maximize2 } from "lucide-react";
 import {
   fracDelta, clamp01, angleFromCenter, distance, scaleFromResize, snapToGuides,
 } from "../lib/elements";
-import { orientedCanvas, deviceTransform, frameColorOf, frameButtonColor } from "../lib/deviceLayout";
+import { orientedCanvas, frameColorOf } from "../lib/deviceLayout";
+import { frameSpec, railGradient, shade } from "../lib/deviceFrames";
 
 /**
- * A single device mockup: CSS/SVG bezel + screen + notch + side buttons wrapping
- * an uploaded screenshot. `width` is the rendered frame width in px; the height
- * follows the device aspect (swapped in landscape). The notch is hidden in
- * landscape — a top-center island would sit on the wrong edge.
+ * A realistic device mockup: a metal rail (brushed gradient) around a black
+ * screen bezel and the screenshot, with a family-specific camera cutout and side
+ * buttons — so an iPhone, iPad, Pixel and Galaxy read as different devices, not
+ * just different sizes.
+ *
+ * 3D: tiltX/tiltY apply a single-element perspective rotation (exports cleanly),
+ * plus an extruded metal edge (layered box-shadow in the tilt direction), a
+ * screen glare that shifts with the angle, and a contact shadow on the ground —
+ * the cues that make the tilt actually read as 3D.
  */
-export function DeviceMockup({ device, image, width, orientation = "portrait", color }) {
+export function DeviceMockup({ device, image, width, orientation = "portrait", color, tiltX = 0, tiltY = 0 }) {
   const canvas = orientedCanvas(device, orientation);
   const w = width;
   const h = w * (canvas.h / canvas.w);
-  const bezel = Math.max(4, w * 0.035);
-  const radius = w * 0.13;
-  const notch = orientation === "landscape" ? "none" : device.notch;
-  const bezelColor = color || device.bezel.color;
-  const buttonColor = frameButtonColor(bezelColor);
+  const spec = frameSpec(device);
+  const land = orientation === "landscape";
+
+  const railPx = Math.max(2, w * spec.rail);
+  const bezelPx = Math.max(3, w * spec.bezel);
+  const chinPx = w * spec.chin;
+  const radius = w * spec.radius;
+  const innerR = Math.max(2, radius - railPx);
+  const screenR = Math.max(1, innerR - bezelPx * 0.5);
+
+  const railColor = color || device.bezel.color;
+  const tilted = Math.abs(tiltX) + Math.abs(tiltY) > 1.5;
+
+  // Extruded metal side wall: stacked dark copies stepping in the tilt direction.
+  const extrusion = (() => {
+    if (!tilted) return "";
+    const mag = Math.min(42, Math.abs(tiltX) + Math.abs(tiltY));
+    const ex = -Math.sin((tiltY * Math.PI) / 180);
+    const ey = Math.sin((tiltX * Math.PI) / 180);
+    const len = w * 0.07 * (mag / 30);
+    const dark = shade(railColor, -0.5);
+    const mid = shade(railColor, -0.3);
+    const parts = [];
+    for (let i = 1; i <= 14; i++) {
+      const f = (len * i) / 14;
+      parts.push(`${(ex * f).toFixed(1)}px ${(ey * f).toFixed(1)}px 0 ${i > 9 ? dark : mid}`);
+    }
+    return parts.join(", ");
+  })();
+
+  // Screen glare band — its position tracks the horizontal tilt (glass look).
+  const glarePos = 50 + tiltY * 1.3;
+  const glare = `linear-gradient(112deg, transparent ${glarePos - 28}%, rgba(255,255,255,0.14) ${glarePos}%, rgba(255,255,255,0.04) ${glarePos + 10}%, transparent ${glarePos + 22}%)`;
 
   return (
-    <div
-      className="relative shadow-2xl"
-      style={{
-        width: w,
-        height: h,
-        background: bezelColor,
-        borderRadius: radius,
-        padding: bezel,
-        boxShadow: "0 25px 60px -15px rgba(0,0,0,0.55)",
-        outline: `${Math.max(1, w * 0.004)}px solid rgba(255,255,255,0.10)`,
-        outlineOffset: -Math.max(1, w * 0.004),
-      }}
-    >
-      {device.buttons && <SideButtons w={w} h={h} color={buttonColor} />}
+    <div className="relative" style={{ width: w, height: h }}>
+      {/* contact shadow on the ground, shifting with tilt */}
       <div
-        className="relative w-full h-full overflow-hidden bg-white"
-        style={{ borderRadius: radius - bezel * 0.6 }}
+        aria-hidden="true"
+        className="pointer-events-none absolute"
+        style={{
+          left: "50%", top: "50%", width: w * 0.92, height: h * 0.14,
+          transform: `translate(-50%, ${h * 0.45}px) translateX(${tiltY * 1.1}px)`,
+          background: "radial-gradient(ellipse at center, rgba(0,0,0,0.4), transparent 72%)",
+          borderRadius: "50%",
+        }}
+      />
+
+      {/* the device — single-element 3D projection */}
+      <div
+        style={{
+          width: w, height: h,
+          transform: `perspective(${w * 1.7}px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`,
+          transformOrigin: "center center",
+        }}
       >
-        <Notch type={notch} />
-        {image ? (
-          <img
-            src={image}
-            alt="app screenshot"
-            className="w-full h-full object-cover"
-            crossOrigin="anonymous"
+        {/* metal rail */}
+        <div
+          className="relative h-full w-full"
+          style={{
+            background: railGradient(railColor),
+            borderRadius: radius,
+            padding: railPx,
+            boxShadow: [extrusion, "0 30px 60px -22px rgba(0,0,0,0.6)"].filter(Boolean).join(", "),
+          }}
+        >
+          {/* subtle rail highlight */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{ borderRadius: radius, boxShadow: `inset 0 0 ${railPx * 1.4}px rgba(255,255,255,${spec.railLight ? 0.35 : 0.18})` }}
           />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200 text-slate-400">
-            <svg width="28%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="m21 15-5-5L5 21" />
-            </svg>
-            <span className="mt-2 text-[10px] font-medium uppercase tracking-wider">
-              Upload screenshot
-            </span>
+          {/* black screen bezel (chin/forehead for classic phones) */}
+          <div
+            className="relative h-full w-full overflow-hidden"
+            style={{
+              background: "#050509",
+              borderRadius: innerR,
+              padding: `${bezelPx + (land ? 0 : chinPx)}px ${bezelPx + (land ? chinPx : 0)}px`,
+            }}
+          >
+            <div className="relative h-full w-full overflow-hidden" style={{ borderRadius: screenR }}>
+              {image ? (
+                <img src={image} alt="app screenshot" className="h-full w-full object-cover" crossOrigin="anonymous" />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200 text-slate-400">
+                  <svg width="26%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="m21 15-5-5L5 21" />
+                  </svg>
+                  <span className="mt-2 text-[10px] font-medium uppercase tracking-wider">Upload screenshot</span>
+                </div>
+              )}
+              {/* glass glare */}
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: glare }} />
+            </div>
+
+            <Camera spec={spec} w={w} land={land} chinPx={chinPx} bezelPx={bezelPx} />
           </div>
-        )}
+
+          {!land && <DeviceButtons layout={spec.buttons} w={w} h={h} railPx={railPx} color={railColor} />}
+        </div>
       </div>
     </div>
   );
 }
 
-function Notch({ type }) {
-  if (type === "none") return null;
-  if (type === "dynamic-island") {
-    return <div className="absolute left-1/2 top-[1.5%] -translate-x-1/2 h-[3.5%] aspect-[2.6] rounded-full bg-black z-20" />;
+/** Family-specific front camera / cutout, positioned over the screen or chin. */
+function Camera({ spec, w, land, chinPx, bezelPx }) {
+  if (spec.camera === "none" || land) return null;
+  const black = { background: "#000" };
+  if (spec.camera === "island") {
+    return <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ ...black, top: w * 0.03, width: w * 0.26, height: w * 0.075 }} />;
   }
-  if (type === "notch") {
-    return <div className="absolute left-1/2 top-0 -translate-x-1/2 h-[3%] w-[42%] rounded-b-2xl bg-black z-20" />;
+  if (spec.camera === "notch") {
+    return <div className="absolute left-1/2 -translate-x-1/2 rounded-b-2xl" style={{ ...black, top: bezelPx, width: w * 0.42, height: w * 0.06 }} />;
   }
-  // punch-hole
-  return <div className="absolute left-1/2 top-[1.4%] -translate-x-1/2 h-[1.6%] aspect-square rounded-full bg-black z-20" />;
+  if (spec.camera === "punch") {
+    return <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ ...black, top: w * 0.035, width: w * 0.05, height: w * 0.05 }} />;
+  }
+  if (spec.camera === "dot") {
+    // iPad front camera — a tiny lens centered on the top bezel.
+    return <div className="absolute left-1/2 -translate-x-1/2 rounded-full bg-slate-700" style={{ top: bezelPx * 0.35, width: w * 0.012, height: w * 0.012 }} />;
+  }
+  if (spec.camera === "home") {
+    // Classic iPhone — earpiece in the forehead + home button in the chin.
+    return (
+      <>
+        <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ ...black, top: chinPx * 0.5, width: w * 0.16, height: w * 0.012 }} />
+        <div
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full"
+          style={{ bottom: chinPx * 0.18, width: chinPx * 0.5, height: chinPx * 0.5, background: "#0b0b0e", boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.18)" }}
+        />
+      </>
+    );
+  }
+  return null;
 }
 
-function SideButtons({ w, h, color = "#26262b" }) {
-  const bw = Math.max(2, w * 0.012);
-  const btn = (style) => (
-    <div className="absolute" style={{ width: bw, background: color, borderRadius: bw, ...style }} />
+/** Side buttons whose placement/material vary by device family. */
+function DeviceButtons({ layout, w, h, railPx, color }) {
+  const bw = Math.max(2, w * 0.013);
+  const grad = `linear-gradient(180deg, ${shade(color, 0.2)}, ${shade(color, -0.25)})`;
+  const btn = (style, key) => (
+    <div key={key} className="absolute" style={{ width: bw, background: grad, borderRadius: bw, ...style }} />
   );
+  const off = -bw * 0.55;
+  if (layout === "iphone") {
+    return (
+      <>
+        {btn({ left: off, top: h * 0.16, height: h * 0.045 }, "action")}
+        {btn({ left: off, top: h * 0.24, height: h * 0.07 }, "vup")}
+        {btn({ left: off, top: h * 0.335, height: h * 0.07 }, "vdn")}
+        {btn({ right: off, top: h * 0.26, height: h * 0.11 }, "power")}
+      </>
+    );
+  }
+  if (layout === "ipad") {
+    return (
+      <>
+        {btn({ right: off, top: h * 0.05, height: h * 0.05 }, "power")}
+        {btn({ right: off, top: h * 0.14, height: h * 0.08 }, "vol")}
+      </>
+    );
+  }
+  // right2 — power above a longer volume rocker on the right (Pixel/Galaxy/Android)
   return (
     <>
-      {btn({ right: -bw * 0.6, top: h * 0.22, height: h * 0.09 })}
-      {btn({ left: -bw * 0.6, top: h * 0.18, height: h * 0.06 })}
-      {btn({ left: -bw * 0.6, top: h * 0.26, height: h * 0.1 })}
+      {btn({ right: off, top: h * 0.2, height: h * 0.075 }, "power")}
+      {btn({ right: off, top: h * 0.31, height: h * 0.12 }, "vol")}
     </>
   );
 }
 
 /**
- * Free-positioning overlay for one screen's device mockups. Mirrors
- * ElementsLayer: each instance is absolutely placed by fractional x/y, gets a
- * 3D-tilt + rotation transform, and (when editable + selected) shows
- * drag/resize/rotate/delete handles. Tilt itself is set from the panel sliders.
+ * Free-positioning overlay for one screen's device mockups. Each instance is
+ * absolutely placed by fractional x/y and z-rotated here; the 3D tilt + depth
+ * live inside DeviceMockup. Selected mockups get drag/resize/rotate handles.
  */
 export function DevicesLayer({
   devices = [],
@@ -198,11 +302,18 @@ export function DevicesLayer({
               left: `${d.x * 100}%`,
               top: `${d.y * 100}%`,
               width: elW,
-              transform: deviceTransform(d),
-              transformStyle: "preserve-3d",
+              transform: `translate(-50%, -50%) rotate(${d.rotation || 0}deg)`,
             }}
           >
-            <DeviceMockup device={device} image={d.image} width={elW} orientation={d.orientation} color={color} />
+            <DeviceMockup
+              device={device}
+              image={d.image}
+              width={elW}
+              orientation={d.orientation}
+              color={color}
+              tiltX={d.tiltX}
+              tiltY={d.tiltY}
+            />
 
             {selected && (
               <>
