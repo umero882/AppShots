@@ -1,7 +1,52 @@
 import { useState } from "react";
-import { Smartphone, Plus, Copy, Trash2, X } from "lucide-react";
+import { Smartphone, Plus, Copy, Trash2, X, Box } from "lucide-react";
 import { DEVICES, getDevice } from "../lib/devices";
-import { orientedCanvas, isFreeMode } from "../lib/deviceLayout";
+import { orientedCanvas, isFreeMode, deviceTransform } from "../lib/deviceLayout";
+
+// One-click 3D perspective poses (the signature AppScreens look). Each sets the
+// mockup's tilt + z-rotation; "Flat" clears them.
+export const POSES = [
+  { id: "flat", name: "Flat", tiltX: 0, tiltY: 0, rotation: 0 },
+  { id: "left", name: "Left", tiltX: 6, tiltY: 24, rotation: 0 },
+  { id: "right", name: "Right", tiltX: 6, tiltY: -24, rotation: 0 },
+  { id: "iso-l", name: "Iso L", tiltX: 14, tiltY: 22, rotation: -5 },
+  { id: "iso-r", name: "Iso R", tiltX: 14, tiltY: -22, rotation: 5 },
+  { id: "back", name: "Back", tiltX: 22, tiltY: 0, rotation: 0 },
+];
+
+const poseMatches = (d, p) =>
+  !!d && (d.tiltX || 0) === p.tiltX && (d.tiltY || 0) === p.tiltY && (d.rotation || 0) === p.rotation;
+
+function Tilt3dPicker({ active, onPick }) {
+  return (
+    <div>
+      <p className="label flex items-center gap-1.5"><Box size={13} /> 3D perspective</p>
+      <div className="grid grid-cols-3 gap-2">
+        {POSES.map((p) => {
+          const on = poseMatches(active, p);
+          return (
+            <button
+              key={p.id}
+              onClick={() => onPick(p)}
+              title={p.name}
+              className={`flex flex-col items-center gap-1 rounded-lg border py-2 transition ${
+                on ? "border-brand-500 bg-brand-500/10 text-white" : "border-white/10 bg-white/[0.02] text-slate-300 hover:border-white/20"
+              }`}
+            >
+              <span className="grid h-7 w-7 place-items-center" style={{ perspective: "120px" }}>
+                <span
+                  className="block h-6 w-4 rounded-[3px] border border-current"
+                  style={{ transform: deviceTransform({ tiltX: p.tiltX, tiltY: p.tiltY, rotation: p.rotation }, { perspective: 120 }).replace("translate(-50%, -50%) ", "") }}
+                />
+              </span>
+              <span className="text-[10px] font-semibold">{p.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Device-studio panel: choose the output screenshot size + orientation, then
@@ -82,7 +127,7 @@ function OrientationToggle({ value, onChange }) {
 
 export default function DevicePanel({
   state, update, screen, selectedDevice,
-  onAdd, onChange, onDelete, onDuplicate, onSelect, onPromote,
+  onAdd, onChange, onDelete, onDuplicate, onSelect, onPromote, onPose,
 }) {
   const [adding, setAdding] = useState(false);
   const free = isFreeMode(screen);
@@ -109,8 +154,9 @@ export default function DevicePanel({
         {!free ? (
           <>
             <p className="text-xs text-slate-400">
-              One centered device. Position it freely, tilt it in 3D, or add more.
+              One centered device. Drop it into a 3D pose, position it freely, or add more.
             </p>
+            <Tilt3dPicker active={null} onPick={onPose} />
             <button onClick={() => onPromote()} className="btn-soft w-full justify-center">
               <Smartphone size={15} /> Position &amp; tilt freely
             </button>
@@ -149,6 +195,7 @@ export default function DevicePanel({
                   </div>
                 </div>
                 <OrientationToggle value={selected.orientation} onChange={(o) => onChange(selected.id, { orientation: o })} />
+                <Tilt3dPicker active={selected} onPick={onPose} />
                 <Slider label="Position X" value={Math.round(selected.x * 100)} min={-20} max={120} suffix="%" onChange={(v) => onChange(selected.id, { x: v / 100 })} />
                 <Slider label="Position Y" value={Math.round(selected.y * 100)} min={-20} max={120} suffix="%" onChange={(v) => onChange(selected.id, { y: v / 100 })} />
                 <Slider label="Size" value={Math.round(selected.scale * 100)} min={20} max={160} suffix="%" onChange={(v) => onChange(selected.id, { scale: v / 100 })} />

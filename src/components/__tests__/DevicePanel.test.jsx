@@ -9,7 +9,7 @@ const baseProps = {
   update: vi.fn(),
   selectedDevice: null,
   onAdd: vi.fn(), onChange: vi.fn(), onDelete: vi.fn(),
-  onDuplicate: vi.fn(), onSelect: vi.fn(), onPromote: vi.fn(),
+  onDuplicate: vi.fn(), onSelect: vi.fn(), onPromote: vi.fn(), onPose: vi.fn(),
 };
 
 const render = (props) => renderToStaticMarkup(<DevicePanel {...baseProps} {...props} />);
@@ -23,6 +23,12 @@ describe("DevicePanel — legacy (single device)", () => {
     expect(html).toContain("landscape");
     expect(html).toContain("Position &amp; tilt freely");
     expect(html).toContain("Connected panorama");
+  });
+  it("offers one-click 3D perspective poses", () => {
+    const html = render({ screen: defaultScreen() });
+    expect(html).toContain("3D perspective");
+    expect(html).toContain("Iso L");
+    expect(html).toContain("Back");
   });
   it("reflects landscape output dimensions", () => {
     const html = render({ screen: defaultScreen(), state: { ...defaultProjectState(), orientation: "landscape" } });

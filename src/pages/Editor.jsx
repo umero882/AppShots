@@ -400,6 +400,34 @@ export default function Editor() {
     if (id) setTab("device");
   }
 
+  // Apply a one-click 3D perspective pose (tilt/rotation) to the active mockup,
+  // promoting a legacy screen into free mode first so 3D works from any state.
+  function applyDevicePose(pose) {
+    const s = state.screens[activeScreen];
+    if (!isFreeMode(s)) {
+      const inst = {
+        ...makeDeviceInstance(state.deviceId, {
+          image: s.image ?? null,
+          scale: state.deviceScale ?? 0.78,
+          orientation: state.orientation ?? "portrait",
+        }),
+        ...pose,
+      };
+      update((prev) => ({
+        ...prev,
+        screens: prev.screens.map((sc, i) =>
+          i === activeScreen ? { ...sc, devices: isFreeMode(sc) ? sc.devices : [inst] } : sc
+        ),
+      }));
+      setSelectedDevice(inst.id);
+    } else {
+      const tid = s.devices.some((d) => d.id === selectedDevice) ? selectedDevice : s.devices[0]?.id;
+      if (!tid) return;
+      changeDevice(tid, pose);
+      setSelectedDevice(tid);
+    }
+  }
+
   async function onUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -633,6 +661,7 @@ export default function Editor() {
                 onDuplicate={duplicateDevice}
                 onSelect={selectDevice}
                 onPromote={promoteToFree}
+                onPose={applyDevicePose}
               />
             )}
             {tab === "background" && (
