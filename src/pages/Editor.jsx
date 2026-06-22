@@ -5,8 +5,9 @@ import {
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
   BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Keyboard, X,
 } from "lucide-react";
+import { SHORTCUTS } from "../lib/shortcuts";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
 import {
@@ -62,6 +63,7 @@ export default function Editor() {
   const [selectedEl, setSelectedEl] = useState(null);
   const [format, setFormat] = useState("png"); // png | jpeg
   const [copied, setCopied] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
@@ -161,6 +163,10 @@ export default function Editor() {
       } else if (mod && (e.key === "y" || e.key === "Y")) {
         e.preventDefault();
         redo();
+      } else if (e.key === "?") {
+        setShowHelp((v) => !v);
+      } else if (e.key === "Escape") {
+        setShowHelp(false);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -441,6 +447,13 @@ export default function Editor() {
             >
               <Redo2 size={16} />
             </button>
+            <button
+              onClick={() => setShowHelp(true)}
+              title="Keyboard shortcuts (?)"
+              className="btn-ghost px-2 py-2"
+            >
+              <Keyboard size={16} />
+            </button>
           </div>
           <SaveBadge state={saveState} />
           <div className="hidden overflow-hidden rounded-lg border border-white/10 sm:flex">
@@ -555,6 +568,8 @@ export default function Editor() {
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUpload} />
             </div>
           </div>
+
+          {showHelp && <ShortcutsModal onClose={() => setShowHelp(false)} />}
 
           {/* screen filmstrip */}
           <div className="border-t border-white/5 bg-ink-900 p-3">
@@ -1872,6 +1887,42 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ShortcutsModal({ onClose }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="card w-full max-w-md p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <Keyboard size={16} /> Keyboard shortcuts
+          </h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white">
+            <X size={16} />
+          </button>
+        </div>
+        <ul className="space-y-1.5">
+          {SHORTCUTS.map((s) => (
+            <li key={s.keys} className="flex items-center justify-between gap-4 text-sm">
+              <span className="text-slate-300">{s.desc}</span>
+              <kbd className="shrink-0 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-200">
+                {s.keys}
+              </kbd>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-[11px] text-slate-500">
+          Element shortcuts apply when an element is selected (not while typing in a field).
+        </p>
+      </div>
     </div>
   );
 }
