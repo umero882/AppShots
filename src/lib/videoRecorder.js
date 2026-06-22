@@ -11,18 +11,22 @@ import {
   pickVideoMime, videoExtFor, buildTimeline, frameState, kenBurns,
   VIDEO_MIME_CANDIDATES, VIDEO_MIME_AUDIO_CANDIDATES,
 } from "./video";
+import { renderTrackBuffer, trackById } from "./music";
 
 // Build a looping audio track from a data-URL, routed through a gain (volume)
 // into a MediaStream destination. Returns { tracks, cleanup } — tracks is empty
 // and cleanup a no-op if anything fails (music is optional, never blocks export).
 async function buildAudioTrack(audio) {
-  if (!audio?.data) return { tracks: [], cleanup: () => {} };
+  if (!audio || (!audio.data && !audio.builtin)) return { tracks: [], cleanup: () => {} };
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     const ac = new AC();
     if (ac.state === "suspended") await ac.resume();
-    const arr = await (await fetch(audio.data)).arrayBuffer();
-    const buffer = await ac.decodeAudioData(arr);
+    // Uploaded file → decode; built-in track → synthesize a loopable buffer.
+    const buffer = audio.data
+      ? await ac.decodeAudioData(await (await fetch(audio.data)).arrayBuffer())
+      : await renderTrackBuffer(trackById(audio.builtin), ac.sampleRate);
+    if (!buffer) return { tracks: [], cleanup: () => ac.close() };
     const src = ac.createBufferSource();
     src.buffer = buffer;
     src.loop = true;

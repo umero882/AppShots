@@ -24,6 +24,7 @@ import {
 } from "../lib/i18n";
 import { videoSize } from "../lib/video";
 import { recordReel, videoSupported } from "../lib/videoRecorder";
+import { MUSIC_TRACKS } from "../lib/music";
 import ScreenCanvas from "../components/ScreenCanvas";
 import DevicePanel from "../components/DevicePanel";
 import { useAuth } from "../lib/auth";
@@ -659,7 +660,9 @@ export default function Editor() {
         images,
         width: vw,
         height: vh,
-        audio: state.audio?.data ? { data: state.audio.data, volume: state.audio.volume ?? 0.7 } : null,
+        audio: state.audio
+          ? { data: state.audio.data, builtin: state.audio.builtin, volume: state.audio.volume ?? 0.7 }
+          : null,
         onProgress: (p) => setVideoMsg(`Recording ${Math.round(p * 100)}%`),
       });
       const url = URL.createObjectURL(blob);
@@ -790,12 +793,35 @@ export default function Editor() {
                 <div className="fixed inset-0 z-40" onClick={() => setShowAudio(false)} />
                 <div className="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-white/10 bg-ink-900 p-3 shadow-xl">
                   <p className="label flex items-center gap-1.5"><Music size={13} /> Video background music</p>
-                  {state.audio ? (
-                    <>
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="truncate text-xs text-slate-200" title={state.audio.name}>{state.audio.name}</span>
+                  <div className="mb-2 grid grid-cols-2 gap-1.5">
+                    {MUSIC_TRACKS.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => update({ audio: { builtin: t.id, volume: state.audio?.volume ?? 0.7 } })}
+                        className={`rounded-lg border px-2 py-1.5 text-left transition ${
+                          state.audio?.builtin === t.id
+                            ? "border-brand-500 bg-brand-500/10 text-white"
+                            : "border-white/10 text-slate-300 hover:border-white/20"
+                        }`}
+                      >
+                        <span className="block text-xs font-semibold">{t.name}</span>
+                        <span className="block text-[10px] text-slate-500">{t.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => audioRef.current?.click()} className="btn-soft w-full justify-center">
+                    <Upload size={14} /> {state.audio?.data ? "Replace uploaded track" : "Upload your own"}
+                  </button>
+                  {state.audio && (
+                    <div className="mt-2 border-t border-white/10 pt-2">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="truncate text-[11px] text-slate-300">
+                          {state.audio.data
+                            ? state.audio.name
+                            : `${MUSIC_TRACKS.find((t) => t.id === state.audio.builtin)?.name || "Track"} (built-in)`}
+                        </span>
                         <button onClick={() => update({ audio: null })} title="Remove" className="text-slate-400 hover:text-red-400">
-                          <X size={14} />
+                          <X size={13} />
                         </button>
                       </div>
                       <p className="label">Volume · {Math.round((state.audio.volume ?? 0.7) * 100)}%</p>
@@ -808,20 +834,11 @@ export default function Editor() {
                         onChange={(e) => update({ audio: { ...state.audio, volume: +e.target.value } })}
                         className="w-full accent-brand-500"
                       />
-                      <button onClick={() => audioRef.current?.click()} className="mt-2 text-xs text-slate-400 hover:text-white">
-                        Replace track
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => audioRef.current?.click()} className="btn-soft w-full justify-center">
-                        <Upload size={14} /> Add music
-                      </button>
-                      <p className="mt-2 text-[11px] text-slate-500">
-                        MP3/M4A/WAV. Loops to the video length and is mixed into the export. Use audio you have the rights to.
-                      </p>
-                    </>
+                    </div>
                   )}
+                  <p className="mt-2 text-[10px] text-slate-500">
+                    Built-in tracks are royalty-free. Uploads loop to the video length — use audio you have the rights to.
+                  </p>
                   <input ref={audioRef} type="file" accept="audio/*" hidden onChange={onAudioUpload} />
                 </div>
               </>
