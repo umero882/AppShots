@@ -11,12 +11,12 @@ const render = (elements, extra = {}) =>
 
 describe("ElementsLayer rendering", () => {
   it("renders a badge's text", () => {
-    const html = render([makeElement(BADGES.find((b) => b.id === "featured"))]);
+    const html = render([makeElement(BADGES.find((b) => b.text === "Featured"))]);
     expect(html).toContain("Featured");
   });
 
   it("renders a rating badge with stars", () => {
-    const html = render([makeElement(BADGES.find((b) => b.id === "rating"))]);
+    const html = render([makeElement(BADGES.find((b) => b.badge === "rating"))]);
     expect(html).toContain("★★★★★");
     expect(html).toContain("4.9");
   });

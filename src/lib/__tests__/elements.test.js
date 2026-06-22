@@ -56,13 +56,19 @@ describe("geometry", () => {
 });
 
 describe("libraries", () => {
-  it("expose non-empty curated sets", () => {
-    expect(BADGES.length).toBeGreaterThanOrEqual(5);
-    expect(SHAPES.length).toBeGreaterThanOrEqual(5);
-    expect(ARROWS.length).toBeGreaterThanOrEqual(4);
-    expect(EMOJI.length).toBeGreaterThanOrEqual(30);
-    expect(ICONS.length).toBeGreaterThanOrEqual(20);
+  it("expose large curated sets (~100+ per category)", () => {
+    expect(BADGES.length).toBeGreaterThanOrEqual(100);
+    expect(SHAPES.length).toBeGreaterThanOrEqual(100);
+    expect(ARROWS.length).toBeGreaterThanOrEqual(90);
+    expect(EMOJI.length).toBeGreaterThanOrEqual(100);
+    expect(ICONS.length).toBeGreaterThanOrEqual(100);
     expect(PHOTO_CATEGORIES.length).toBeGreaterThanOrEqual(20);
+  });
+  it("element library ids are unique within each set", () => {
+    for (const set of [BADGES, SHAPES, ARROWS]) {
+      const ids = set.map((x) => x.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
   });
   it("every photo category has an id, label and query", () => {
     for (const c of PHOTO_CATEGORIES) {
