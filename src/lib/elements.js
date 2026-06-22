@@ -55,6 +55,31 @@ export function snapToCenter(x, y, threshold = 0.02) {
   return { x: snapX ? 0.5 : x, y: snapY ? 0.5 : y, snapX, snapY };
 }
 
+/**
+ * Snap a dragged position to the nearest target on each axis (canvas center +
+ * other elements' centers). Returns the snapped pos and the fraction position of
+ * each active guide line (or null).
+ * @param {Array<{x:number,y:number}>} targets
+ * @returns { x, y, guideX, guideY }
+ */
+export function snapToGuides(x, y, targets = [], threshold = 0.02) {
+  let sx = x;
+  let sy = y;
+  let guideX = null;
+  let guideY = null;
+  for (const t of targets) {
+    if (guideX === null && Math.abs(x - t.x) <= threshold) {
+      sx = t.x;
+      guideX = t.x;
+    }
+    if (guideY === null && Math.abs(y - t.y) <= threshold) {
+      sy = t.y;
+      guideY = t.y;
+    }
+  }
+  return { x: sx, y: sy, guideX, guideY };
+}
+
 /* ----------------------------- SVG helpers ----------------------------- */
 
 const svgUri = (svg) =>

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  clamp01, fracDelta, angleFromCenter, distance, scaleFromResize, snapToCenter,
+  clamp01, fracDelta, angleFromCenter, distance, scaleFromResize, snapToCenter, snapToGuides,
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
   reorderElements, duplicateElement, twemojiCodepoints, twemojiUrl,
   BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
@@ -37,6 +37,21 @@ describe("geometry", () => {
     expect(snapToCenter(0.5, 0.5)).toMatchObject({ x: 0.5, y: 0.5, snapX: true, snapY: true });
     const far = snapToCenter(0.2, 0.8);
     expect(far).toMatchObject({ x: 0.2, y: 0.8, snapX: false, snapY: false });
+  });
+  it("snapToGuides snaps to a target's center and reports the guide position", () => {
+    const targets = [{ x: 0.5, y: 0.5 }, { x: 0.3, y: 0.7 }];
+    const r = snapToGuides(0.305, 0.3, targets); // near target x=0.3, no y target near
+    expect(r.x).toBe(0.3);
+    expect(r.guideX).toBe(0.3);
+    expect(r.guideY).toBeNull();
+  });
+  it("snapToGuides snaps both axes to the canvas center", () => {
+    const r = snapToGuides(0.49, 0.51, [{ x: 0.5, y: 0.5 }]);
+    expect(r).toMatchObject({ x: 0.5, y: 0.5, guideX: 0.5, guideY: 0.5 });
+  });
+  it("snapToGuides leaves a far position untouched", () => {
+    const r = snapToGuides(0.1, 0.9, [{ x: 0.5, y: 0.5 }]);
+    expect(r).toMatchObject({ x: 0.1, y: 0.9, guideX: null, guideY: null });
   });
 });
 
