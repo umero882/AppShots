@@ -1,17 +1,67 @@
-import { useMemo, useState, memo } from "react";
-import { Search } from "lucide-react";
+import { useMemo, useState, memo, useEffect } from "react";
+import { Search, X, Check } from "lucide-react";
 import ScreenCanvas from "./ScreenCanvas";
 import {
   TEMPLATES, TEMPLATE_CATEGORIES, filterTemplates, textPosFor,
 } from "../lib/galleryTemplates";
 
-const Thumb = memo(function Thumb({ template, width }) {
-  const state = {
-    ...template.style,
-    _textPos: textPosFor(template.style.layoutId),
-  };
-  return <ScreenCanvas state={state} screen={template.screens[0]} width={width} />;
+const stateFor = (template) => ({
+  ...template.style,
+  _textPos: textPosFor(template.style.layoutId),
 });
+
+const Thumb = memo(function Thumb({ template, width }) {
+  return <ScreenCanvas state={stateFor(template)} screen={template.screens[0]} width={width} />;
+});
+
+/** Full-screen preview of every screen in a template, with an apply action. */
+export function TemplatePreview({ template, onUse, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const state = stateFor(template);
+  const n = template.screens.length;
+  return (
+    <div
+      className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-label={`Preview of ${template.name}`}
+    >
+      <div className="card max-h-[88vh] w-full max-w-3xl overflow-hidden p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-white">{template.name}</h3>
+            <p className="text-xs text-slate-500">
+              {template.category} · {n} screen{n > 1 ? "s" : ""}
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Close preview" className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="scroll-thin flex gap-4 overflow-x-auto pb-2">
+          {template.screens.map((s, i) => (
+            <div key={i} className="shrink-0">
+              <ScreenCanvas state={state} screen={s} width={200} />
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="btn-ghost">Cancel</button>
+          <button onClick={onUse} className="btn-primary">
+            <Check size={16} /> Use this template
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function TemplateGrid({
   templates = TEMPLATES,
@@ -21,6 +71,7 @@ export default function TemplateGrid({
 }) {
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
+  const [preview, setPreview] = useState(null);
 
   const visible = useMemo(
     () => filterTemplates(templates, { category, query }),
@@ -72,8 +123,8 @@ export default function TemplateGrid({
           {visible.map((t) => (
             <button
               key={t.id}
-              onClick={() => onSelect?.(t)}
-              aria-label={`Use template ${t.name}`}
+              onClick={() => setPreview(t)}
+              aria-label={`Preview template ${t.name}`}
               className="card group flex flex-col items-center gap-2 p-2 text-center transition hover:border-brand-500/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <div className="grid w-full place-items-center overflow-hidden rounded-lg bg-ink-900 p-2">
@@ -86,6 +137,17 @@ export default function TemplateGrid({
             </button>
           ))}
         </div>
+      )}
+
+      {preview && (
+        <TemplatePreview
+          template={preview}
+          onUse={() => {
+            onSelect?.(preview);
+            setPreview(null);
+          }}
+          onClose={() => setPreview(null)}
+        />
       )}
     </div>
   );
