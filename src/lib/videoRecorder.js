@@ -9,7 +9,36 @@
  */
 import {
   pickVideoMime, videoExtFor, buildTimeline, frameState, kenBurns,
+  VIDEO_MIME_CANDIDATES, VIDEO_MIME_AUDIO_CANDIDATES,
 } from "./video";
+
+// Build a looping audio track from a data-URL, routed through a gain (volume)
+// into a MediaStream destination. Returns { tracks, cleanup } — tracks is empty
+// and cleanup a no-op if anything fails (music is optional, never blocks export).
+async function buildAudioTrack(audio) {
+  if (!audio?.data) return { tracks: [], cleanup: () => {} };
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ac = new AC();
+    if (ac.state === "suspended") await ac.resume();
+    const arr = await (await fetch(audio.data)).arrayBuffer();
+    const buffer = await ac.decodeAudioData(arr);
+    const src = ac.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    const gain = ac.createGain();
+    gain.gain.value = audio.volume ?? 0.7;
+    const dest = ac.createMediaStreamDestination();
+    src.connect(gain).connect(dest);
+    src.start();
+    return {
+      tracks: dest.stream.getAudioTracks(),
+      cleanup: () => { try { src.stop(); } catch { /* already stopped */ } ac.close(); },
+    };
+  } catch {
+    return { tracks: [], cleanup: () => {} };
+  }
+}
 
 export function videoSupported() {
   return (
@@ -47,7 +76,7 @@ function drawCover(ctx, img, W, H, scale, panY, alpha) {
  * @returns {Promise<{ blob: Blob, ext: string }>}
  */
 export async function recordReel({
-  images, width, height, perScreenMs = 2500, transitionMs = 600, fps = 30, onProgress,
+  images, width, height, perScreenMs = 2500, transitionMs = 600, fps = 30, audio = null, onProgress,
 }) {
   if (!videoSupported()) throw new Error("video-unsupported");
   if (!images?.length) throw new Error("video-empty");
@@ -60,11 +89,22 @@ export async function recordReel({
   canvas.height = height;
   const ctx = canvas.getContext("2d");
 
-  const mime = pickVideoMime((m) => MediaRecorder.isTypeSupported?.(m));
-  const stream = canvas.captureStream(fps);
+  // Optional looping background music mixed into the recorded stream.
+  const { tracks: audioTracks, cleanup: stopAudio } = await buildAudioTrack(audio);
+  const hasAudio = audioTracks.length > 0;
+
+  const stream = new MediaStream([
+    ...canvas.captureStream(fps).getVideoTracks(),
+    ...audioTracks,
+  ]);
+  const mime = pickVideoMime(
+    (m) => MediaRecorder.isTypeSupported?.(m),
+    hasAudio ? VIDEO_MIME_AUDIO_CANDIDATES : VIDEO_MIME_CANDIDATES
+  );
   const rec = new MediaRecorder(stream, {
     ...(mime ? { mimeType: mime } : {}),
     videoBitsPerSecond: 8_000_000,
+    audioBitsPerSecond: 128_000,
   });
   const chunks = [];
   rec.ondataavailable = (e) => e.data?.size && chunks.push(e.data);
@@ -92,6 +132,7 @@ export async function recordReel({
   await new Promise((r) => setTimeout(r, 120));
   rec.stop();
   const blob = await stopped;
+  stopAudio();
   return { blob, ext: videoExtFor(mime || "video/webm") };
 }
 

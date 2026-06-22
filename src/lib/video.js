@@ -17,6 +17,15 @@ export const VIDEO_MIME_CANDIDATES = [
   "video/webm",
 ];
 
+// Same preference order but with an audio codec, used when the reel has music.
+export const VIDEO_MIME_AUDIO_CANDIDATES = [
+  "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+  "video/mp4",
+  "video/webm;codecs=vp9,opus",
+  "video/webm;codecs=vp8,opus",
+  "video/webm",
+];
+
 /** First supported mime per `isSupported`, or "" when none match. */
 export function pickVideoMime(isSupported, candidates = VIDEO_MIME_CANDIDATES) {
   for (const m of candidates) {

@@ -1,8 +1,19 @@
 import { describe, it, expect } from "vitest";
 import {
   pickVideoMime, videoExtFor, videoSize, easeInOut, buildTimeline, frameState, kenBurns,
-  VIDEO_MIME_CANDIDATES,
+  VIDEO_MIME_CANDIDATES, VIDEO_MIME_AUDIO_CANDIDATES,
 } from "../video.js";
+
+describe("audio mime candidates", () => {
+  it("carry an audio codec and still prefer mp4 first", () => {
+    expect(VIDEO_MIME_AUDIO_CANDIDATES[0]).toContain("mp4a");
+    expect(pickVideoMime((m) => m.includes("webm"), VIDEO_MIME_AUDIO_CANDIDATES)).toContain("opus");
+  });
+  it("pick mp4+aac when supported", () => {
+    expect(pickVideoMime((m) => m.startsWith("video/mp4"), VIDEO_MIME_AUDIO_CANDIDATES))
+      .toBe("video/mp4;codecs=avc1.42E01E,mp4a.40.2");
+  });
+});
 
 describe("pickVideoMime", () => {
   it("prefers mp4/H.264 when supported", () => {

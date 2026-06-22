@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
   BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
-  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film,
+  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film, Music,
 } from "lucide-react";
 import { SHORTCUTS } from "../lib/shortcuts";
 import Logo from "../components/Logo";
@@ -79,9 +79,11 @@ export default function Editor() {
   const [translating, setTranslating] = useState(false);
   const [translateErr, setTranslateErr] = useState("");
   const [videoMsg, setVideoMsg] = useState(""); // app-preview video progress/status
+  const [showAudio, setShowAudio] = useState(false); // bg-music popover
 
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
+  const audioRef = useRef(null);
   const saveTimer = useRef(null);
 
   // Undo/redo history. Snapshots of `state`; rapid edits (typing/dragging) within
@@ -623,6 +625,14 @@ export default function Editor() {
     }
   }
 
+  async function onAudioUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const data = await readFileAsDataURL(file);
+    update({ audio: { name: file.name, data, volume: state.audio?.volume ?? 0.7 } });
+    e.target.value = "";
+  }
+
   // Render an animated app-preview reel (Ken Burns + crossfades) of every screen
   // and download it as MP4 (when supported) or WebM.
   async function exportVideo() {
@@ -649,6 +659,7 @@ export default function Editor() {
         images,
         width: vw,
         height: vh,
+        audio: state.audio?.data ? { data: state.audio.data, volume: state.audio.volume ?? 0.7 } : null,
         onProgress: (p) => setVideoMsg(`Recording ${Math.round(p * 100)}%`),
       });
       const url = URL.createObjectURL(blob);
@@ -766,6 +777,56 @@ export default function Editor() {
             {projectLocales(state).length > 1 ? "Export all langs" : "Export .zip"}
           </button>
           {videoMsg && <span className="hidden text-xs font-medium text-brand-300 lg:inline">{videoMsg}</span>}
+          <div className="relative hidden md:block">
+            <button
+              onClick={() => setShowAudio((v) => !v)}
+              title="Background music for the video"
+              className={`btn-ghost px-2 py-2 ${state.audio ? "text-brand-300" : ""}`}
+            >
+              <Music size={16} />
+            </button>
+            {showAudio && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowAudio(false)} />
+                <div className="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-white/10 bg-ink-900 p-3 shadow-xl">
+                  <p className="label flex items-center gap-1.5"><Music size={13} /> Video background music</p>
+                  {state.audio ? (
+                    <>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="truncate text-xs text-slate-200" title={state.audio.name}>{state.audio.name}</span>
+                        <button onClick={() => update({ audio: null })} title="Remove" className="text-slate-400 hover:text-red-400">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <p className="label">Volume · {Math.round((state.audio.volume ?? 0.7) * 100)}%</p>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={state.audio.volume ?? 0.7}
+                        onChange={(e) => update({ audio: { ...state.audio, volume: +e.target.value } })}
+                        className="w-full accent-brand-500"
+                      />
+                      <button onClick={() => audioRef.current?.click()} className="mt-2 text-xs text-slate-400 hover:text-white">
+                        Replace track
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => audioRef.current?.click()} className="btn-soft w-full justify-center">
+                        <Upload size={14} /> Add music
+                      </button>
+                      <p className="mt-2 text-[11px] text-slate-500">
+                        MP3/M4A/WAV. Loops to the video length and is mixed into the export. Use audio you have the rights to.
+                      </p>
+                    </>
+                  )}
+                  <input ref={audioRef} type="file" accept="audio/*" hidden onChange={onAudioUpload} />
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={exportVideo}
             disabled={exporting}
