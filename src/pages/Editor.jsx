@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
   BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
-  ChevronLeft, ChevronRight, Keyboard, X, Languages,
+  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film,
 } from "lucide-react";
 import { SHORTCUTS } from "../lib/shortcuts";
 import Logo from "../components/Logo";
@@ -22,6 +22,8 @@ import {
   BASE_LOCALE, LOCALES, localeName, projectLocales, localizeScreen, setLocaleText,
   baseStrings, applyLocaleStrings,
 } from "../lib/i18n";
+import { videoSize } from "../lib/video";
+import { recordReel, videoSupported } from "../lib/videoRecorder";
 import ScreenCanvas from "../components/ScreenCanvas";
 import DevicePanel from "../components/DevicePanel";
 import { useAuth } from "../lib/auth";
@@ -76,6 +78,7 @@ export default function Editor() {
   const [locale, setLocale] = useState(BASE_LOCALE); // active preview/edit language
   const [translating, setTranslating] = useState(false);
   const [translateErr, setTranslateErr] = useState("");
+  const [videoMsg, setVideoMsg] = useState(""); // app-preview video progress/status
 
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
@@ -620,6 +623,47 @@ export default function Editor() {
     }
   }
 
+  // Render an animated app-preview reel (Ken Burns + crossfades) of every screen
+  // and download it as MP4 (when supported) or WebM.
+  async function exportVideo() {
+    if (!videoSupported()) {
+      setVideoMsg("Video export isn't supported in this browser.");
+      setTimeout(() => setVideoMsg(""), 4000);
+      return;
+    }
+    setExporting(true);
+    setSelectedEl(null);
+    setSelectedDevice(null);
+    const oc = orientedCanvas(getDevice(state.deviceId), state.orientation);
+    const { width: vw, height: vh } = videoSize(oc.w, oc.h);
+    const origScreen = activeScreen;
+    try {
+      setVideoMsg("Rendering screens…");
+      const images = [];
+      for (let i = 0; i < state.screens.length; i++) {
+        setActiveScreen(i);
+        await new Promise((r) => setTimeout(r, 350));
+        if (canvasRef.current) images.push(await renderNode(canvasRef.current, vw, { format: "png" }));
+      }
+      const { blob, ext } = await recordReel({
+        images,
+        width: vw,
+        height: vh,
+        onProgress: (p) => setVideoMsg(`Recording ${Math.round(p * 100)}%`),
+      });
+      const url = URL.createObjectURL(blob);
+      triggerDownload(url, `${slug(name)}.${ext}`);
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+      setVideoMsg("");
+    } catch {
+      setVideoMsg("Video export failed — try again.");
+      setTimeout(() => setVideoMsg(""), 4000);
+    } finally {
+      setActiveScreen(origScreen);
+      setExporting(false);
+    }
+  }
+
   if (!state) {
     return (
       <div className="grid min-h-screen place-items-center bg-ink-950 text-slate-400">
@@ -720,6 +764,16 @@ export default function Editor() {
           >
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             {projectLocales(state).length > 1 ? "Export all langs" : "Export .zip"}
+          </button>
+          {videoMsg && <span className="hidden text-xs font-medium text-brand-300 lg:inline">{videoMsg}</span>}
+          <button
+            onClick={exportVideo}
+            disabled={exporting}
+            className="btn-ghost hidden md:inline-flex"
+            title="Render an animated app-preview reel (MP4/WebM) of all screens"
+          >
+            {exporting ? <Loader2 size={16} className="animate-spin" /> : <Film size={16} />}
+            Video
           </button>
           <button onClick={exportOne} disabled={exporting} className="btn-primary">
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
