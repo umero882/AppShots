@@ -45,3 +45,11 @@ export async function generateImage({ concept, prompt = "" }) {
   const data = await postJson("/api/ai/image", { concept, prompt });
   return data.image;
 }
+
+/**
+ * Translate ordered caption strings into the target locales.
+ * @returns {Promise<{ translations: { [code]: string[] } }>}
+ */
+export async function translateTexts({ texts = [], targets = [], model } = {}) {
+  return postJson("/api/ai/translate", { texts, targets, model });
+}

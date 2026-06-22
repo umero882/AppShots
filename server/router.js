@@ -3,7 +3,7 @@
  * errors to { status, body }. Reused by the Vite dev middleware now and by any
  * Node/serverless wrapper later — no host-specific types leak in here.
  */
-import { capabilities, suggest, image, search, statusForError } from "./handlers.js";
+import { capabilities, suggest, image, search, translate, statusForError } from "./handlers.js";
 
 const ok = (body) => ({ status: 200, body });
 
@@ -12,6 +12,7 @@ export async function route({ method, path, query = {}, body = {} }) {
     if (method === "GET" && path === "/api/capabilities") return ok(capabilities());
     if (method === "POST" && path === "/api/ai/suggest") return ok(await suggest(body));
     if (method === "POST" && path === "/api/ai/image") return ok(await image(body));
+    if (method === "POST" && path === "/api/ai/translate") return ok(await translate(body));
     if (method === "GET" && path === "/api/search") return ok(await search(query.q || ""));
     return { status: 404, body: { error: "not-found" } };
   } catch (e) {

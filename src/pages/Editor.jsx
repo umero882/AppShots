@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
   BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
-  ChevronLeft, ChevronRight, Keyboard, X,
+  ChevronLeft, ChevronRight, Keyboard, X, Languages,
 } from "lucide-react";
 import { SHORTCUTS } from "../lib/shortcuts";
 import Logo from "../components/Logo";
@@ -16,8 +16,12 @@ import {
 import { BG_PRESETS, BG_CATEGORIES } from "../lib/backgroundImages";
 import { searchImages } from "../lib/imageSearch";
 import {
-  getCapabilities, suggestBackgrounds, generateImage, aiGradientCss, AI_MODELS,
+  getCapabilities, suggestBackgrounds, generateImage, aiGradientCss, AI_MODELS, translateTexts,
 } from "../lib/aiBackground";
+import {
+  BASE_LOCALE, LOCALES, localeName, projectLocales, localizeScreen, setLocaleText,
+  baseStrings, applyLocaleStrings,
+} from "../lib/i18n";
 import ScreenCanvas from "../components/ScreenCanvas";
 import DevicePanel from "../components/DevicePanel";
 import { useAuth } from "../lib/auth";
@@ -69,6 +73,9 @@ export default function Editor() {
   const [format, setFormat] = useState("png"); // png | jpeg
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [locale, setLocale] = useState(BASE_LOCALE); // active preview/edit language
+  const [translating, setTranslating] = useState(false);
+  const [translateErr, setTranslateErr] = useState("");
 
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
@@ -428,6 +435,69 @@ export default function Editor() {
     }
   }
 
+  /* ----------------------------- localization ----------------------------- */
+
+  function addLocale(code) {
+    update((prev) => {
+      const cur = projectLocales(prev);
+      if (cur.includes(code)) return prev;
+      return { ...prev, locales: [...cur, code] };
+    });
+    setLocale(code);
+    setTab("text");
+  }
+
+  function removeLocale(code) {
+    if (code === BASE_LOCALE) return;
+    update((prev) => ({
+      ...prev,
+      locales: projectLocales(prev).filter((c) => c !== code),
+      screens: prev.screens.map((s) => {
+        if (!s.i18n?.[code]) return s;
+        const { [code]: _drop, ...rest } = s.i18n;
+        return { ...s, i18n: rest };
+      }),
+    }));
+    setLocale((cur) => (cur === code ? BASE_LOCALE : cur));
+  }
+
+  async function translateAll() {
+    const targets = projectLocales(state)
+      .filter((c) => c !== BASE_LOCALE)
+      .map((c) => ({ code: c, name: localeName(c) }));
+    if (!targets.length) return;
+    setTranslating(true);
+    setTranslateErr("");
+    try {
+      const texts = baseStrings(state.screens);
+      const { translations } = await translateTexts({ texts, targets });
+      update((prev) => {
+        let screens = prev.screens;
+        for (const t of targets) {
+          const arr = translations[t.code];
+          if (arr) screens = applyLocaleStrings(screens, t.code, arr);
+        }
+        return { ...prev, screens };
+      });
+    } catch (e) {
+      setTranslateErr(
+        e.message === "no-llm-key"
+          ? "Set ANTHROPIC_API_KEY in .env.local and restart the dev server."
+          : "Translation failed — please try again."
+      );
+    } finally {
+      setTranslating(false);
+    }
+  }
+
+  // Locale-aware headline/subheading edit (base writes plain fields, others i18n).
+  function setScreenText(patch) {
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, i) => (i === activeScreen ? setLocaleText(s, locale, patch) : s)),
+    }));
+  }
+
   async function onUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -517,15 +587,25 @@ export default function Editor() {
     setSelectedDevice(null);
     const outW = orientedCanvas(getDevice(state.deviceId), state.orientation).w;
     const ext = format === "jpeg" ? "jpg" : "png";
+    // Export every screen for every target locale. With one locale, files sit at
+    // the zip root; with several, each locale gets its own folder.
+    const locales = projectLocales(state);
+    const multi = locales.length > 1;
+    const origLocale = locale;
+    const origScreen = activeScreen;
     try {
       const files = [];
-      for (let i = 0; i < state.screens.length; i++) {
-        setActiveScreen(i);
-        // wait a tick for the canvas to re-render the active screen
-        await new Promise((r) => setTimeout(r, 350));
-        if (canvasRef.current) {
-          const dataUrl = await renderNode(canvasRef.current, outW, { format });
-          files.push({ name: `${slug(name)}-${i + 1}.${ext}`, data: await dataUrlToBytes(dataUrl) });
+      for (const loc of locales) {
+        setLocale(loc);
+        for (let i = 0; i < state.screens.length; i++) {
+          setActiveScreen(i);
+          // wait a tick for the canvas to re-render the active screen + locale
+          await new Promise((r) => setTimeout(r, 350));
+          if (canvasRef.current) {
+            const dataUrl = await renderNode(canvasRef.current, outW, { format });
+            const base = `${slug(name)}-${i + 1}.${ext}`;
+            files.push({ name: multi ? `${loc}/${base}` : base, data: await dataUrlToBytes(dataUrl) });
+          }
         }
       }
       if (files.length) {
@@ -534,6 +614,8 @@ export default function Editor() {
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       }
     } finally {
+      setLocale(origLocale);
+      setActiveScreen(origScreen);
       setExporting(false);
     }
   }
@@ -600,6 +682,18 @@ export default function Editor() {
               <Keyboard size={16} />
             </button>
           </div>
+          {projectLocales(state).length > 1 && (
+            <select
+              value={locale}
+              onChange={(e) => setLocale(e.target.value)}
+              title="Preview language"
+              className="hidden rounded-lg border border-white/10 bg-ink-800 px-2 py-1.5 text-xs font-semibold text-slate-200 outline-none sm:block"
+            >
+              {projectLocales(state).map((c) => (
+                <option key={c} value={c}>{localeName(c)}</option>
+              ))}
+            </select>
+          )}
           <SaveBadge state={saveState} />
           <div className="hidden overflow-hidden rounded-lg border border-white/10 sm:flex">
             {["png", "jpeg"].map((f) => (
@@ -618,9 +712,14 @@ export default function Editor() {
             {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
             {copied ? "Copied" : "Copy"}
           </button>
-          <button onClick={exportAll} disabled={exporting} className="btn-ghost hidden sm:inline-flex" title="Download all screens as a .zip">
+          <button
+            onClick={exportAll}
+            disabled={exporting}
+            className="btn-ghost hidden sm:inline-flex"
+            title={projectLocales(state).length > 1 ? "Download every screen in every language as a .zip" : "Download all screens as a .zip"}
+          >
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            Export .zip
+            {projectLocales(state).length > 1 ? "Export all langs" : "Export .zip"}
           </button>
           <button onClick={exportOne} disabled={exporting} className="btn-primary">
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
@@ -678,6 +777,18 @@ export default function Editor() {
                 update={update}
                 screen={screen}
                 onScreen={(p) => updateScreen(activeScreen, p)}
+                locale={locale}
+                onText={setScreenText}
+                i18n={{
+                  locales: projectLocales(state),
+                  locale,
+                  setLocale,
+                  onAdd: addLocale,
+                  onRemove: removeLocale,
+                  onTranslate: translateAll,
+                  translating,
+                  error: translateErr,
+                }}
               />
             )}
             {tab === "layout" && <LayoutPanel state={state} update={update} />}
@@ -716,6 +827,7 @@ export default function Editor() {
                   screenIndex={activeScreen}
                   screenCount={state.screens.length}
                   panoramaBg={panoramaBg}
+                  locale={locale}
                   editableElements={!exporting}
                   selectedElement={selectedEl}
                   onSelectElement={selectElement}
@@ -756,7 +868,7 @@ export default function Editor() {
                       i === activeScreen ? "border-brand-500" : "border-transparent hover:border-white/20"
                     }`}
                   >
-                    <ScreenCanvas state={canvasState} screen={s} width={56} screenIndex={i} screenCount={state.screens.length} panoramaBg={panoramaBg} />
+                    <ScreenCanvas state={canvasState} screen={s} width={56} screenIndex={i} screenCount={state.screens.length} panoramaBg={panoramaBg} locale={locale} />
                   </button>
                   <div className="absolute -top-1.5 -right-1.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
                     <button
@@ -1445,8 +1557,65 @@ function AiBackgroundPanel({ state, update, bg, onScreen, caps }) {
   );
 }
 
-function TextPanel({ state, update, screen, onScreen }) {
+function LanguagesSection({ i18n }) {
+  const { locales, locale, setLocale, onAdd, onRemove, onTranslate, translating, error } = i18n;
+  const available = LOCALES.filter((l) => !locales.includes(l.code));
+  return (
+    <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between">
+        <p className="label mb-0 flex items-center gap-1.5"><Languages size={13} /> Languages</p>
+        {locales.length > 1 && (
+          <button
+            onClick={onTranslate}
+            disabled={translating}
+            className="flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
+          >
+            {translating ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+            AI translate
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {locales.map((c) => (
+          <span
+            key={c}
+            className={`flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold transition ${
+              locale === c ? "border-brand-500 bg-brand-500/10 text-white" : "border-white/10 text-slate-300"
+            }`}
+          >
+            <button onClick={() => setLocale(c)} className="hover:text-white">{localeName(c)}</button>
+            {c !== BASE_LOCALE && (
+              <button onClick={() => onRemove(c)} title="Remove" className="text-slate-500 hover:text-red-400">
+                <X size={11} />
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+      <select
+        value=""
+        onChange={(e) => e.target.value && onAdd(e.target.value)}
+        className="input"
+      >
+        <option value="">+ Add a language…</option>
+        {available.map((l) => (
+          <option key={l.code} value={l.code}>{l.name}</option>
+        ))}
+      </select>
+      {error && <p className="text-[11px] text-red-400">{error}</p>}
+      {locale !== BASE_LOCALE && (
+        <p className="text-[11px] text-amber-300/90">
+          Editing <b>{localeName(locale)}</b> — headline edits below apply to this language. AI translate fills every language from English.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TextPanel({ state, update, screen, onScreen, locale = BASE_LOCALE, onText, i18n }) {
   const t = state.text;
+  const ls = localizeScreen(screen, locale);
+  const setText = onText || onScreen; // locale-aware when provided
   // Effective subheading style (independent size/color/weight), with fallback
   // for projects created before subtext existed.
   const sub = state.subtext || {
@@ -1457,6 +1626,7 @@ function TextPanel({ state, update, screen, onScreen }) {
   const setSub = (patch) => update({ subtext: { ...sub, ...patch } });
   return (
     <div className="space-y-5">
+      {i18n && <LanguagesSection i18n={i18n} />}
       <div>
         <p className="label">Style presets</p>
         <div className="scroll-thin -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
@@ -1475,18 +1645,18 @@ function TextPanel({ state, update, screen, onScreen }) {
         <p className="label">Headline</p>
         <input
           className="input"
-          value={screen.heading}
+          value={ls.heading}
           placeholder="Your headline"
-          onChange={(e) => onScreen({ heading: e.target.value })}
+          onChange={(e) => setText({ heading: e.target.value })}
         />
       </div>
       <div>
         <p className="label">Subheading</p>
         <input
           className="input"
-          value={screen.subheading || ""}
+          value={ls.subheading || ""}
           placeholder="Optional supporting line"
-          onChange={(e) => onScreen({ subheading: e.target.value })}
+          onChange={(e) => setText({ subheading: e.target.value })}
         />
       </div>
       <div>

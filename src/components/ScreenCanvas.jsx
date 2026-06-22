@@ -1,6 +1,7 @@
 import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
 import { orientedCanvas, screenDevices, isFreeMode, panoramaStyle } from "../lib/deviceLayout";
+import { localizeScreen } from "../lib/i18n";
 import { legibilityHalo } from "../lib/contrast";
 import { textEffectStyle } from "../lib/textEffects";
 import ElementsLayer from "./ElementsLayer";
@@ -39,6 +40,7 @@ export default function ScreenCanvas({
   screenIndex = 0,
   screenCount = 1,
   panoramaBg = null,
+  locale = null,
   editableElements = false,
   selectedElement = null,
   onSelectElement,
@@ -59,6 +61,8 @@ export default function ScreenCanvas({
   const background = screen.background || state.background;
   const font = FONTS.find((f) => f.id === state.text.font) || FONTS[0];
   const textPos = state._textPos || "top";
+  // Headline/subheading resolved for the active locale (base text otherwise).
+  const lscreen = localizeScreen(screen, locale);
 
   const free = isFreeMode(screen);
   const devices = screenDevices(screen, state);
@@ -89,7 +93,7 @@ export default function ScreenCanvas({
     return `0 0 ${r}px rgba(${h},0.6), 0 0 ${r * 2}px rgba(${h},0.45)`;
   };
 
-  const TextBlock = screen.heading ? (
+  const TextBlock = lscreen.heading ? (
     <div
       className="px-[8%] text-center"
       style={{ fontFamily: font.stack, textAlign: state.text.align }}
@@ -105,9 +109,9 @@ export default function ScreenCanvas({
           ...textEffectStyle(state.text, scaledFont),
         }}
       >
-        {screen.heading}
+        {lscreen.heading}
       </div>
-      {screen.subheading ? (
+      {lscreen.subheading ? (
         <div
           style={{
             fontSize: scaledSub,
@@ -117,7 +121,7 @@ export default function ScreenCanvas({
             textShadow: haloFor(sub.color, scaledSub),
           }}
         >
-          {screen.subheading}
+          {lscreen.subheading}
         </div>
       ) : null}
     </div>

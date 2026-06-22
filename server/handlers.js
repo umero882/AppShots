@@ -9,7 +9,9 @@
  * Each handler returns a plain JSON-able object, or throws an Error whose message
  * is a typed code the transport maps to an HTTP status.
  */
-import { buildPrompt, parseConcepts, extractHexColors } from "../src/lib/aiCore.js";
+import {
+  buildPrompt, parseConcepts, extractHexColors, buildTranslatePrompt, parseTranslations,
+} from "../src/lib/aiCore.js";
 
 const AI_MODEL_DEFAULT = "claude-haiku-4-5-20251001";
 const GH_API = "https://api.github.com";
@@ -138,6 +140,49 @@ function parseRepo(url) {
   }
   repo = repo.replace(/\.git$/i, "");
   return { owner, repo };
+}
+
+/* ----------------------------- translate (Claude) ----------------------------- */
+
+export async function translate({ texts = [], targets = [], model } = {}) {
+  if (!env("ANTHROPIC_API_KEY")) throw new Error("no-llm-key");
+  const clean = (Array.isArray(texts) ? texts : []).map((t) => (typeof t === "string" ? t : ""));
+  const langs = (Array.isArray(targets) ? targets : []).filter((t) => t && t.code);
+  const codes = langs.map((t) => t.code);
+  if (!clean.length || !codes.length) return { translations: {} };
+
+  const key = env("ANTHROPIC_API_KEY");
+  const useModel = model || AI_MODEL_DEFAULT;
+  const prompt = buildTranslatePrompt(clean, langs);
+
+  async function callOnce(extra) {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: useModel,
+        max_tokens: 2048,
+        messages: [{ role: "user", content: prompt + (extra || "") }],
+      }),
+    });
+    if (!resp.ok) throw new Error("llm-error");
+    const data = await resp.json();
+    const text = (data.content || []).map((b) => b.text || "").join("");
+    return parseTranslations(text, codes, clean.length);
+  }
+
+  try {
+    return { translations: await callOnce("") };
+  } catch (e) {
+    if (e.message === "ai-parse") {
+      return { translations: await callOnce("\n\nRespond with ONLY the JSON object — nothing else.") };
+    }
+    throw e;
+  }
 }
 
 /* ----------------------------- image gen ----------------------------- */

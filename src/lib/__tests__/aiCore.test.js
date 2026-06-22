@@ -6,7 +6,39 @@ import {
   normalizeConcept,
   parseConcepts,
   buildPrompt,
+  buildTranslatePrompt,
+  parseTranslations,
 } from "../aiCore.js";
+
+describe("buildTranslatePrompt", () => {
+  it("lists indexed texts and target locales, asks for JSON", () => {
+    const p = buildTranslatePrompt(["Hello", "World"], [{ code: "es", name: "Spanish" }]);
+    expect(p).toContain('0: "Hello"');
+    expect(p).toContain('1: "World"');
+    expect(p).toContain('"es" (Spanish)');
+    expect(p).toContain("JSON object");
+    expect(p).toContain("exactly 2");
+  });
+});
+
+describe("parseTranslations", () => {
+  it("parses a locale-keyed object into fixed-length arrays", () => {
+    const out = parseTranslations('{"es":["Hola","Mundo"],"fr":["Bonjour","Monde"]}', ["es", "fr"], 2);
+    expect(out).toEqual({ es: ["Hola", "Mundo"], fr: ["Bonjour", "Monde"] });
+  });
+  it("strips markdown fences", () => {
+    const out = parseTranslations('```json\n{"es":["Hola"]}\n```', ["es"], 1);
+    expect(out.es).toEqual(["Hola"]);
+  });
+  it("pads/truncates each locale to the requested count", () => {
+    const out = parseTranslations('{"es":["only one"]}', ["es"], 2);
+    expect(out.es).toEqual(["only one", ""]);
+  });
+  it("throws on a missing target or malformed JSON", () => {
+    expect(() => parseTranslations('{"es":["Hola"]}', ["es", "fr"], 1)).toThrow("ai-parse");
+    expect(() => parseTranslations("not json", ["es"], 1)).toThrow("ai-parse");
+  });
+});
 
 describe("parseGithubUrl", () => {
   it("parses a standard https URL", () => {

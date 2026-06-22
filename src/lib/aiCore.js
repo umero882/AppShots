@@ -125,6 +125,54 @@ export function parseConcepts(rawText) {
   return concepts;
 }
 
+/** Build the translation prompt: texts (ordered) → JSON keyed by locale code. */
+export function buildTranslatePrompt(texts, targets) {
+  const list = texts.map((t, i) => `${i}: ${JSON.stringify(t ?? "")}`).join("\n");
+  const langs = targets.map((t) => `"${t.code}" (${t.name})`).join(", ");
+  return [
+    "You are localizing App Store / Google Play screenshot captions for a mobile app.",
+    "Translate each text idiomatically — keep the marketing punch and a similar length,",
+    "do NOT translate brand or product names, and preserve any emoji.",
+    "",
+    "TEXTS (index: value):",
+    list,
+    "",
+    `TARGET LOCALES: ${langs}`,
+    "",
+    `Return ONLY a JSON object mapping each locale code to an array of exactly ${texts.length} ` +
+      `translated strings, in the SAME ORDER as the indices above. No prose, no markdown fences.`,
+    `Example: { "es": ["…", "…"], "fr": ["…", "…"] }`,
+  ].join("\n");
+}
+
+/**
+ * Parse a translation response into { [code]: string[] } with exactly `count`
+ * strings per locale (padded/trimmed). Throws "ai-parse" on malformed output.
+ */
+export function parseTranslations(rawText, targetCodes, count) {
+  if (!rawText || typeof rawText !== "string") throw new Error("ai-parse");
+  let text = rawText.trim();
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) text = fence[1].trim();
+  if (text[0] !== "{") {
+    const obj = text.match(/\{[\s\S]*\}/);
+    if (obj) text = obj[0];
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("ai-parse");
+  }
+  const out = {};
+  for (const code of targetCodes) {
+    const arr = parsed[code];
+    if (!Array.isArray(arr)) throw new Error("ai-parse");
+    out[code] = Array.from({ length: count }, (_, i) => (typeof arr[i] === "string" ? arr[i] : ""));
+  }
+  return out;
+}
+
 /** Build the Claude user prompt from optional repo context + a user prompt. */
 export function buildPrompt({ repoContext, prompt }) {
   const parts = [];
