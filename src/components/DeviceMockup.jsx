@@ -3,7 +3,7 @@ import { X, RotateCw, Maximize2 } from "lucide-react";
 import {
   fracDelta, clamp01, angleFromCenter, distance, scaleFromResize, snapToGuides,
 } from "../lib/elements";
-import { orientedCanvas, deviceTransform } from "../lib/deviceLayout";
+import { orientedCanvas, deviceTransform, frameColorOf, frameButtonColor } from "../lib/deviceLayout";
 
 /**
  * A single device mockup: CSS/SVG bezel + screen + notch + side buttons wrapping
@@ -11,13 +11,15 @@ import { orientedCanvas, deviceTransform } from "../lib/deviceLayout";
  * follows the device aspect (swapped in landscape). The notch is hidden in
  * landscape — a top-center island would sit on the wrong edge.
  */
-export function DeviceMockup({ device, image, width, orientation = "portrait" }) {
+export function DeviceMockup({ device, image, width, orientation = "portrait", color }) {
   const canvas = orientedCanvas(device, orientation);
   const w = width;
   const h = w * (canvas.h / canvas.w);
   const bezel = Math.max(4, w * 0.035);
   const radius = w * 0.13;
   const notch = orientation === "landscape" ? "none" : device.notch;
+  const bezelColor = color || device.bezel.color;
+  const buttonColor = frameButtonColor(bezelColor);
 
   return (
     <div
@@ -25,7 +27,7 @@ export function DeviceMockup({ device, image, width, orientation = "portrait" })
       style={{
         width: w,
         height: h,
-        background: device.bezel.color,
+        background: bezelColor,
         borderRadius: radius,
         padding: bezel,
         boxShadow: "0 25px 60px -15px rgba(0,0,0,0.55)",
@@ -33,7 +35,7 @@ export function DeviceMockup({ device, image, width, orientation = "portrait" })
         outlineOffset: -Math.max(1, w * 0.004),
       }}
     >
-      {device.buttons && <SideButtons w={w} h={h} />}
+      {device.buttons && <SideButtons w={w} h={h} color={buttonColor} />}
       <div
         className="relative w-full h-full overflow-hidden bg-white"
         style={{ borderRadius: radius - bezel * 0.6 }}
@@ -75,10 +77,10 @@ function Notch({ type }) {
   return <div className="absolute left-1/2 top-[1.4%] -translate-x-1/2 h-[1.6%] aspect-square rounded-full bg-black z-20" />;
 }
 
-function SideButtons({ w, h }) {
+function SideButtons({ w, h, color = "#26262b" }) {
   const bw = Math.max(2, w * 0.012);
   const btn = (style) => (
-    <div className="absolute" style={{ width: bw, background: "#26262b", borderRadius: bw, ...style }} />
+    <div className="absolute" style={{ width: bw, background: color, borderRadius: bw, ...style }} />
   );
   return (
     <>
@@ -99,6 +101,7 @@ export function DevicesLayer({
   devices = [],
   width,
   getDevice,
+  defaultColor = null,
   editable = false,
   selectedId = null,
   onSelect,
@@ -184,6 +187,7 @@ export function DevicesLayer({
       {devices.map((d) => {
         const device = resolve(d.deviceId);
         const elW = width * d.scale;
+        const color = frameColorOf(d, defaultColor, device);
         const selected = editable && selectedId === d.id;
         return (
           <div
@@ -198,7 +202,7 @@ export function DevicesLayer({
               transformStyle: "preserve-3d",
             }}
           >
-            <DeviceMockup device={device} image={d.image} width={elW} orientation={d.orientation} />
+            <DeviceMockup device={device} image={d.image} width={elW} orientation={d.orientation} color={color} />
 
             {selected && (
               <>

@@ -195,6 +195,7 @@ export default function ScreenCanvas({
             image={screen.image}
             width={width * (state.deviceScale ?? 0.78)}
             orientation={state.orientation}
+            color={state.frameColor}
           />
         )}
       </div>
@@ -209,6 +210,7 @@ export default function ScreenCanvas({
           devices={devices}
           width={width}
           getDevice={getDevice}
+          defaultColor={state.frameColor}
           editable={editableDevices}
           selectedId={selectedDevice}
           onSelect={onSelectDevice}

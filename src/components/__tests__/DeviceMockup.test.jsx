@@ -17,6 +17,10 @@ describe("DeviceMockup", () => {
     const html = renderToStaticMarkup(<DeviceMockup device={ios} image={null} width={200} />);
     expect(html).toContain("Upload screenshot");
   });
+  it("paints the bezel with a custom frame color", () => {
+    const html = renderToStaticMarkup(<DeviceMockup device={ios} width={200} color="#d6d6d8" />);
+    expect(html).toContain("background:#d6d6d8");
+  });
   it("hides the notch in landscape orientation", () => {
     const portrait = renderToStaticMarkup(<DeviceMockup device={ios} width={200} orientation="portrait" />);
     const landscape = renderToStaticMarkup(<DeviceMockup device={ios} width={200} orientation="landscape" />);

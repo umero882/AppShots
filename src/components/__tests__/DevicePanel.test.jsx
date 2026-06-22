@@ -30,6 +30,12 @@ describe("DevicePanel — legacy (single device)", () => {
     expect(html).toContain("Iso L");
     expect(html).toContain("Back");
   });
+  it("offers device frame color swatches", () => {
+    const html = render({ screen: defaultScreen() });
+    expect(html).toContain("Frame color");
+    expect(html).toContain("#54545a"); // titanium swatch
+    expect(html).toContain("#cdb58e"); // gold swatch
+  });
   it("reflects landscape output dimensions", () => {
     const html = render({ screen: defaultScreen(), state: { ...defaultProjectState(), orientation: "landscape" } });
     expect(html).toContain("2796×1290");

@@ -1,7 +1,29 @@
 import { useState } from "react";
 import { Smartphone, Plus, Copy, Trash2, X, Box } from "lucide-react";
 import { DEVICES, getDevice } from "../lib/devices";
-import { orientedCanvas, isFreeMode, deviceTransform } from "../lib/deviceLayout";
+import { orientedCanvas, isFreeMode, deviceTransform, FRAME_COLORS } from "../lib/deviceLayout";
+
+function FrameColorRow({ label = "Frame color", value, onPick }) {
+  const active = (value || "#0b0b0e").toLowerCase();
+  return (
+    <div>
+      <p className="label">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {FRAME_COLORS.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => onPick(c.bezel)}
+            title={c.name}
+            className={`h-8 w-8 rounded-full ring-2 transition ${
+              active === c.bezel.toLowerCase() ? "ring-white" : "ring-white/15 hover:ring-white/40"
+            }`}
+            style={{ background: c.bezel }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // One-click 3D perspective poses (the signature AppScreens look). Each sets the
 // mockup's tilt + z-rotation; "Flat" clears them.
@@ -151,6 +173,8 @@ export default function DevicePanel({
       <div className="space-y-3 border-t border-white/10 pt-4">
         <p className="label mb-0">Device mockups</p>
 
+        <FrameColorRow value={state.frameColor} onPick={(c) => update({ frameColor: c })} />
+
         {!free ? (
           <>
             <p className="text-xs text-slate-400">
@@ -196,6 +220,11 @@ export default function DevicePanel({
                 </div>
                 <OrientationToggle value={selected.orientation} onChange={(o) => onChange(selected.id, { orientation: o })} />
                 <Tilt3dPicker active={selected} onPick={onPose} />
+                <FrameColorRow
+                  label="Frame color (this mockup)"
+                  value={selected.frameColor || state.frameColor}
+                  onPick={(c) => onChange(selected.id, { frameColor: c })}
+                />
                 <Slider label="Position X" value={Math.round(selected.x * 100)} min={-20} max={120} suffix="%" onChange={(v) => onChange(selected.id, { x: v / 100 })} />
                 <Slider label="Position Y" value={Math.round(selected.y * 100)} min={-20} max={120} suffix="%" onChange={(v) => onChange(selected.id, { y: v / 100 })} />
                 <Slider label="Size" value={Math.round(selected.scale * 100)} min={20} max={160} suffix="%" onChange={(v) => onChange(selected.id, { scale: v / 100 })} />

@@ -15,6 +15,34 @@ import { clamp01 } from "./elements";
 // Baseline 3D perspective (px) applied when a mockup is tilted.
 export const PERSPECTIVE = 1200;
 
+// Selectable device frame finishes (bezel color). `bezel` is the frame color;
+// `button` overrides the side-button color so it reads on light finishes.
+export const FRAME_COLORS = [
+  { id: "black", name: "Black", bezel: "#0b0b0e" },
+  { id: "titanium", name: "Titanium", bezel: "#54545a" },
+  { id: "silver", name: "Silver", bezel: "#d6d6d8", button: "#b8b8bd" },
+  { id: "gold", name: "Gold", bezel: "#cdb58e", button: "#b09a72" },
+  { id: "blue", name: "Blue", bezel: "#2f3b52" },
+  { id: "rose", name: "Rose", bezel: "#caa69b", button: "#ac897f" },
+];
+
+const FRAME_BY_ID = Object.fromEntries(FRAME_COLORS.map((c) => [c.id, c]));
+
+/** Resolve a mockup's bezel hex: instance override → project default → device. */
+export function frameColorOf(inst, projectColor, device) {
+  return inst?.frameColor || projectColor || device?.bezel?.color || "#0b0b0e";
+}
+
+/** The side-button color for a bezel finish (darker tint for light frames). */
+export function frameButtonColor(bezelHex) {
+  const f = FRAME_COLORS.find((c) => c.bezel.toLowerCase() === String(bezelHex).toLowerCase());
+  return f?.button || "#26262b";
+}
+
+export function getFrameColor(id) {
+  return FRAME_BY_ID[id] || null;
+}
+
 const freshId = () => `dev_${Math.random().toString(36).slice(2, 9)}`;
 
 /** Output canvas dimensions honoring orientation (landscape swaps w/h). */
@@ -36,6 +64,7 @@ export function makeDeviceInstance(deviceId, opts = {}) {
     tiltX: opts.tiltX ?? 0,
     tiltY: opts.tiltY ?? 0,
     orientation: opts.orientation ?? "portrait",
+    frameColor: opts.frameColor ?? null,
   };
 }
 

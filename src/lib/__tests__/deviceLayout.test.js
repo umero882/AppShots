@@ -2,7 +2,30 @@ import { describe, it, expect } from "vitest";
 import {
   orientedCanvas, makeDeviceInstance, duplicateDeviceInstance,
   screenDevices, isFreeMode, deviceTransform, panoramaStyle, PERSPECTIVE,
+  FRAME_COLORS, frameColorOf, frameButtonColor,
 } from "../deviceLayout.js";
+
+describe("frame colors", () => {
+  const device = { bezel: { color: "#0b0b0e" } };
+  it("offers named finishes with valid hex bezels", () => {
+    expect(FRAME_COLORS.length).toBeGreaterThanOrEqual(4);
+    expect(FRAME_COLORS.map((c) => c.id)).toEqual(expect.arrayContaining(["black", "titanium", "silver", "gold"]));
+    for (const c of FRAME_COLORS) expect(c.bezel).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+  it("frameColorOf prefers instance, then project, then device default", () => {
+    expect(frameColorOf({ frameColor: "#111111" }, "#222222", device)).toBe("#111111");
+    expect(frameColorOf({ frameColor: null }, "#222222", device)).toBe("#222222");
+    expect(frameColorOf({}, null, device)).toBe("#0b0b0e");
+  });
+  it("frameButtonColor returns a light-frame tint or the default", () => {
+    expect(frameButtonColor("#d6d6d8")).toBe("#b8b8bd"); // silver
+    expect(frameButtonColor("#0b0b0e")).toBe("#26262b"); // default dark
+  });
+  it("makeDeviceInstance carries an optional frameColor (null by default)", () => {
+    expect(makeDeviceInstance("iphone-69").frameColor).toBeNull();
+    expect(makeDeviceInstance("iphone-69", { frameColor: "#abcdef" }).frameColor).toBe("#abcdef");
+  });
+});
 import { getDevice } from "../devices.js";
 import { defaultProjectState, defaultScreen } from "../templates.js";
 
