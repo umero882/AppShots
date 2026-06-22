@@ -221,4 +221,30 @@ export const TEMPLATES = [
     scr(mockMap("#a5f3fc", { dark: true }), "Cool and clear"),
     scr(mockStats("#a5f3fc", { dark: true }), "Crisp data"),
   ]),
+
+  // ---------- extra variety (proven WCAG-safe combos, new devices) ----------
+  mk("minimal-frost", "Frost", "Minimal", "#6366f1", solidBg("#f3f4f6"), "#111827", "inter", "text-bottom", "iphone-61", [
+    scr(mockOnboarding("#6366f1"), "Effortless from day one"),
+    scr(mockDashboard("#6366f1"), "Clarity, by default"),
+  ]),
+  mk("bold-cobalt", "Cobalt", "Bold", "#a5b4fc", solidBg("#3730a3"), "#ffffff", "inter", "centered", "galaxy-s24", [
+    scr(mockStats("#a5b4fc", { dark: true }), "Built to perform"),
+    scr(mockFeed("#a5b4fc", { dark: true }), "Front and center"),
+  ]),
+  mk("dark-space", "Space", "Dark", "#818cf8", solidBg("#0b1020"), "#ffffff", "inter", "text-bottom", "iphone-61", [
+    scr(mockMusic("#818cf8", { dark: true }), "Made for the dark"),
+    scr(mockStats("#818cf8", { dark: true }), "Signal over noise"),
+  ]),
+  mk("vibrant-volt", "Volt", "Vibrant", "#c7d2fe", gradBg("indigo", "#6366f1"), "#ffffff", "inter", "text-top", "galaxy-s24", [
+    scr(mockDashboard("#c7d2fe", { dark: true }), "Charged and ready"),
+    scr(mockProfile("#c7d2fe", { dark: true }), "Plug in"),
+  ]),
+  mk("editorial-broadsheet", "Broadsheet", "Editorial", "#92400e", solidBg("#faf7f0"), "#1c1917", "georgia", "centered", "ipad-11", [
+    scr(mockFeed("#92400e"), "The long read"),
+    scr(mockProfile("#92400e"), "Ideas worth keeping"),
+  ]),
+  mk("playful-bubble", "Bubble", "Playful", "#065f46", gradBg("mint", "#14b8a6"), "#064e3b", "inter", "text-top", "iphone-61", [
+    scr(mockChat("#065f46"), "Say more"),
+    scr(mockOnboarding("#065f46"), "Pop in anytime"),
+  ]),
 ];
