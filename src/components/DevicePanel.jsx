@@ -117,7 +117,7 @@ function FitToggle({ value, onChange }) {
     { id: "contain", label: "Fit" },
     { id: "fill", label: "Fill" },
   ];
-  const cur = value === "fill" ? "fill" : "contain";
+  const cur = value === "contain" ? "contain" : "fill"; // fill is the default
   return (
     <div>
       <p className="label">Screenshot</p>
@@ -126,7 +126,7 @@ function FitToggle({ value, onChange }) {
           <button
             key={o.id}
             onClick={() => onChange(o.id)}
-            title={o.id === "contain" ? "Show the whole screenshot (no cropping)" : "Fill the screen (crops to fit)"}
+            title={o.id === "contain" ? "Show the whole screenshot; fill the side gaps with a blurred extension" : "Fill the screen edge-to-edge, keep the top, trim the overflowing bottom"}
             className={`flex-1 px-3 py-1.5 text-xs font-semibold transition ${
               cur === o.id ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300 hover:text-white"
             }`}

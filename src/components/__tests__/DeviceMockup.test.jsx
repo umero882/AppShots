@@ -17,15 +17,16 @@ describe("DeviceMockup", () => {
     const html = renderToStaticMarkup(<DeviceMockup device={ios} image={null} width={200} />);
     expect(html).toContain("Upload screenshot");
   });
-  it("fits the whole screenshot (contain) by default, never cropping", () => {
+  it("fills width edge-to-edge, anchored to the top, by default", () => {
     const html = renderToStaticMarkup(<DeviceMockup device={getDevice("ipad-13")} image="data:img" width={200} />);
-    expect(html).toContain("object-fit:contain"); // sharp layer is contained
-    expect(html).toContain("blur(16px)"); // blurred filler behind
-  });
-  it("fills (crops) when fit='fill'", () => {
-    const html = renderToStaticMarkup(<DeviceMockup device={getDevice("ipad-13")} image="data:img" width={200} fit="fill" />);
     expect(html).toContain("object-fit:cover");
-    expect(html).not.toContain("blur(16px)"); // no filler when filling
+    expect(html).toContain("object-position:top center"); // top kept, bottom trims
+    expect(html).not.toContain("blur(16px)"); // no blurred filler in fill mode
+  });
+  it("shows the whole screenshot with blurred sides when fit='contain'", () => {
+    const html = renderToStaticMarkup(<DeviceMockup device={getDevice("ipad-13")} image="data:img" width={200} fit="contain" />);
+    expect(html).toContain("object-fit:contain");
+    expect(html).toContain("blur(16px)");
   });
   it("paints the metal rail with a custom frame color", () => {
     const html = renderToStaticMarkup(<DeviceMockup device={ios} width={200} color="#d6d6d8" />);

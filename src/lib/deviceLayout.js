@@ -65,7 +65,7 @@ export function makeDeviceInstance(deviceId, opts = {}) {
     tiltY: opts.tiltY ?? 0,
     orientation: opts.orientation ?? "portrait",
     frameColor: opts.frameColor ?? null,
-    fit: opts.fit ?? "contain", // "contain" shows the whole shot; "fill" crops to the screen
+    fit: opts.fit ?? "fill", // "fill" = cover, top-anchored (trims bottom); "contain" = whole shot, blurred sides
   };
 }
 

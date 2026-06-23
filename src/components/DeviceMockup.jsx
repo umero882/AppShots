@@ -17,7 +17,7 @@ import { frameSpec, railGradient, shade } from "../lib/deviceFrames";
  * screen glare that shifts with the angle, and a contact shadow on the ground —
  * the cues that make the tilt actually read as 3D.
  */
-export function DeviceMockup({ device, image, width, orientation = "portrait", color, tiltX = 0, tiltY = 0, fit = "contain" }) {
+export function DeviceMockup({ device, image, width, orientation = "portrait", color, tiltX = 0, tiltY = 0, fit = "fill" }) {
   const canvas = orientedCanvas(device, orientation);
   const w = width;
   const h = w * (canvas.h / canvas.w);
@@ -104,10 +104,10 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
           >
             <div className="relative h-full w-full overflow-hidden bg-white" style={{ borderRadius: screenR }}>
               {image ? (
-                <>
-                  {/* "contain" never crops the screenshot; a blurred cover copy
-                      fills the letterbox area so it reads as intentional. */}
-                  {fit !== "fill" && (
+                fit === "contain" ? (
+                  <>
+                    {/* whole screenshot, never cropped; a blurred cover copy fills
+                        the letterbox area so it reads as intentional. */}
                     <img
                       src={image}
                       alt=""
@@ -116,15 +116,25 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
                       style={{ filter: "blur(16px)", transform: "scale(1.12)" }}
                       crossOrigin="anonymous"
                     />
-                  )}
+                    <img
+                      src={image}
+                      alt="app screenshot"
+                      className="absolute inset-0 h-full w-full"
+                      style={{ objectFit: "contain" }}
+                      crossOrigin="anonymous"
+                    />
+                  </>
+                ) : (
+                  // fill: cover the screen edge-to-edge, anchored to the top so
+                  // headers/status bar stay and only the overflowing bottom trims.
                   <img
                     src={image}
                     alt="app screenshot"
                     className="absolute inset-0 h-full w-full"
-                    style={{ objectFit: fit === "fill" ? "cover" : "contain" }}
+                    style={{ objectFit: "cover", objectPosition: "top center" }}
                     crossOrigin="anonymous"
                   />
-                </>
+                )
               ) : (
                 <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200 text-slate-400">
                   <svg width="26%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
