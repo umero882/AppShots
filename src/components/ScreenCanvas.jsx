@@ -55,6 +55,7 @@ export default function ScreenCanvas({
   onDeleteDevice,
   onFrameCorner,
   onLive3dRotate,
+  onLive3dModelInfo,
 }) {
   const device = getDevice(state.deviceId);
   const canvas = orientedCanvas(device, state.orientation);
@@ -235,6 +236,7 @@ export default function ScreenCanvas({
           height={height}
           editable={editableDevices}
           onChange={onLive3dRotate}
+          onModelInfo={onLive3dModelInfo}
         />
       )}
 

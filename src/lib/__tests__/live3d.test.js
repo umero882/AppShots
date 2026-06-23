@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   makeLive3d, materialPreset, LIVE3D_MATERIALS, clampRot, rotationRad,
-  deviceBox, cameraDistance, dragToRot,
+  deviceBox, cameraDistance, dragToRot, pickScreenMaterial, fitScale, makeModel,
 } from "../live3d.js";
 
 describe("makeLive3d", () => {
@@ -65,5 +65,34 @@ describe("dragToRot", () => {
     const { dRotY, dRotX } = dragToRot(10, 10, 0.5);
     expect(dRotY).toBe(5);
     expect(dRotX).toBe(-5);
+  });
+});
+
+describe("pickScreenMaterial", () => {
+  it("finds a screen-like name case-insensitively", () => {
+    expect(pickScreenMaterial(["Body", "Screen", "Buttons"])).toBe("Screen");
+    expect(pickScreenMaterial(["frame", "display_glass"])).toBe("display_glass");
+  });
+  it("returns null when nothing looks like a screen", () => {
+    expect(pickScreenMaterial(["Body", "Metal", "Buttons"])).toBeNull();
+    expect(pickScreenMaterial([])).toBeNull();
+  });
+});
+
+describe("fitScale", () => {
+  it("scales the largest dimension to the target", () => {
+    expect(fitScale(4.8, 2.4)).toBeCloseTo(0.5, 5);
+  });
+  it("guards against a zero-sized model", () => {
+    expect(fitScale(0)).toBe(1);
+  });
+});
+
+describe("makeModel", () => {
+  it("defaults to auto screen + no flip/rotate", () => {
+    expect(makeModel("data:x")).toEqual({ src: "data:x", screenKey: null, flip: false, rotate: 0 });
+  });
+  it("applies overrides", () => {
+    expect(makeModel("data:x", { screenKey: "Screen", flip: true })).toMatchObject({ screenKey: "Screen", flip: true });
   });
 });

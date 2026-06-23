@@ -113,8 +113,12 @@ export function FrameGrid({ activeId, onPick }) {
   );
 }
 
-function Live3DSection({ live3d, frameActive, onToggle, onChange }) {
+function Live3DSection({
+  live3d, frameActive, onToggle, onChange,
+  modelNames = [], modelError, onUploadModel, onRemoveModel, onChangeModel,
+}) {
   const on = !!live3d?.enabled;
+  const model = live3d?.model || null;
   return (
     <div className="space-y-2">
       <label className="flex cursor-pointer items-center justify-between">
@@ -132,22 +136,67 @@ function Live3DSection({ live3d, frameActive, onToggle, onChange }) {
       ) : on ? (
         <div className="space-y-3 rounded-xl border border-brand-500/40 bg-brand-500/5 p-3">
           <p className="text-[11px] text-slate-400">Drag the device on the canvas to rotate it. Exports include the rendered 3D.</p>
-          <div>
-            <p className="label">Body material</p>
-            <div className="flex flex-wrap gap-2">
-              {LIVE3D_MATERIALS.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => onChange({ material: m.id })}
-                  title={m.name}
-                  className={`h-8 w-8 rounded-full ring-2 transition ${
-                    (live3d.material || "titanium") === m.id ? "ring-white" : "ring-white/15 hover:ring-white/40"
-                  }`}
-                  style={{ background: m.color }}
-                />
-              ))}
-            </div>
+
+          {/* real device model */}
+          <div className="space-y-2">
+            <p className="label mb-0">Device model</p>
+            {model?.src ? (
+              <>
+                <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5">
+                  <span className="text-xs font-semibold text-white">Real model loaded</span>
+                  <button onClick={onRemoveModel} title="Remove model" className="text-slate-400 hover:text-red-400"><X size={14} /></button>
+                </div>
+                <div>
+                  <p className="label">Screen surface</p>
+                  <select
+                    value={model.screenKey || ""}
+                    onChange={(e) => onChangeModel({ screenKey: e.target.value || null })}
+                    className="w-full rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
+                  >
+                    <option value="">Auto-detect</option>
+                    {modelNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-500">If the screenshot lands on the wrong part, pick the screen/glass material here.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => onChangeModel({ flip: !model.flip })} className={`btn-soft justify-center ${model.flip ? "ring-1 ring-brand-500" : ""}`}>Flip Y</button>
+                  <button onClick={() => onChangeModel({ rotate: ((model.rotate || 0) + 90) % 360 })} className="btn-soft justify-center">Rotate {model.rotate || 0}°</button>
+                </div>
+                <button onClick={onUploadModel} className="btn-soft w-full justify-center"><Upload size={14} /> Replace model</button>
+              </>
+            ) : (
+              <>
+                <button onClick={onUploadModel} className="btn-soft w-full justify-center"><Upload size={14} /> Load device model (.glb / .gltf)</button>
+                {modelError && <p className="text-[11px] text-red-400">{modelError}</p>}
+                <p className="text-[11px] text-slate-500">
+                  Drop a real phone model for an industry-standard look (its own buttons, camera &amp; rails). Free CC0 models:
+                  search <b>poly.pizza</b> or Sketchfab (license = CC0) for &ldquo;smartphone&rdquo;, download <b>.glb</b>, load it here.
+                  Without a model, a generic metal device is shown.
+                </p>
+              </>
+            )}
           </div>
+
+          {/* body material — generic device only */}
+          {!model?.src && (
+            <div>
+              <p className="label">Body material</p>
+              <div className="flex flex-wrap gap-2">
+                {LIVE3D_MATERIALS.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => onChange({ material: m.id })}
+                    title={m.name}
+                    className={`h-8 w-8 rounded-full ring-2 transition ${
+                      (live3d.material || "titanium") === m.id ? "ring-white" : "ring-white/15 hover:ring-white/40"
+                    }`}
+                    style={{ background: m.color }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           <Slider label="Rotate ↔" value={Math.round(live3d.rotY || 0)} min={-60} max={60} suffix="°" onChange={(v) => onChange({ rotY: v })} />
           <Slider label="Rotate ↕" value={Math.round(live3d.rotX || 0)} min={-60} max={60} suffix="°" onChange={(v) => onChange({ rotX: v })} />
           <Slider label="Zoom" value={Math.round((live3d.zoom || 1) * 100)} min={60} max={160} suffix="%" onChange={(v) => onChange({ zoom: v / 100 })} />
@@ -160,7 +209,7 @@ function Live3DSection({ live3d, frameActive, onToggle, onChange }) {
         </div>
       ) : (
         <p className="text-[11px] text-slate-500">
-          A live, rotatable WebGL device with real metal reflections — drag to spin it in 3D. Heavier than the CSS mockup; loads on demand.
+          A live, rotatable 3D device — load a real phone model (.glb) for a true industry-standard look, or use the built-in generic device. Drag to spin it. Loads on demand.
         </p>
       )}
     </div>
@@ -234,6 +283,7 @@ export default function DevicePanel({
   onAdd, onChange, onDelete, onDuplicate, onSelect, onPromote, onPose,
   frame, onPickFrame, onRemoveFrame, onAutoFitFrame,
   live3d, onToggleLive3d, onChangeLive3d,
+  live3dModelNames, live3dModelError, onUploadModel, onRemoveModel, onChangeLive3dModel,
 }) {
   const [adding, setAdding] = useState(false);
   const free = isFreeMode(screen);
@@ -288,6 +338,11 @@ export default function DevicePanel({
           frameActive={!!frame}
           onToggle={onToggleLive3d}
           onChange={onChangeLive3d}
+          modelNames={live3dModelNames}
+          modelError={live3dModelError}
+          onUploadModel={onUploadModel}
+          onRemoveModel={onRemoveModel}
+          onChangeModel={onChangeLive3dModel}
         />
       </div>
 

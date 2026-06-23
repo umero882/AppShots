@@ -74,3 +74,24 @@ export function cameraDistance(zoom = 1) {
 export function dragToRot(dx, dy, sens = 0.4) {
   return { dRotY: dx * sens, dRotX: -dy * sens };
 }
+
+/* -------- real device .glb model support -------- */
+
+// Material/mesh names that usually carry the device screen, best-effort. Models
+// vary, so the user can always override with the "Screen surface" picker.
+const SCREEN_RE = /screen|display|glass|wallpaper|lcd|oled|panel|monitor|front/i;
+
+/** Pick the most likely screen surface from a list of material/mesh names. */
+export function pickScreenMaterial(names = []) {
+  return names.find((n) => SCREEN_RE.test(n)) || null;
+}
+
+/** Uniform scale so a model's largest dimension fits `target` world units. */
+export function fitScale(maxDim, target = 2.4) {
+  return maxDim > 0 ? target / maxDim : 1;
+}
+
+/** Default model descriptor stored on `live3d.model` once a .glb is loaded. */
+export function makeModel(src, overrides = {}) {
+  return { src, screenKey: null, flip: false, rotate: 0, ...overrides };
+}

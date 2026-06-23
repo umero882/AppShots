@@ -24,7 +24,7 @@ import {
 } from "../lib/i18n";
 import { defaultCorners } from "../lib/warp";
 import { loadFrameCorners } from "../lib/frameDetect";
-import { makeLive3d } from "../lib/live3d";
+import { makeLive3d, makeModel } from "../lib/live3d";
 import { videoSize } from "../lib/video";
 import { recordReel, videoSupported } from "../lib/videoRecorder";
 import { MUSIC_TRACKS, previewTrack, trackById } from "../lib/music";
@@ -85,11 +85,14 @@ export default function Editor() {
   const [videoMsg, setVideoMsg] = useState(""); // app-preview video progress/status
   const [showAudio, setShowAudio] = useState(false); // bg-music popover
   const [previewId, setPreviewId] = useState(null); // track currently previewing
+  // discovered material names + load error for the live-3D device model (transient)
+  const [live3dModel, setLive3dModel] = useState({ names: [], error: null });
 
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
   const audioRef = useRef(null);
   const frameRef = useRef(null);
+  const modelRef = useRef(null);
   const saveTimer = useRef(null);
   const previewStop = useRef(null); // stop() for the active music preview
   const previewIdRef = useRef(null); // latest requested preview id (race guard)
@@ -567,6 +570,39 @@ export default function Editor() {
     changeLive3d({ rotX, rotY });
   }
 
+  function changeLive3dModel(patch) {
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, idx) =>
+        idx === activeScreen && s.live3d?.model
+          ? { ...s, live3d: { ...s.live3d, model: { ...s.live3d.model, ...patch } } }
+          : s
+      ),
+    }));
+  }
+
+  async function onUploadModel(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLive3dModel({ names: [], error: null });
+    const src = await readFileAsDataURL(file);
+    // Enabling live-3D if needed, then attach the model.
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, idx) => {
+        if (idx !== activeScreen) return s;
+        const base = s.live3d || makeLive3d();
+        return { ...s, live3d: { ...base, enabled: true, model: makeModel(src) } };
+      }),
+    }));
+    e.target.value = "";
+  }
+
+  function removeModel() {
+    changeLive3d({ model: null });
+    setLive3dModel({ names: [], error: null });
+  }
+
   async function onUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1001,6 +1037,11 @@ export default function Editor() {
                 live3d={screen.live3d}
                 onToggleLive3d={toggleLive3d}
                 onChangeLive3d={changeLive3d}
+                live3dModelNames={live3dModel.names}
+                live3dModelError={live3dModel.error}
+                onUploadModel={() => modelRef.current?.click()}
+                onRemoveModel={removeModel}
+                onChangeLive3dModel={changeLive3dModel}
               />
             )}
             {tab === "background" && (
@@ -1080,6 +1121,7 @@ export default function Editor() {
                   onDeleteDevice={deleteDevice}
                   onFrameCorner={changeFrameCorner}
                   onLive3dRotate={live3dRotate}
+                  onLive3dModelInfo={setLive3dModel}
                 />
                 {showWatermark && (
                   <div className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/40 px-2 py-0.5 text-[9px] font-semibold text-white/80 backdrop-blur">
@@ -1095,6 +1137,7 @@ export default function Editor() {
               </button>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUpload} />
               <input ref={frameRef} type="file" accept="image/png,image/webp,image/*" hidden onChange={onUploadFrame} />
+              <input ref={modelRef} type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" hidden onChange={onUploadModel} />
             </div>
           </div>
 
