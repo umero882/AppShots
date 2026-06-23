@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
   BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
-  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film, Music,
+  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film, Music, Play, Pause,
 } from "lucide-react";
 import { SHORTCUTS } from "../lib/shortcuts";
 import Logo from "../components/Logo";
@@ -24,7 +24,7 @@ import {
 } from "../lib/i18n";
 import { videoSize } from "../lib/video";
 import { recordReel, videoSupported } from "../lib/videoRecorder";
-import { MUSIC_TRACKS } from "../lib/music";
+import { MUSIC_TRACKS, previewTrack, trackById } from "../lib/music";
 import ScreenCanvas from "../components/ScreenCanvas";
 import DevicePanel from "../components/DevicePanel";
 import { useAuth } from "../lib/auth";
@@ -81,11 +81,14 @@ export default function Editor() {
   const [translateErr, setTranslateErr] = useState("");
   const [videoMsg, setVideoMsg] = useState(""); // app-preview video progress/status
   const [showAudio, setShowAudio] = useState(false); // bg-music popover
+  const [previewId, setPreviewId] = useState(null); // track currently previewing
 
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
   const audioRef = useRef(null);
   const saveTimer = useRef(null);
+  const previewStop = useRef(null); // stop() for the active music preview
+  const previewIdRef = useRef(null); // latest requested preview id (race guard)
 
   // Undo/redo history. Snapshots of `state`; rapid edits (typing/dragging) within
   // a short window coalesce into one step.
@@ -190,6 +193,9 @@ export default function Editor() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [state, name]);
+
+  // stop any music preview when leaving the editor
+  useEffect(() => () => { if (previewStop.current) previewStop.current(); }, []);
 
   // debounced autosave
   const scheduleSave = useCallback(
@@ -634,6 +640,29 @@ export default function Editor() {
     e.target.value = "";
   }
 
+  function stopPreview() {
+    if (previewStop.current) { previewStop.current(); previewStop.current = null; }
+    previewIdRef.current = null;
+    setPreviewId(null);
+  }
+
+  // Play/stop a built-in track on a loop so it can be auditioned before choosing.
+  async function togglePreview(id) {
+    if (previewStop.current) { previewStop.current(); previewStop.current = null; }
+    if (previewIdRef.current === id) { previewIdRef.current = null; setPreviewId(null); return; }
+    previewIdRef.current = id;
+    setPreviewId(id);
+    const stop = await previewTrack(trackById(id), 0.6);
+    if (previewIdRef.current === id && stop) previewStop.current = stop;
+    else if (stop) stop(); // selection changed before playback started
+    else if (previewIdRef.current === id) setPreviewId(null);
+  }
+
+  function closeAudio() {
+    stopPreview();
+    setShowAudio(false);
+  }
+
   // Render an animated app-preview reel (Ken Burns + crossfades) of every screen
   // and download it as MP4 (when supported) or WebM.
   async function exportVideo() {
@@ -782,7 +811,7 @@ export default function Editor() {
           {videoMsg && <span className="hidden text-xs font-medium text-brand-300 lg:inline">{videoMsg}</span>}
           <div className="relative hidden md:block">
             <button
-              onClick={() => setShowAudio((v) => !v)}
+              onClick={() => { if (showAudio) stopPreview(); setShowAudio((v) => !v); }}
               title="Background music for the video"
               className={`btn-ghost px-2 py-2 ${state.audio ? "text-brand-300" : ""}`}
             >
@@ -790,24 +819,39 @@ export default function Editor() {
             </button>
             {showAudio && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowAudio(false)} />
+                <div className="fixed inset-0 z-40" onClick={closeAudio} />
                 <div className="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-white/10 bg-ink-900 p-3 shadow-xl">
                   <p className="label flex items-center gap-1.5"><Music size={13} /> Video background music</p>
-                  <div className="mb-2 grid grid-cols-2 gap-1.5">
-                    {MUSIC_TRACKS.map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => update({ audio: { builtin: t.id, volume: state.audio?.volume ?? 0.7 } })}
-                        className={`rounded-lg border px-2 py-1.5 text-left transition ${
-                          state.audio?.builtin === t.id
-                            ? "border-brand-500 bg-brand-500/10 text-white"
-                            : "border-white/10 text-slate-300 hover:border-white/20"
-                        }`}
-                      >
-                        <span className="block text-xs font-semibold">{t.name}</span>
-                        <span className="block text-[10px] text-slate-500">{t.desc}</span>
-                      </button>
-                    ))}
+                  <div className="scroll-thin mb-2 grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto pr-1">
+                    {MUSIC_TRACKS.map((t) => {
+                      const active = state.audio?.builtin === t.id;
+                      const playing = previewId === t.id;
+                      return (
+                        <div
+                          key={t.id}
+                          className={`flex items-center gap-1 rounded-lg border pr-1 transition ${
+                            active ? "border-brand-500 bg-brand-500/10" : "border-white/10 hover:border-white/20"
+                          }`}
+                        >
+                          <button
+                            onClick={() => update({ audio: { builtin: t.id, volume: state.audio?.volume ?? 0.7 } })}
+                            className="min-w-0 flex-1 px-2 py-1.5 text-left"
+                          >
+                            <span className={`block truncate text-xs font-semibold ${active ? "text-white" : "text-slate-200"}`}>{t.name}</span>
+                            <span className="block truncate text-[10px] text-slate-500">{t.desc}</span>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); togglePreview(t.id); }}
+                            title={playing ? "Stop preview" : "Preview"}
+                            className={`grid h-7 w-7 shrink-0 place-items-center rounded-md transition ${
+                              playing ? "bg-brand-500 text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                            }`}
+                          >
+                            {playing ? <Pause size={13} /> : <Play size={13} />}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                   <button onClick={() => audioRef.current?.click()} className="btn-soft w-full justify-center">
                     <Upload size={14} /> {state.audio?.data ? "Replace uploaded track" : "Upload your own"}

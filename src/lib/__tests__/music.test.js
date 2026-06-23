@@ -12,9 +12,15 @@ describe("noteFreq", () => {
 });
 
 describe("MUSIC_TRACKS catalog", () => {
-  it("offers several built-in moods", () => {
-    expect(MUSIC_TRACKS.length).toBeGreaterThanOrEqual(3);
-    expect(MUSIC_TRACKS.map((t) => t.id)).toEqual(expect.arrayContaining(["calm", "upbeat"]));
+  it("offers a broad set of built-in moods", () => {
+    expect(MUSIC_TRACKS.length).toBeGreaterThanOrEqual(8);
+    expect(MUSIC_TRACKS.map((t) => t.id)).toEqual(
+      expect.arrayContaining(["calm", "upbeat", "cinematic", "lofi", "energetic", "ambient"])
+    );
+  });
+  it("has a unique id per track", () => {
+    const ids = MUSIC_TRACKS.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
   it("every track has a name, a positive loop length and chords", () => {
     for (const t of MUSIC_TRACKS) {

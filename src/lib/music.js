@@ -36,6 +36,36 @@ export const MUSIC_TRACKS = [
     loopSec: 8, bpm: 84, wave: "sine", pad: true, bass: true, arp: false, beat: true,
     chords: [[62, 65, 69, 72], [55, 59, 62, 65], [60, 64, 67, 71], [57, 60, 64, 67]],
   },
+  {
+    id: "energetic", name: "Energetic", desc: "Fast bright arpeggio",
+    loopSec: 8, bpm: 128, wave: "triangle", pad: true, bass: true, arp: true, beat: true,
+    chords: [[62, 66, 69], [59, 62, 66], [57, 60, 64], [64, 67, 71]],
+  },
+  {
+    id: "dreamy", name: "Dreamy", desc: "Ethereal slow pad",
+    loopSec: 8, bpm: 60, wave: "sine", pad: true, bass: true, arp: false, beat: false,
+    chords: [[60, 64, 67, 71], [62, 65, 69, 72], [57, 60, 64, 67], [59, 62, 67, 71]],
+  },
+  {
+    id: "corporate", name: "Corporate", desc: "Clean & uplifting",
+    loopSec: 8, bpm: 104, wave: "triangle", pad: true, bass: true, arp: true, beat: false,
+    chords: [[60, 64, 67], [64, 67, 71], [57, 60, 64], [55, 59, 62]],
+  },
+  {
+    id: "playful", name: "Playful", desc: "Bouncy & fun",
+    loopSec: 8, bpm: 120, wave: "triangle", pad: true, bass: true, arp: true, beat: true,
+    chords: [[60, 64, 67], [62, 65, 69], [64, 67, 71], [65, 69, 72]],
+  },
+  {
+    id: "ambient", name: "Ambient", desc: "Calm drone",
+    loopSec: 8, bpm: 48, wave: "sine", pad: true, bass: true, arp: false, beat: false,
+    chords: [[55, 62, 67], [55, 62, 69], [53, 60, 65], [57, 64, 69]],
+  },
+  {
+    id: "groove", name: "Groove", desc: "Beat-driven",
+    loopSec: 8, bpm: 92, wave: "sine", pad: true, bass: true, arp: false, beat: true,
+    chords: [[57, 60, 64, 67], [53, 57, 60, 64], [55, 59, 62, 65], [50, 57, 62, 65]],
+  },
 ];
 
 export function trackById(id) {
@@ -138,4 +168,30 @@ export function renderTrackBuffer(track, sampleRate = 44100) {
     }
   }
   return ctx.startRendering();
+}
+
+/**
+ * Play a built-in track on a loop for previewing. Returns a stop() function
+ * (closes the audio graph), or null if WebAudio is unavailable.
+ * @returns {Promise<(() => void)|null>}
+ */
+export async function previewTrack(track, volume = 0.6) {
+  const AC = (typeof window !== "undefined") && (window.AudioContext || window.webkitAudioContext);
+  if (!AC || !track) return null;
+  try {
+    const ac = new AC();
+    if (ac.state === "suspended") await ac.resume();
+    const buffer = await renderTrackBuffer(track, ac.sampleRate);
+    if (!buffer) { ac.close(); return null; }
+    const src = ac.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    const gain = ac.createGain();
+    gain.gain.value = volume;
+    src.connect(gain).connect(ac.destination);
+    src.start();
+    return () => { try { src.stop(); } catch { /* already stopped */ } ac.close(); };
+  } catch {
+    return null;
+  }
 }
