@@ -4,7 +4,7 @@ import {
   fracDelta, clamp01, angleFromCenter, distance, scaleFromResize, snapToGuides,
 } from "../lib/elements";
 import { orientedCanvas, frameColorOf } from "../lib/deviceLayout";
-import { frameSpec, railGradient, shade } from "../lib/deviceFrames";
+import { frameSpec, railGradient, shade, mix } from "../lib/deviceFrames";
 
 /**
  * A realistic device mockup: a metal rail (brushed gradient) around a black
@@ -34,19 +34,25 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
   const railColor = color || device.bezel.color;
   const tilted = Math.abs(tiltX) + Math.abs(tiltY) > 1.5;
 
-  // Extruded metal side wall: stacked dark copies stepping in the tilt direction.
+  // Extruded metal side wall stepping in the tilt direction. Coloured like a
+  // real chamfered rail: a bright highlight catching light at the visible edge,
+  // falling off to the dark body — this is what makes the tilt read as 3D.
   const extrusion = (() => {
     if (!tilted) return "";
-    const mag = Math.min(42, Math.abs(tiltX) + Math.abs(tiltY));
+    const mag = Math.min(46, Math.abs(tiltX) + Math.abs(tiltY));
     const ex = -Math.sin((tiltY * Math.PI) / 180);
     const ey = Math.sin((tiltX * Math.PI) / 180);
-    const len = w * 0.07 * (mag / 30);
-    const dark = shade(railColor, -0.5);
-    const mid = shade(railColor, -0.3);
+    const len = w * 0.085 * (mag / 26);
+    const steps = 20;
+    const hi = shade(railColor, 0.5);
+    const body = shade(railColor, -0.12);
+    const deep = shade(railColor, -0.62);
     const parts = [];
-    for (let i = 1; i <= 14; i++) {
-      const f = (len * i) / 14;
-      parts.push(`${(ex * f).toFixed(1)}px ${(ey * f).toFixed(1)}px 0 ${i > 9 ? dark : mid}`);
+    for (let i = 1; i <= steps; i++) {
+      const f = (len * i) / steps;
+      // first ~2 steps = bright chamfer, then body grading into deep shadow
+      const col = i <= 2 ? hi : mix(body, deep, (i - 2) / (steps - 2));
+      parts.push(`${(ex * f).toFixed(1)}px ${(ey * f).toFixed(1)}px 0 ${col}`);
     }
     return parts.join(", ");
   })();
@@ -57,23 +63,23 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
 
   return (
     <div className="relative" style={{ width: w, height: h }}>
-      {/* contact shadow on the ground, shifting with tilt */}
+      {/* soft contact shadow on the ground, drifting + narrowing with tilt */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute"
         style={{
-          left: "50%", top: "50%", width: w * 0.92, height: h * 0.14,
-          transform: `translate(-50%, ${h * 0.45}px) translateX(${tiltY * 1.1}px)`,
-          background: "radial-gradient(ellipse at center, rgba(0,0,0,0.4), transparent 72%)",
+          left: "50%", top: "50%", width: w * 1.02, height: h * 0.12,
+          transform: `translate(-50%, ${h * 0.47}px) translateX(${tiltY * 1.5}px) scaleX(${Math.max(0.6, 1 - Math.abs(tiltY) / 160)})`,
+          background: "radial-gradient(ellipse at center, rgba(0,0,0,0.42), rgba(0,0,0,0.16) 46%, transparent 72%)",
           borderRadius: "50%",
         }}
       />
 
-      {/* the device — single-element 3D projection */}
+      {/* the device — single-element 3D projection (stronger perspective) */}
       <div
         style={{
           width: w, height: h,
-          transform: `perspective(${w * 1.7}px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`,
+          transform: `perspective(${w * 1.25}px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`,
           transformOrigin: "center center",
         }}
       >
@@ -145,8 +151,13 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
                   <span className="mt-2 text-[10px] font-medium uppercase tracking-wider">Upload screenshot</span>
                 </div>
               )}
-              {/* glass glare */}
+              {/* glass glare + recessed-glass inner shadow for depth */}
               <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: glare }} />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0"
+                style={{ boxShadow: `inset 0 0 ${w * 0.03}px rgba(0,0,0,0.30)`, borderRadius: screenR }}
+              />
             </div>
 
             <Camera spec={spec} w={w} land={land} chinPx={chinPx} bezelPx={bezelPx} />

@@ -29,11 +29,11 @@ function FrameColorRow({ label = "Frame color", value, onPick }) {
 // mockup's tilt + z-rotation; "Flat" clears them.
 export const POSES = [
   { id: "flat", name: "Flat", tiltX: 0, tiltY: 0, rotation: 0 },
-  { id: "left", name: "Left", tiltX: 6, tiltY: 24, rotation: 0 },
-  { id: "right", name: "Right", tiltX: 6, tiltY: -24, rotation: 0 },
-  { id: "iso-l", name: "Iso L", tiltX: 14, tiltY: 22, rotation: -5 },
-  { id: "iso-r", name: "Iso R", tiltX: 14, tiltY: -22, rotation: 5 },
-  { id: "back", name: "Back", tiltX: 22, tiltY: 0, rotation: 0 },
+  { id: "left", name: "Left", tiltX: 8, tiltY: 30, rotation: 0 },
+  { id: "right", name: "Right", tiltX: 8, tiltY: -30, rotation: 0 },
+  { id: "iso-l", name: "Iso L", tiltX: 16, tiltY: 26, rotation: -6 },
+  { id: "iso-r", name: "Iso R", tiltX: 16, tiltY: -26, rotation: 6 },
+  { id: "back", name: "Back", tiltX: 26, tiltY: 0, rotation: 0 },
 ];
 
 const poseMatches = (d, p) =>

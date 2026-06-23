@@ -1,5 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { shade, railGradient, familyOf, cameraType, frameSpec } from "../deviceFrames.js";
+import { shade, mix, railGradient, familyOf, cameraType, frameSpec } from "../deviceFrames.js";
+
+describe("mix", () => {
+  it("returns the endpoints at t=0 and t=1", () => {
+    expect(mix("#000000", "#ffffff", 0)).toBe("#000000");
+    expect(mix("#000000", "#ffffff", 1)).toBe("#ffffff");
+  });
+  it("blends halfway", () => {
+    expect(mix("#000000", "#ffffff", 0.5)).toBe("#808080");
+  });
+  it("clamps out-of-range t", () => {
+    expect(mix("#000000", "#ffffff", -1)).toBe("#000000");
+    expect(mix("#000000", "#ffffff", 2)).toBe("#ffffff");
+  });
+});
 import { DEVICES, getDevice } from "../devices.js";
 
 describe("shade", () => {

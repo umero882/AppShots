@@ -22,6 +22,25 @@ export function shade(hex, amt) {
   return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }
 
+function toRgb(hex) {
+  let c = String(hex || "#000").replace("#", "");
+  if (c.length === 3) c = c.split("").map((x) => x + x).join("");
+  const n = parseInt(c, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+/** Linear blend between two hex colors. t in [0,1]. */
+export function mix(a, b, t) {
+  const pa = toRgb(a);
+  const pb = toRgb(b);
+  const k = Math.max(0, Math.min(1, t));
+  const v = (x, y) => Math.round(x + (y - x) * k);
+  const r = v(pa.r, pb.r);
+  const g = v(pa.g, pb.g);
+  const bch = v(pa.b, pb.b);
+  return `#${((1 << 24) + (r << 16) + (g << 8) + bch).toString(16).slice(1)}`;
+}
+
 /** Brushed-metal gradient for the device rail from a base color. */
 export function railGradient(hex) {
   return `linear-gradient(145deg, ${shade(hex, 0.34)} 0%, ${hex} 46%, ${shade(hex, -0.3)} 100%)`;
