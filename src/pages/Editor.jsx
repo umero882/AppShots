@@ -22,6 +22,7 @@ import {
   BASE_LOCALE, LOCALES, localeName, projectLocales, localizeScreen, setLocaleText,
   baseStrings, applyLocaleStrings,
 } from "../lib/i18n";
+import { defaultCorners } from "../lib/warp";
 import { videoSize } from "../lib/video";
 import { recordReel, videoSupported } from "../lib/videoRecorder";
 import { MUSIC_TRACKS, previewTrack, trackById } from "../lib/music";
@@ -86,6 +87,7 @@ export default function Editor() {
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
   const audioRef = useRef(null);
+  const frameRef = useRef(null);
   const saveTimer = useRef(null);
   const previewStop = useRef(null); // stop() for the active music preview
   const previewIdRef = useRef(null); // latest requested preview id (race guard)
@@ -508,6 +510,31 @@ export default function Editor() {
       ...prev,
       screens: prev.screens.map((s, i) => (i === activeScreen ? setLocaleText(s, locale, patch) : s)),
     }));
+  }
+
+  /* -------- photoreal device frame (uploaded PNG + perspective warp) -------- */
+
+  async function onUploadFrame(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const image = await readFileAsDataURL(file);
+    updateScreen(activeScreen, { frame: { image, corners: defaultCorners() } });
+    e.target.value = "";
+  }
+
+  function changeFrameCorner(i, x, y) {
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, idx) => {
+        if (idx !== activeScreen || !s.frame) return s;
+        const corners = s.frame.corners.map((c, ci) => (ci === i ? [clamp01(x), clamp01(y)] : c));
+        return { ...s, frame: { ...s.frame, corners } };
+      }),
+    }));
+  }
+
+  function removeFrame() {
+    updateScreen(activeScreen, { frame: null });
   }
 
   async function onUpload(e) {
@@ -937,6 +964,9 @@ export default function Editor() {
                 onSelect={selectDevice}
                 onPromote={promoteToFree}
                 onPose={applyDevicePose}
+                frame={screen.frame}
+                onPickFrame={() => frameRef.current?.click()}
+                onRemoveFrame={removeFrame}
               />
             )}
             {tab === "background" && (
@@ -1014,6 +1044,7 @@ export default function Editor() {
                   onSelectDevice={selectDevice}
                   onChangeDevice={changeDevice}
                   onDeleteDevice={deleteDevice}
+                  onFrameCorner={changeFrameCorner}
                 />
                 {showWatermark && (
                   <div className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/40 px-2 py-0.5 text-[9px] font-semibold text-white/80 backdrop-blur">
@@ -1028,6 +1059,7 @@ export default function Editor() {
                 <Upload size={15} /> {uploadTargetImage ? "Replace screenshot" : "Upload screenshot"}
               </button>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUpload} />
+              <input ref={frameRef} type="file" accept="image/png,image/webp,image/*" hidden onChange={onUploadFrame} />
             </div>
           </div>
 

@@ -6,6 +6,7 @@ import { legibilityHalo } from "../lib/contrast";
 import { textEffectStyle } from "../lib/textEffects";
 import ElementsLayer from "./ElementsLayer";
 import { DeviceMockup, DevicesLayer } from "./DeviceMockup";
+import { PhotoFrame } from "./PhotoFrame";
 
 export function backgroundCss(bg) {
   if (bg.type === "solid") return bg.solid;
@@ -51,6 +52,7 @@ export default function ScreenCanvas({
   onSelectDevice,
   onChangeDevice,
   onDeleteDevice,
+  onFrameCorner,
 }) {
   const device = getDevice(state.deviceId);
   const canvas = orientedCanvas(device, state.orientation);
@@ -66,6 +68,8 @@ export default function ScreenCanvas({
 
   const free = isFreeMode(screen);
   const devices = screenDevices(screen, state);
+  // Photoreal mode: an uploaded device-frame PNG replaces the CSS device.
+  const photo = screen.frame?.image ? screen.frame : null;
 
   // Connected panorama: one shared design spanning every screen. The design is
   // the first screen's background (passed in), so editing screen 1's background
@@ -189,7 +193,7 @@ export default function ScreenCanvas({
         className="relative z-10 flex-1 w-full flex items-center justify-center"
         style={{ paddingTop: textPos === "bottom" ? "6%" : 0 }}
       >
-        {!free && (
+        {!free && !photo && (
           <DeviceMockup
             device={device}
             image={screen.image}
@@ -205,8 +209,20 @@ export default function ScreenCanvas({
         <div className="relative z-20 pb-[8%] w-full flex justify-center">{TextBlock}</div>
       )}
 
+      {/* photoreal device frame (uploaded PNG) — replaces the CSS device */}
+      {photo && (
+        <PhotoFrame
+          frame={photo}
+          image={screen.image}
+          width={width}
+          height={height}
+          editable={editableDevices}
+          onCorner={onFrameCorner}
+        />
+      )}
+
       {/* free-positioned device mockups (multi / tilt / rotate / off-canvas) */}
-      {free && (
+      {free && !photo && (
         <DevicesLayer
           devices={devices}
           width={width}

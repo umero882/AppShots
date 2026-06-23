@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Smartphone, Plus, Copy, Trash2, X, Box } from "lucide-react";
+import { Smartphone, Plus, Copy, Trash2, X, Box, Upload } from "lucide-react";
 import { DEVICES, getDevice } from "../lib/devices";
 import { orientedCanvas, isFreeMode, deviceTransform, FRAME_COLORS } from "../lib/deviceLayout";
 
@@ -177,6 +177,7 @@ function OrientationToggle({ value, onChange }) {
 export default function DevicePanel({
   state, update, screen, selectedDevice,
   onAdd, onChange, onDelete, onDuplicate, onSelect, onPromote, onPose,
+  frame, onPickFrame, onRemoveFrame,
 }) {
   const [adding, setAdding] = useState(false);
   const free = isFreeMode(screen);
@@ -196,9 +197,34 @@ export default function DevicePanel({
         <FrameGrid activeId={state.deviceId} onPick={(id) => update({ deviceId: id })} />
       </div>
 
+      {/* ---- photoreal 3D frame ---- */}
+      <div className="space-y-2 border-t border-white/10 pt-4">
+        <p className="label mb-0 flex items-center gap-1.5"><Box size={13} /> Photoreal 3D frame</p>
+        {frame ? (
+          <>
+            <div className="flex items-center justify-between rounded-lg border border-brand-500/40 bg-brand-500/5 px-2.5 py-2">
+              <span className="text-xs font-semibold text-white">Frame active — CSS device hidden</span>
+              <button onClick={onRemoveFrame} title="Remove frame" className="text-slate-400 hover:text-red-400"><X size={14} /></button>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Drag the 4 blue pins on the canvas to align your screenshot to the device&apos;s screen.
+            </p>
+            <button onClick={onPickFrame} className="btn-soft w-full justify-center"><Upload size={14} /> Replace frame</button>
+          </>
+        ) : (
+          <>
+            <button onClick={onPickFrame} className="btn-soft w-full justify-center"><Upload size={14} /> Upload device frame (PNG)</button>
+            <p className="text-[11px] text-slate-500">
+              Drop a photoreal device render with a <b>transparent screen</b> (e.g. a free Rotato or Figma 3D mockup export).
+              Your screenshot is perspective-warped into the screen and the frame composites on top — for true photoreal 3D.
+            </p>
+          </>
+        )}
+      </div>
+
       {/* ---- device mockups ---- */}
       <div className="space-y-3 border-t border-white/10 pt-4">
-        <p className="label mb-0">Device mockups</p>
+        <p className="label mb-0">Device mockups{frame ? " (replaced by frame)" : ""}</p>
 
         <FrameColorRow value={state.frameColor} onPick={(c) => update({ frameColor: c })} />
         <FitToggle value={state.deviceFit} onChange={(f) => update({ deviceFit: f })} />
