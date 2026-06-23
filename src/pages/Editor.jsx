@@ -368,6 +368,7 @@ export default function Editor() {
       image: s.image ?? null,
       scale: state.deviceScale ?? 0.78,
       orientation: state.orientation ?? "portrait",
+      fit: state.deviceFit,
     });
     update((prev) => ({
       ...prev,
@@ -383,6 +384,7 @@ export default function Editor() {
     const inst = makeDeviceInstance(deviceId, {
       scale: state.deviceScale ?? 0.78,
       orientation: state.orientation ?? "portrait",
+      fit: state.deviceFit,
       x: 0.5,
       y: 0.5,
     });

@@ -2,8 +2,24 @@ import { describe, it, expect } from "vitest";
 import {
   orientedCanvas, makeDeviceInstance, duplicateDeviceInstance,
   screenDevices, isFreeMode, deviceTransform, panoramaStyle, PERSPECTIVE,
-  FRAME_COLORS, frameColorOf, frameButtonColor,
+  FRAME_COLORS, frameColorOf, frameButtonColor, projectFit,
 } from "../deviceLayout.js";
+
+describe("projectFit (what the Fit/Fill toggle shows)", () => {
+  it("legacy: reflects state.deviceFit, defaulting to fill", () => {
+    expect(projectFit({ deviceFit: "contain" }, { devices: undefined })).toBe("contain");
+    expect(projectFit({}, {})).toBe("fill");
+  });
+  it("free mode: reflects the rendered device's own fit, NOT state.deviceFit", () => {
+    const screen = { devices: [makeDeviceInstance("ipad-13", { fit: "contain" })] };
+    // the bug: toggle said "fill" while the device was actually "contain"
+    expect(projectFit({ deviceFit: "fill" }, screen)).toBe("contain");
+  });
+  it("free mode: falls back to fill when an instance has no explicit fit", () => {
+    const screen = { devices: [{ id: "x", deviceId: "ipad-13" }] };
+    expect(projectFit({}, screen)).toBe("fill");
+  });
+});
 
 describe("frame colors", () => {
   const device = { bezel: { color: "#0b0b0e" } };

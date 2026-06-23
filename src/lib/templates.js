@@ -60,6 +60,7 @@ export function defaultProjectState() {
       weight: 500,
     },
     deviceScale: 0.78,
+    deviceFit: "fill", // fill the device screen edge-to-edge by default (no blurred sides)
     screens: [defaultScreen()],
   };
 }

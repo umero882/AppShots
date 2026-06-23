@@ -85,6 +85,17 @@ export function isFreeMode(screen) {
 }
 
 /**
+ * The screenshot-fit currently IN EFFECT for a screen — what the panel's Fit/Fill
+ * toggle must display. In free mode the rendered device uses its own instance
+ * `fit`, so the toggle has to read that (not `state.deviceFit`); otherwise it
+ * could show "Fill" while a device is actually letterboxed (contain).
+ */
+export function projectFit(state, screen) {
+  if (isFreeMode(screen)) return screen.devices[0]?.fit ?? state?.deviceFit ?? "fill";
+  return state?.deviceFit ?? "fill";
+}
+
+/**
  * Devices to render for a screen. Returns the explicit array in free mode,
  * else a single synthesized instance from the legacy single-device fields so
  * old projects/templates render exactly as before.
@@ -97,6 +108,7 @@ export function screenDevices(screen, state) {
       image: screen?.image ?? null,
       scale: state.deviceScale ?? 0.78,
       orientation: state.orientation ?? "portrait",
+      fit: state.deviceFit,
     }),
   ];
 }

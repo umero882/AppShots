@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Smartphone, Plus, Copy, Trash2, X, Box, Upload, Boxes } from "lucide-react";
 import { DEVICES, getDevice } from "../lib/devices";
-import { orientedCanvas, isFreeMode, deviceTransform, FRAME_COLORS } from "../lib/deviceLayout";
+import { orientedCanvas, isFreeMode, deviceTransform, FRAME_COLORS, projectFit } from "../lib/deviceLayout";
 import { LIVE3D_MATERIALS } from "../lib/live3d";
 
 function FrameColorRow({ label = "Frame color", value, onPick }) {
@@ -351,7 +351,16 @@ export default function DevicePanel({
         <p className="label mb-0">Device mockups{frame ? " (replaced by frame)" : live3d?.enabled ? " (replaced by live 3D)" : ""}</p>
 
         <FrameColorRow value={state.frameColor} onPick={(c) => update({ frameColor: c })} />
-        <FitToggle value={state.deviceFit} onChange={(f) => update({ deviceFit: f })} />
+        {/* In free/multi mode each device renders from its OWN fit, so this toggle
+            must read + write the instances — otherwise it could show "Fill" while a
+            device is still letterboxed (contain) with blurred sides. */}
+        <FitToggle
+          value={projectFit(state, screen)}
+          onChange={(f) => {
+            update({ deviceFit: f });
+            if (free) devices.forEach((d) => onChange(d.id, { fit: f }));
+          }}
+        />
 
         {!free ? (
           <>
