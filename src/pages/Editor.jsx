@@ -23,6 +23,7 @@ import {
   baseStrings, applyLocaleStrings,
 } from "../lib/i18n";
 import { defaultCorners } from "../lib/warp";
+import { loadFrameCorners } from "../lib/frameDetect";
 import { videoSize } from "../lib/video";
 import { recordReel, videoSupported } from "../lib/videoRecorder";
 import { MUSIC_TRACKS, previewTrack, trackById } from "../lib/music";
@@ -518,8 +519,17 @@ export default function Editor() {
     const file = e.target.files?.[0];
     if (!file) return;
     const image = await readFileAsDataURL(file);
-    updateScreen(activeScreen, { frame: { image, corners: defaultCorners() } });
+    // Auto-fit the pins to the frame's transparent screen; fall back to a default.
+    const corners = (await loadFrameCorners(image)) || defaultCorners();
+    updateScreen(activeScreen, { frame: { image, corners } });
     e.target.value = "";
+  }
+
+  async function autoFitFrame() {
+    const f = state.screens[activeScreen]?.frame;
+    if (!f?.image) return;
+    const corners = await loadFrameCorners(f.image);
+    if (corners) updateScreen(activeScreen, { frame: { ...f, corners } });
   }
 
   function changeFrameCorner(i, x, y) {
@@ -967,6 +977,7 @@ export default function Editor() {
                 frame={screen.frame}
                 onPickFrame={() => frameRef.current?.click()}
                 onRemoveFrame={removeFrame}
+                onAutoFitFrame={autoFitFrame}
               />
             )}
             {tab === "background" && (

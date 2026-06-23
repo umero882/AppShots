@@ -177,7 +177,7 @@ function OrientationToggle({ value, onChange }) {
 export default function DevicePanel({
   state, update, screen, selectedDevice,
   onAdd, onChange, onDelete, onDuplicate, onSelect, onPromote, onPose,
-  frame, onPickFrame, onRemoveFrame,
+  frame, onPickFrame, onRemoveFrame, onAutoFitFrame,
 }) {
   const [adding, setAdding] = useState(false);
   const free = isFreeMode(screen);
@@ -207,9 +207,12 @@ export default function DevicePanel({
               <button onClick={onRemoveFrame} title="Remove frame" className="text-slate-400 hover:text-red-400"><X size={14} /></button>
             </div>
             <p className="text-[11px] text-slate-400">
-              Drag the 4 blue pins on the canvas to align your screenshot to the device&apos;s screen.
+              Pins auto-fit the screen on upload. Drag them on the canvas to fine-tune, or re-run:
             </p>
-            <button onClick={onPickFrame} className="btn-soft w-full justify-center"><Upload size={14} /> Replace frame</button>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={onAutoFitFrame} className="btn-soft justify-center"><Box size={14} /> Auto-fit</button>
+              <button onClick={onPickFrame} className="btn-soft justify-center"><Upload size={14} /> Replace</button>
+            </div>
           </>
         ) : (
           <>
