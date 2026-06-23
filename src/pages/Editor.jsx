@@ -24,6 +24,7 @@ import {
 } from "../lib/i18n";
 import { defaultCorners } from "../lib/warp";
 import { loadFrameCorners } from "../lib/frameDetect";
+import { makeLive3d } from "../lib/live3d";
 import { videoSize } from "../lib/video";
 import { recordReel, videoSupported } from "../lib/videoRecorder";
 import { MUSIC_TRACKS, previewTrack, trackById } from "../lib/music";
@@ -547,6 +548,25 @@ export default function Editor() {
     updateScreen(activeScreen, { frame: null });
   }
 
+  /* -------- real 3D (live WebGL device) -------- */
+
+  function toggleLive3d(on) {
+    updateScreen(activeScreen, { live3d: on ? makeLive3d() : null });
+  }
+
+  function changeLive3d(patch) {
+    update((prev) => ({
+      ...prev,
+      screens: prev.screens.map((s, idx) =>
+        idx === activeScreen && s.live3d ? { ...s, live3d: { ...s.live3d, ...patch } } : s
+      ),
+    }));
+  }
+
+  function live3dRotate({ rotX, rotY }) {
+    changeLive3d({ rotX, rotY });
+  }
+
   async function onUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -978,6 +998,9 @@ export default function Editor() {
                 onPickFrame={() => frameRef.current?.click()}
                 onRemoveFrame={removeFrame}
                 onAutoFitFrame={autoFitFrame}
+                live3d={screen.live3d}
+                onToggleLive3d={toggleLive3d}
+                onChangeLive3d={changeLive3d}
               />
             )}
             {tab === "background" && (
@@ -1056,6 +1079,7 @@ export default function Editor() {
                   onChangeDevice={changeDevice}
                   onDeleteDevice={deleteDevice}
                   onFrameCorner={changeFrameCorner}
+                  onLive3dRotate={live3dRotate}
                 />
                 {showWatermark && (
                   <div className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/40 px-2 py-0.5 text-[9px] font-semibold text-white/80 backdrop-blur">

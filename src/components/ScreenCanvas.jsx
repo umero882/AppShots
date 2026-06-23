@@ -7,6 +7,7 @@ import { textEffectStyle } from "../lib/textEffects";
 import ElementsLayer from "./ElementsLayer";
 import { DeviceMockup, DevicesLayer } from "./DeviceMockup";
 import { PhotoFrame } from "./PhotoFrame";
+import { Live3DDevice } from "./Live3DDevice";
 
 export function backgroundCss(bg) {
   if (bg.type === "solid") return bg.solid;
@@ -53,6 +54,7 @@ export default function ScreenCanvas({
   onChangeDevice,
   onDeleteDevice,
   onFrameCorner,
+  onLive3dRotate,
 }) {
   const device = getDevice(state.deviceId);
   const canvas = orientedCanvas(device, state.orientation);
@@ -70,6 +72,8 @@ export default function ScreenCanvas({
   const devices = screenDevices(screen, state);
   // Photoreal mode: an uploaded device-frame PNG replaces the CSS device.
   const photo = screen.frame?.image ? screen.frame : null;
+  // Real-3D mode: a live WebGL device replaces the CSS device (photo wins if both).
+  const live = !photo && screen.live3d?.enabled ? screen.live3d : null;
 
   // Connected panorama: one shared design spanning every screen. The design is
   // the first screen's background (passed in), so editing screen 1's background
@@ -193,7 +197,7 @@ export default function ScreenCanvas({
         className="relative z-10 flex-1 w-full flex items-center justify-center"
         style={{ paddingTop: textPos === "bottom" ? "6%" : 0 }}
       >
-        {!free && !photo && (
+        {!free && !photo && !live && (
           <DeviceMockup
             device={device}
             image={screen.image}
@@ -221,8 +225,21 @@ export default function ScreenCanvas({
         />
       )}
 
+      {/* real-3D WebGL device (live, rotatable) — replaces the CSS device */}
+      {live && (
+        <Live3DDevice
+          live3d={live}
+          image={screen.image}
+          aspect={aspect}
+          width={width}
+          height={height}
+          editable={editableDevices}
+          onChange={onLive3dRotate}
+        />
+      )}
+
       {/* free-positioned device mockups (multi / tilt / rotate / off-canvas) */}
-      {free && !photo && (
+      {free && !photo && !live && (
         <DevicesLayer
           devices={devices}
           width={width}

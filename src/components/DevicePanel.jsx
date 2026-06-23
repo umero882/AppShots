@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Smartphone, Plus, Copy, Trash2, X, Box, Upload } from "lucide-react";
+import { Smartphone, Plus, Copy, Trash2, X, Box, Upload, Boxes } from "lucide-react";
 import { DEVICES, getDevice } from "../lib/devices";
 import { orientedCanvas, isFreeMode, deviceTransform, FRAME_COLORS } from "../lib/deviceLayout";
+import { LIVE3D_MATERIALS } from "../lib/live3d";
 
 function FrameColorRow({ label = "Frame color", value, onPick }) {
   const active = (value || "#0b0b0e").toLowerCase();
@@ -112,6 +113,60 @@ export function FrameGrid({ activeId, onPick }) {
   );
 }
 
+function Live3DSection({ live3d, frameActive, onToggle, onChange }) {
+  const on = !!live3d?.enabled;
+  return (
+    <div className="space-y-2">
+      <label className="flex cursor-pointer items-center justify-between">
+        <span className="label mb-0 flex items-center gap-1.5"><Boxes size={13} /> Real 3D (WebGL)</span>
+        <input
+          type="checkbox"
+          checked={on}
+          disabled={frameActive}
+          onChange={(e) => onToggle(e.target.checked)}
+          className="h-4 w-4 accent-brand-500 disabled:opacity-40"
+        />
+      </label>
+      {frameActive ? (
+        <p className="text-[11px] text-slate-500">Turn off the photoreal frame above to use live 3D.</p>
+      ) : on ? (
+        <div className="space-y-3 rounded-xl border border-brand-500/40 bg-brand-500/5 p-3">
+          <p className="text-[11px] text-slate-400">Drag the device on the canvas to rotate it. Exports include the rendered 3D.</p>
+          <div>
+            <p className="label">Body material</p>
+            <div className="flex flex-wrap gap-2">
+              {LIVE3D_MATERIALS.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => onChange({ material: m.id })}
+                  title={m.name}
+                  className={`h-8 w-8 rounded-full ring-2 transition ${
+                    (live3d.material || "titanium") === m.id ? "ring-white" : "ring-white/15 hover:ring-white/40"
+                  }`}
+                  style={{ background: m.color }}
+                />
+              ))}
+            </div>
+          </div>
+          <Slider label="Rotate ↔" value={Math.round(live3d.rotY || 0)} min={-60} max={60} suffix="°" onChange={(v) => onChange({ rotY: v })} />
+          <Slider label="Rotate ↕" value={Math.round(live3d.rotX || 0)} min={-60} max={60} suffix="°" onChange={(v) => onChange({ rotX: v })} />
+          <Slider label="Zoom" value={Math.round((live3d.zoom || 1) * 100)} min={60} max={160} suffix="%" onChange={(v) => onChange({ zoom: v / 100 })} />
+          <button
+            onClick={() => onChange({ rotX: -14, rotY: 22, zoom: 1 })}
+            className="text-xs text-slate-400 transition hover:text-white"
+          >
+            Reset 3D pose
+          </button>
+        </div>
+      ) : (
+        <p className="text-[11px] text-slate-500">
+          A live, rotatable WebGL device with real metal reflections — drag to spin it in 3D. Heavier than the CSS mockup; loads on demand.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function FitToggle({ value, onChange }) {
   const opts = [
     { id: "contain", label: "Fit" },
@@ -178,6 +233,7 @@ export default function DevicePanel({
   state, update, screen, selectedDevice,
   onAdd, onChange, onDelete, onDuplicate, onSelect, onPromote, onPose,
   frame, onPickFrame, onRemoveFrame, onAutoFitFrame,
+  live3d, onToggleLive3d, onChangeLive3d,
 }) {
   const [adding, setAdding] = useState(false);
   const free = isFreeMode(screen);
@@ -225,9 +281,19 @@ export default function DevicePanel({
         )}
       </div>
 
+      {/* ---- real 3D (WebGL) ---- */}
+      <div className="border-t border-white/10 pt-4">
+        <Live3DSection
+          live3d={live3d}
+          frameActive={!!frame}
+          onToggle={onToggleLive3d}
+          onChange={onChangeLive3d}
+        />
+      </div>
+
       {/* ---- device mockups ---- */}
       <div className="space-y-3 border-t border-white/10 pt-4">
-        <p className="label mb-0">Device mockups{frame ? " (replaced by frame)" : ""}</p>
+        <p className="label mb-0">Device mockups{frame ? " (replaced by frame)" : live3d?.enabled ? " (replaced by live 3D)" : ""}</p>
 
         <FrameColorRow value={state.frameColor} onPick={(c) => update({ frameColor: c })} />
         <FitToggle value={state.deviceFit} onChange={(f) => update({ deviceFit: f })} />
