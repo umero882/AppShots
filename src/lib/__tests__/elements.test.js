@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   clamp01, fracDelta, angleFromCenter, distance, scaleFromResize, snapToCenter, snapToGuides,
-  makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
+  makeElement, makeEmojiElement, makeIconElement, makeImageElement, makeTextElement, elementSvg,
   reorderElements, duplicateElement, twemojiCodepoints, twemojiUrl,
   BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
 } from "../elements.js";
@@ -100,6 +100,17 @@ describe("makeElement", () => {
     expect(makeEmojiElement("🚀")).toMatchObject({ kind: "emoji", emoji: "🚀" });
     expect(makeIconElement("Star")).toMatchObject({ kind: "icon", icon: "Star" });
     expect(makeImageElement("data:img")).toMatchObject({ kind: "image", image: "data:img" });
+  });
+  it("makeTextElement creates a placed text block with style defaults", () => {
+    const t = makeTextElement();
+    expect(t).toMatchObject({ kind: "text", scale: 1, rotation: 0, align: "center", weight: 700 });
+    expect(t.id).toMatch(/^el_/);
+    expect(t.size).toBeGreaterThan(0);
+    expect(t.text).toBeTruthy();
+  });
+  it("makeTextElement honors overrides", () => {
+    expect(makeTextElement({ text: "Hi", size: 0.09, weight: 800, color: "#ff0000", x: 0.2, y: 0.8 }))
+      .toMatchObject({ text: "Hi", size: 0.09, weight: 800, color: "#ff0000", x: 0.2, y: 0.8 });
   });
 });
 

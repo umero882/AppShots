@@ -399,6 +399,25 @@ export function makeImageElement(image, opts) {
   return makeElement({ kind: "image", image }, opts);
 }
 
+/**
+ * A free-positioned text block — a first-class element so it can be dragged,
+ * resized, rotated and layered like any other. `size` is a fraction of the
+ * canvas width; the renderer multiplies by the element scale.
+ */
+export function makeTextElement(opts = {}) {
+  const {
+    x = 0.5, y = 0.4, text = "Add your text", font = "inter",
+    size = 0.06, color = "#ffffff", weight = 700, align = "center", effect = "none",
+  } = opts;
+  return {
+    id: freshId(),
+    kind: "text",
+    x, y, scale: 1, rotation: 0, opacity: 1,
+    baseWidth: 0.6,
+    text, font, size, color, weight, align, effect,
+  };
+}
+
 /** Copy an element with a fresh id, nudged slightly so it's visible on top. */
 export function duplicateElement(el, offset = 0.04) {
   return { ...el, id: freshId(), x: clamp01((el.x ?? 0.5) + offset), y: clamp01((el.y ?? 0.4) + offset) };

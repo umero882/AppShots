@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { X, RotateCw, Maximize2 } from "lucide-react";
 import { elementSvg, fracDelta, clamp01, angleFromCenter, distance, scaleFromResize, snapToGuides, twemojiUrl } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
+import { FONTS } from "../lib/templates";
+import { textEffectStyle } from "../lib/textEffects";
 
 /**
  * Renders a screen's elements as positioned overlays. When `editable` is set,
@@ -131,7 +133,7 @@ export default function ElementsLayer({
               left: `${el.x * 100}%`,
               top: `${el.y * 100}%`,
               transform: `translate(-50%, -50%) rotate(${el.rotation}deg)`,
-              width: el.kind === "badge" ? "auto" : elW,
+              width: el.kind === "badge" || el.kind === "text" ? "auto" : elW,
               opacity: el.opacity ?? 1,
             }}
           >
@@ -177,6 +179,29 @@ export default function ElementsLayer({
 }
 
 function ElementContent({ el, elW, width, twemoji }) {
+  if (el.kind === "text") {
+    const font = FONTS.find((f) => f.id === el.font) || FONTS[0];
+    const fs = width * (el.size ?? 0.06) * (el.scale ?? 1);
+    return (
+      <div
+        className="select-none"
+        style={{
+          fontFamily: font.stack,
+          fontSize: fs,
+          color: el.color || "#ffffff",
+          fontWeight: el.weight ?? 700,
+          textAlign: el.align || "center",
+          lineHeight: 1.15,
+          letterSpacing: "-0.01em",
+          whiteSpace: "pre-wrap",
+          maxWidth: width * 0.85,
+          ...textEffectStyle(el, fs),
+        }}
+      >
+        {el.text}
+      </div>
+    );
+  }
   if (el.kind === "shape" || el.kind === "arrow") {
     return <img src={elementSvg(el)} alt="" className="block w-full select-none" draggable={false} />;
   }

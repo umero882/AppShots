@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import ElementsLayer from "../ElementsLayer.jsx";
 import {
-  makeElement, makeEmojiElement, makeIconElement, makeImageElement,
+  makeElement, makeEmojiElement, makeIconElement, makeImageElement, makeTextElement,
   BADGES, SHAPES, ARROWS,
 } from "../../lib/elements.js";
 
@@ -34,6 +34,13 @@ describe("ElementsLayer rendering", () => {
     const html = render([makeEmojiElement("🚀")], { twemoji: true });
     expect(html).toContain("jsdelivr");
     expect(html).toContain("1f680.svg");
+  });
+
+  it("renders a text element's content with its styling", () => {
+    const html = render([makeTextElement({ text: "Hello world", color: "#ff0000", align: "left" })]);
+    expect(html).toContain("Hello world");
+    expect(html).toContain("color:#ff0000");
+    expect(html).toContain("text-align:left");
   });
 
   it("renders an icon as an inline svg", () => {

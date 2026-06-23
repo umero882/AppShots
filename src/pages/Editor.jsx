@@ -34,7 +34,7 @@ import {
   orientedCanvas, makeDeviceInstance, duplicateDeviceInstance, isFreeMode, screenDevices,
 } from "../lib/deviceLayout";
 import {
-  makeElement, makeEmojiElement, makeIconElement, makeImageElement, elementSvg,
+  makeElement, makeEmojiElement, makeIconElement, makeImageElement, makeTextElement, elementSvg,
   reorderElements, duplicateElement, clamp01,
   BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
 } from "../lib/elements";
@@ -2034,8 +2034,14 @@ function LayerBtn({ label, onClick, disabled, children }) {
 }
 
 function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onDelete, onChange, onDuplicate, twemoji = false, onToggleTwemoji }) {
-  const CATS = ["Badges", "Shapes", "Arrows", "Emoji", "Icons", "Photos"];
-  const [cat, setCat] = useState("Badges");
+  const CATS = ["Text", "Badges", "Shapes", "Arrows", "Emoji", "Icons", "Photos"];
+  const [cat, setCat] = useState("Text");
+  const TEXT_ADDS = [
+    { name: "Heading", text: "Big headline", size: 0.085, weight: 800 },
+    { name: "Subhead", text: "Supporting line", size: 0.052, weight: 600 },
+    { name: "Body", text: "Body text here", size: 0.036, weight: 500 },
+    { name: "Tagline", text: "TAGLINE", size: 0.03, weight: 700 },
+  ];
 
   const selIndex = elements.findIndex((e) => e.id === selectedId);
   const selected = selIndex >= 0 ? elements[selIndex] : null;
@@ -2089,7 +2095,9 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
     : EMOJI;
 
   const elLabel = (el) =>
-    el.kind === "badge"
+    el.kind === "text"
+      ? (el.text || "Text").slice(0, 18)
+      : el.kind === "badge"
       ? el.text
       : el.kind === "emoji"
       ? el.emoji
@@ -2140,6 +2148,76 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
                 className="w-full accent-brand-500"
               />
             </div>
+
+            {selected.kind === "text" && (
+              <>
+                <div>
+                  <p className="label mb-1">Text</p>
+                  <textarea
+                    value={selected.text}
+                    onChange={(e) => onChange(selected.id, { text: e.target.value })}
+                    rows={2}
+                    className="input resize-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="label mb-1">Font</p>
+                    <select className="input" value={selected.font} onChange={(e) => onChange(selected.id, { font: e.target.value })}>
+                      {FONTS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <p className="label mb-1">Weight</p>
+                    <select className="input" value={selected.weight} onChange={(e) => onChange(selected.id, { weight: +e.target.value })}>
+                      {[400, 500, 600, 700, 800, 900].map((w) => <option key={w} value={w}>{w}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <p className="label mb-1">Size · {Math.round((selected.size ?? 0.06) * 100)}</p>
+                  <input
+                    type="range" min="2" max="16" step="0.5"
+                    value={(selected.size ?? 0.06) * 100}
+                    onChange={(e) => onChange(selected.id, { size: +e.target.value / 100 })}
+                    className="w-full accent-brand-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="label mb-1">Align</p>
+                    <select className="input" value={selected.align} onChange={(e) => onChange(selected.id, { align: e.target.value })}>
+                      {["left", "center", "right"].map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <p className="label mb-1">Color</p>
+                    <input
+                      type="color"
+                      value={selected.color || "#ffffff"}
+                      onChange={(e) => onChange(selected.id, { color: e.target.value })}
+                      className="h-8 w-full cursor-pointer rounded-lg bg-transparent"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <p className="label mb-1">Effect</p>
+                  <div className="grid grid-cols-5 gap-1">
+                    {TEXT_EFFECTS.map((ef) => (
+                      <button
+                        key={ef.id}
+                        onClick={() => onChange(selected.id, { effect: ef.id })}
+                        className={`rounded-md border py-1 text-[10px] font-medium transition ${
+                          (selected.effect || "none") === ef.id ? "border-brand-500 bg-brand-500/10 text-white" : "border-white/10 text-slate-300 hover:border-white/20"
+                        }`}
+                      >
+                        {ef.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             {(selected.kind === "shape" || selected.kind === "arrow" || selected.kind === "icon") && (
               <div>
@@ -2202,6 +2280,34 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
           </button>
         ))}
       </div>
+
+      {cat === "Text" && (
+        <div className="space-y-3">
+          <button onClick={() => onAdd(makeTextElement())} className="btn-soft w-full justify-center">
+            <Type size={15} /> Add text
+          </button>
+          <div>
+            <p className="label">Quick styles</p>
+            <div className="grid grid-cols-2 gap-2">
+              {TEXT_ADDS.map((p) => (
+                <button
+                  key={p.name}
+                  onClick={() => onAdd(makeTextElement(p))}
+                  className="rounded-lg border border-white/10 bg-white/[0.02] px-2.5 py-2 text-left transition hover:border-white/25"
+                >
+                  <span className="block font-semibold text-white" style={{ fontSize: Math.min(18, p.size * 180), lineHeight: 1.1 }}>
+                    {p.name}
+                  </span>
+                  <span className="block text-[10px] text-slate-500">size {Math.round(p.size * 100)} · {p.weight}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Click to add a text block, then drag · resize · rotate it on the canvas. Edit the content in the panel above when it&apos;s selected.
+          </p>
+        </div>
+      )}
 
       {cat === "Badges" && (
         <div className="grid grid-cols-2 gap-2">
