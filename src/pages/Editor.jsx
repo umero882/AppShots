@@ -2074,6 +2074,14 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
     { name: "Body", text: "Body text here", size: 0.036, weight: 500 },
     { name: "Tagline", text: "TAGLINE", size: 0.03, weight: 700 },
   ];
+  const imgUploadRef = useRef(null);
+  async function uploadImageEl(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataURL(file);
+    onAdd(makeImageElement(dataUrl));
+    e.target.value = "";
+  }
 
   const selIndex = elements.findIndex((e) => e.id === selectedId);
   const selected = selIndex >= 0 ? elements[selIndex] : null;
@@ -2440,6 +2448,13 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
 
       {cat === "Photos" && (
         <div className="space-y-3">
+          <button type="button" onClick={() => imgUploadRef.current?.click()} className="btn-soft w-full justify-center">
+            <Upload size={14} /> Upload your own image
+          </button>
+          <input ref={imgUploadRef} type="file" accept="image/*" hidden onChange={uploadImageEl} />
+          <p className="text-[11px] text-slate-500">
+            Use any graphic — a finished 3D mockup, a logo, a feature shot. It drops in as a draggable layer.
+          </p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
