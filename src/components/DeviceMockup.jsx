@@ -20,7 +20,6 @@ import { frameSpec, railGradient, shade, mix } from "../lib/deviceFrames";
 export function DeviceMockup({ device, image, width, orientation = "portrait", color, tiltX = 0, tiltY = 0, fit = "fill" }) {
   const canvas = orientedCanvas(device, orientation);
   const w = width;
-  const h = w * (canvas.h / canvas.w);
   const spec = frameSpec(device);
   const land = orientation === "landscape";
 
@@ -30,6 +29,18 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
   const radius = w * spec.radius;
   const innerR = Math.max(2, radius - railPx);
   const screenR = Math.max(1, innerR - bezelPx * 0.5);
+
+  // Size the device so the SCREEN OPENING matches the device's exact aspect
+  // ratio. The bezel is uniform around the screen, so deriving the height from
+  // the screen width (rather than forcing the whole frame to the screen aspect)
+  // means a correctly-sized screenshot fills the screen edge-to-edge — no
+  // letterbox, no side gaps, not floating in the center. (Physically accurate:
+  // a real device's outer body is taller than its bare screen by the bezel.)
+  const AR = canvas.h / canvas.w;
+  const insetX = railPx + bezelPx + (land ? chinPx : 0);
+  const insetY = railPx + bezelPx + (land ? 0 : chinPx);
+  const screenW = Math.max(1, w - 2 * insetX);
+  const h = AR * screenW + 2 * insetY;
 
   const railColor = color || device.bezel.color;
   const tilted = Math.abs(tiltX) + Math.abs(tiltY) > 1.5;

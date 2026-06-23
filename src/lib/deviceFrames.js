@@ -51,11 +51,11 @@ export function railGradient(hex) {
 const FAMILY = {
   iphone:          { radius: 0.165, bezel: 0.030, rail: 0.014, chin: 0, buttons: "iphone", railLight: true },
   "iphone-classic":{ radius: 0.085, bezel: 0.030, rail: 0.010, chin: 0.085, buttons: "iphone", railLight: false },
-  ipad:            { radius: 0.055, bezel: 0.045, rail: 0.010, chin: 0, buttons: "ipad", railLight: true },
+  ipad:            { radius: 0.050, bezel: 0.020, rail: 0.009, chin: 0, buttons: "ipad", railLight: true },
   pixel:           { radius: 0.105, bezel: 0.028, rail: 0.009, chin: 0, buttons: "right2", railLight: false },
   galaxy:          { radius: 0.070, bezel: 0.020, rail: 0.006, chin: 0, buttons: "right2", railLight: false },
   "android-phone": { radius: 0.110, bezel: 0.032, rail: 0.010, chin: 0, buttons: "right2", railLight: false },
-  "android-tablet":{ radius: 0.050, bezel: 0.050, rail: 0.010, chin: 0, buttons: "ipad", railLight: false },
+  "android-tablet":{ radius: 0.046, bezel: 0.022, rail: 0.009, chin: 0, buttons: "ipad", railLight: false },
 };
 
 /** Resolve a device's family from an explicit field or its id. */

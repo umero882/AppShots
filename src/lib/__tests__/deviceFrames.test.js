@@ -67,7 +67,10 @@ describe("frameSpec distinguishes families", () => {
     const galaxy = frameSpec(getDevice("galaxy-s24"));
     expect(iphone.radius).not.toBe(ipad.radius);
     expect(iphone.radius).not.toBe(galaxy.radius);
-    expect(ipad.bezel).toBeGreaterThan(iphone.bezel); // tablets have thicker bezels
+    // Each family has its own bezel; modern iPads use a THIN uniform bezel so the
+    // screenshot fills the frame (matching how Apple/Google present tablet shots).
+    expect(ipad.bezel).not.toBe(iphone.bezel);
+    expect(ipad.bezel).toBeLessThan(0.03);
     expect(iphone.camera).toBe("island");
     expect(ipad.camera).toBe("dot");
   });
