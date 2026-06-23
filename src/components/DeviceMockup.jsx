@@ -17,7 +17,7 @@ import { frameSpec, railGradient, shade } from "../lib/deviceFrames";
  * screen glare that shifts with the angle, and a contact shadow on the ground —
  * the cues that make the tilt actually read as 3D.
  */
-export function DeviceMockup({ device, image, width, orientation = "portrait", color, tiltX = 0, tiltY = 0 }) {
+export function DeviceMockup({ device, image, width, orientation = "portrait", color, tiltX = 0, tiltY = 0, fit = "contain" }) {
   const canvas = orientedCanvas(device, orientation);
   const w = width;
   const h = w * (canvas.h / canvas.w);
@@ -102,9 +102,29 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
               padding: `${bezelPx + (land ? 0 : chinPx)}px ${bezelPx + (land ? chinPx : 0)}px`,
             }}
           >
-            <div className="relative h-full w-full overflow-hidden" style={{ borderRadius: screenR }}>
+            <div className="relative h-full w-full overflow-hidden bg-white" style={{ borderRadius: screenR }}>
               {image ? (
-                <img src={image} alt="app screenshot" className="h-full w-full object-cover" crossOrigin="anonymous" />
+                <>
+                  {/* "contain" never crops the screenshot; a blurred cover copy
+                      fills the letterbox area so it reads as intentional. */}
+                  {fit !== "fill" && (
+                    <img
+                      src={image}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{ filter: "blur(16px)", transform: "scale(1.12)" }}
+                      crossOrigin="anonymous"
+                    />
+                  )}
+                  <img
+                    src={image}
+                    alt="app screenshot"
+                    className="absolute inset-0 h-full w-full"
+                    style={{ objectFit: fit === "fill" ? "cover" : "contain" }}
+                    crossOrigin="anonymous"
+                  />
+                </>
               ) : (
                 <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200 text-slate-400">
                   <svg width="26%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -313,6 +333,7 @@ export function DevicesLayer({
               color={color}
               tiltX={d.tiltX}
               tiltY={d.tiltY}
+              fit={d.fit}
             />
 
             {selected && (

@@ -196,6 +196,7 @@ export default function ScreenCanvas({
             width={width * (state.deviceScale ?? 0.78)}
             orientation={state.orientation}
             color={state.frameColor}
+            fit={state.deviceFit}
           />
         )}
       </div>

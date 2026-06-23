@@ -48,7 +48,7 @@ describe("makeDeviceInstance", () => {
     expect(i.id).toMatch(/^dev_/);
     expect(i.deviceId).toBe("iphone-69");
     expect(i.image).toBeNull();
-    expect(i).toMatchObject({ x: 0.5, y: 0.5, rotation: 0, tiltX: 0, tiltY: 0, orientation: "portrait" });
+    expect(i).toMatchObject({ x: 0.5, y: 0.5, rotation: 0, tiltX: 0, tiltY: 0, orientation: "portrait", fit: "contain" });
     expect(i.scale).toBeGreaterThan(0);
   });
   it("honors overrides", () => {

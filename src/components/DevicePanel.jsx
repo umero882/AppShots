@@ -112,6 +112,33 @@ export function FrameGrid({ activeId, onPick }) {
   );
 }
 
+function FitToggle({ value, onChange }) {
+  const opts = [
+    { id: "contain", label: "Fit" },
+    { id: "fill", label: "Fill" },
+  ];
+  const cur = value === "fill" ? "fill" : "contain";
+  return (
+    <div>
+      <p className="label">Screenshot</p>
+      <div className="flex overflow-hidden rounded-lg border border-white/10">
+        {opts.map((o) => (
+          <button
+            key={o.id}
+            onClick={() => onChange(o.id)}
+            title={o.id === "contain" ? "Show the whole screenshot (no cropping)" : "Fill the screen (crops to fit)"}
+            className={`flex-1 px-3 py-1.5 text-xs font-semibold transition ${
+              cur === o.id ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300 hover:text-white"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Slider({ label, value, min, max, step = 1, suffix = "", onChange }) {
   return (
     <div>
@@ -174,6 +201,7 @@ export default function DevicePanel({
         <p className="label mb-0">Device mockups</p>
 
         <FrameColorRow value={state.frameColor} onPick={(c) => update({ frameColor: c })} />
+        <FitToggle value={state.deviceFit} onChange={(f) => update({ deviceFit: f })} />
 
         {!free ? (
           <>
@@ -225,6 +253,7 @@ export default function DevicePanel({
                   value={selected.frameColor || state.frameColor}
                   onPick={(c) => onChange(selected.id, { frameColor: c })}
                 />
+                <FitToggle value={selected.fit} onChange={(f) => onChange(selected.id, { fit: f })} />
                 <Slider label="Position X" value={Math.round(selected.x * 100)} min={-20} max={120} suffix="%" onChange={(v) => onChange(selected.id, { x: v / 100 })} />
                 <Slider label="Position Y" value={Math.round(selected.y * 100)} min={-20} max={120} suffix="%" onChange={(v) => onChange(selected.id, { y: v / 100 })} />
                 <Slider label="Size" value={Math.round(selected.scale * 100)} min={20} max={160} suffix="%" onChange={(v) => onChange(selected.id, { scale: v / 100 })} />
