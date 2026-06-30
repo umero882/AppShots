@@ -37,7 +37,7 @@ export const DEVICES = [
     id: "iphone-65",
     store: "ios",
     name: 'iPhone 6.5"',
-    canvas: { w: 1242, h: 2688 },
+    canvas: { w: 1284, h: 2778 },
     screen: { radius: 52, inset: 14 },
     bezel: { radius: 66, color: "#0b0b0e" },
     notch: "notch",

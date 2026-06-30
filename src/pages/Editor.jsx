@@ -663,10 +663,11 @@ export default function Editor() {
     setSelectedDevice(null);
     await new Promise((r) => setTimeout(r, 60)); // let selection chrome clear
     try {
-      const outW = orientedCanvas(getDevice(state.deviceId), state.orientation).w;
-      await exportNode(canvasRef.current, outW, {
+      const oc = orientedCanvas(getDevice(state.deviceId), state.orientation);
+      await exportNode(canvasRef.current, oc.w, {
         filename: `${slug(name)}-${activeScreen + 1}`,
         format,
+        targetHeight: oc.h,
       });
     } finally {
       setExporting(false);
@@ -679,8 +680,8 @@ export default function Editor() {
     setSelectedDevice(null);
     await new Promise((r) => setTimeout(r, 60));
     try {
-      const outW = orientedCanvas(getDevice(state.deviceId), state.orientation).w;
-      await copyNodeToClipboard(canvasRef.current, outW);
+      const oc = orientedCanvas(getDevice(state.deviceId), state.orientation);
+      await copyNodeToClipboard(canvasRef.current, oc.w, { targetHeight: oc.h });
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -692,7 +693,8 @@ export default function Editor() {
     setExporting(true);
     setSelectedEl(null);
     setSelectedDevice(null);
-    const outW = orientedCanvas(getDevice(state.deviceId), state.orientation).w;
+    const oc = orientedCanvas(getDevice(state.deviceId), state.orientation);
+    const outW = oc.w;
     const ext = format === "jpeg" ? "jpg" : "png";
     // Export every screen for every target locale. With one locale, files sit at
     // the zip root; with several, each locale gets its own folder.
@@ -709,7 +711,7 @@ export default function Editor() {
           // wait a tick for the canvas to re-render the active screen + locale
           await new Promise((r) => setTimeout(r, 350));
           if (canvasRef.current) {
-            const dataUrl = await renderNode(canvasRef.current, outW, { format });
+            const dataUrl = await renderNode(canvasRef.current, outW, { format, targetHeight: oc.h });
             const base = `${slug(name)}-${i + 1}.${ext}`;
             files.push({ name: multi ? `${loc}/${base}` : base, data: await dataUrlToBytes(dataUrl) });
           }
@@ -813,7 +815,6 @@ export default function Editor() {
   const textPos = textPosFor(state.layoutId);
   const canvasState = { ...state, _textPos: textPos };
   const screen = state.screens[activeScreen];
-  const showWatermark = user.plan === "free";
   // What "Upload/Replace screenshot" targets: the selected mockup in free mode,
   // else the legacy single screen image.
   const uploadTargetImage = isFreeMode(screen)
@@ -1124,12 +1125,8 @@ export default function Editor() {
                   onFrameCorner={changeFrameCorner}
                   onLive3dRotate={live3dRotate}
                   onLive3dModelInfo={setLive3dModel}
+                  exporting={exporting}
                 />
-                {showWatermark && (
-                  <div className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/40 px-2 py-0.5 text-[9px] font-semibold text-white/80 backdrop-blur">
-                    Made with AppShots
-                  </div>
-                )}
               </div>
               <button
                 onClick={() => fileRef.current?.click()}

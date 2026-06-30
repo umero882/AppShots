@@ -56,6 +56,7 @@ export default function ScreenCanvas({
   onFrameCorner,
   onLive3dRotate,
   onLive3dModelInfo,
+  exporting = false,
 }) {
   const device = getDevice(state.deviceId);
   const canvas = orientedCanvas(device, state.orientation);
@@ -138,7 +139,9 @@ export default function ScreenCanvas({
     </div>
   ) : null;
 
-  const radius = width * 0.04;
+  // Square corners on export: App Store screenshots must be a full opaque
+  // rectangle — rounded corners leave transparent pixels that get rejected.
+  const radius = exporting ? 0 : width * 0.04;
 
   return (
     <div
