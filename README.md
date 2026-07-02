@@ -12,16 +12,20 @@ PNG export — all in the browser.
 
 - **Marketing site** — hero, features, how-it-works, and CTA sections.
 - **Auth** — email/password sign-up, login, protected routes, session persistence.
-- **Dashboard** — create, open, duplicate, and delete projects with live thumbnails.
+- **Dashboard** — create, open, duplicate, and delete projects with live thumbnails, plus one-click **A/B style variants** (same content, distinct look, for store split-tests).
+- **Template gallery** — 50+ curated starter templates across 8 categories (Minimal, Bold, Playful, Dark, Editorial, Vibrant, Gradient, Pattern), all passing a WCAG large-text contrast gate.
+- **Inspiration gallery** (`/inspiration`) — public, browsable showcase of complete designs; start a project from any one.
+- **App Store Tracker** (`/tracker`) — look up any competitor's live App Store screenshots + metadata (rating, genre, price, version) via Apple's official iTunes Search API; screenshots link back to the App Store for reference.
 - **Editor**
-  - iPhone / iPad / Pixel / Android device frames at exact store dimensions
-  - Gradient & solid backgrounds (with custom color picker)
-  - Headline + subheading with font, size, weight, alignment, color
+  - iPhone / iPad / Pixel / Android device frames at exact, store-accepted dimensions
+  - Backgrounds: gradient, solid, **patterns** (dots/grid/stripes/diagonal/checker/crosshatch), image (upload or search), and AI-generated
+  - Headline + subheading with font, size, weight, alignment, color, and text effects
+  - Elements: badges, shapes, arrows, emoji, a **searchable 250-icon library**, an **illustration library**, and photos
   - Layout presets (text top / bottom / centered / device only)
-  - Multi-screen sets with a filmstrip (add / duplicate / delete)
+  - Multi-device / free-positioned / 3D-tilt mockups, photoreal frame overlays, and live WebGL 3D devices
+  - Multi-screen sets with a filmstrip (add / duplicate / delete), connected-panorama backgrounds, and localization
   - Live autosave
-  - **PNG export** at true store resolution (single screen or whole set)
-  - Watermark on the free plan, removed on Pro
+  - **Exports**: PNG/JPEG at exact store resolution (no alpha channel), whole-set `.zip`, **"All sizes"** (render one design across every required App Store + Google Play size), copy-to-clipboard, and an animated video reel
 - **Pricing** — Free / Pro / Team tiers with monthly–yearly toggle and a simulated upgrade.
 
 ## Quick start
@@ -116,14 +120,16 @@ src/
 
 ## Tech
 
-React 18 · Vite 5 · React Router 6 · TailwindCSS 3 · Framer Motion ·
-lucide-react · html-to-image.
+React 18 · Vite 8 · React Router 6 · TailwindCSS 3 · Framer Motion ·
+lucide-react · html-to-image · three.js.
+
+The `/api/*` proxy (`server/handlers.js`) also holds the AI, image-search, and
+App-Store-tracker endpoints; the App Store Tracker uses Apple's public iTunes
+Search API and needs **no key**.
 
 ## Notes & next steps
 
-- Add drag-to-reorder on the screen filmstrip.
-- Bulk export as a single `.zip`.
-- Localization sets (duplicate a project and swap copy per language).
-- Real device-frame PNG overlays if you want photographic bezels.
+- Google Play tracker (no official API — would require scraping; deliberately left out).
+- Real device-frame PNG overlays are already supported; more bezel finishes could be added.
 - Move passwords/secrets to the real backend — the local demo stores them in
   `localStorage` for convenience only; never do that in production.
