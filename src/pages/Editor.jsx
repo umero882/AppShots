@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
   BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
-  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film, Music, Play, Pause,
+  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film, Music, Play, Pause, Layers,
 } from "lucide-react";
 import { SHORTCUTS } from "../lib/shortcuts";
 import Logo from "../components/Logo";
@@ -39,9 +39,10 @@ import {
 import {
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, makeTextElement, elementSvg,
   reorderElements, duplicateElement, clamp01,
-  BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES,
+  BADGES, SHAPES, ARROWS, EMOJI, ICONS, PHOTO_CATEGORIES, searchIcons,
 } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
+import { ILLUSTRATIONS } from "../lib/illustrations";
 import { TEXT_EFFECTS, TEXT_PRESETS } from "../lib/textEffects";
 import {
   GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
@@ -62,6 +63,13 @@ const TABS = [
   { id: "elements", label: "Elements", icon: Shapes },
 ];
 
+// The device sizes exported by "All store sizes" — one required size per App
+// Store + Google Play slot (avoids near-duplicate presets like 6.9" Max).
+const STORE_SIZE_EXPORT = [
+  "iphone-69", "iphone-65", "iphone-55", "ipad-13", "ipad-11", // App Store
+  "pixel-8", "android-tablet",                                  // Google Play
+];
+
 export default function Editor() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -74,6 +82,8 @@ export default function Editor() {
   const [tab, setTab] = useState("device");
   const [saveState, setSaveState] = useState("saved"); // saved | saving | dirty
   const [exporting, setExporting] = useState(false);
+  const [exportDeviceId, setExportDeviceId] = useState(null);
+  const [exportMsg, setExportMsg] = useState("");
   const [selectedEl, setSelectedEl] = useState(null);
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [format, setFormat] = useState("png"); // png | jpeg
@@ -729,6 +739,48 @@ export default function Editor() {
     }
   }
 
+  // "Auto-scale to all store sizes": render the current design across every
+  // required App Store + Google Play device size and bundle them in one ZIP,
+  // grouped by device folder. Reuses the exact-dimension/no-alpha pipeline.
+  async function exportAllSizes() {
+    setExporting(true);
+    setSelectedEl(null);
+    setSelectedDevice(null);
+    const ext = format === "jpeg" ? "jpg" : "png";
+    const origScreen = activeScreen;
+    try {
+      const files = [];
+      let done = 0;
+      const total = STORE_SIZE_EXPORT.length * state.screens.length;
+      for (const did of STORE_SIZE_EXPORT) {
+        const dev = getDevice(did);
+        const oc = orientedCanvas(dev, state.orientation);
+        setExportDeviceId(did);
+        const folder = `${dev.store === "ios" ? "app-store" : "google-play"}/${slug(dev.name)}-${oc.w}x${oc.h}`;
+        for (let i = 0; i < state.screens.length; i++) {
+          setActiveScreen(i);
+          // wait for the canvas to re-render at the new device + screen
+          await new Promise((r) => setTimeout(r, 380));
+          if (canvasRef.current) {
+            const dataUrl = await renderNode(canvasRef.current, oc.w, { format, targetHeight: oc.h });
+            files.push({ name: `${folder}/${slug(name)}-${i + 1}.${ext}`, data: await dataUrlToBytes(dataUrl) });
+          }
+          setExportMsg(`Rendering ${dev.name} · ${++done}/${total}`);
+        }
+      }
+      if (files.length) {
+        const url = URL.createObjectURL(createZip(files));
+        triggerDownload(url, `${slug(name)}-all-store-sizes.zip`);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+    } finally {
+      setExportDeviceId(null);
+      setActiveScreen(origScreen);
+      setExportMsg("");
+      setExporting(false);
+    }
+  }
+
   async function onAudioUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -813,7 +865,9 @@ export default function Editor() {
   }
 
   const textPos = textPosFor(state.layoutId);
-  const canvasState = { ...state, _textPos: textPos };
+  // `exportDeviceId` transiently overrides the rendered device during a
+  // multi-size ("all store sizes") export — never persisted to the project.
+  const canvasState = { ...state, _textPos: textPos, deviceId: exportDeviceId || state.deviceId };
   const screen = state.screens[activeScreen];
   // What "Upload/Replace screenshot" targets: the selected mockup in free mode,
   // else the legacy single screen image.
@@ -904,6 +958,16 @@ export default function Editor() {
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             {projectLocales(state).length > 1 ? "Export all langs" : "Export .zip"}
           </button>
+          <button
+            onClick={exportAllSizes}
+            disabled={exporting}
+            className="btn-ghost hidden lg:inline-flex"
+            title="Render this design in every required App Store + Google Play size and download as one .zip"
+          >
+            {exporting ? <Loader2 size={16} className="animate-spin" /> : <Layers size={16} />}
+            All sizes
+          </button>
+          {exportMsg && <span className="hidden text-xs font-medium text-brand-300 lg:inline">{exportMsg}</span>}
           {videoMsg && <span className="hidden text-xs font-medium text-brand-300 lg:inline">{videoMsg}</span>}
           <div className="relative hidden md:block">
             <button
@@ -2143,7 +2207,7 @@ function LayerBtn({ label, onClick, disabled, children }) {
 }
 
 function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onDelete, onChange, onDuplicate, twemoji = false, onToggleTwemoji }) {
-  const CATS = ["Text", "Badges", "Shapes", "Arrows", "Emoji", "Icons", "Photos"];
+  const CATS = ["Text", "Badges", "Shapes", "Arrows", "Emoji", "Icons", "Illustrations", "Photos"];
   const [cat, setCat] = useState("Text");
   const TEXT_ADDS = [
     { name: "Heading", text: "Big headline", size: 0.085, weight: 800 },
@@ -2165,6 +2229,8 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
   const isBottom = selIndex <= 0;
   const isTop = selIndex === elements.length - 1;
   const [emojiQ, setEmojiQ] = useState("");
+  const [iconQ, setIconQ] = useState("");
+  const iconResults = searchIcons(iconQ);
 
   // photo browser state
   const [q, setQ] = useState("");
@@ -2506,20 +2572,67 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
       )}
 
       {cat === "Icons" && (
-        <div className="grid grid-cols-6 gap-1.5">
-          {ICONS.map((name, i) => {
-            const Icon = elementIcon(name);
-            return (
+        <div className="space-y-2.5">
+          <div className="relative">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              value={iconQ}
+              onChange={(e) => setIconQ(e.target.value)}
+              placeholder="Search icons — e.g. star, money, ai, secure…"
+              className="input pl-9"
+            />
+            {iconQ && (
               <button
-                key={name + i}
-                onClick={() => onAdd(makeIconElement(name))}
-                title={name}
-                className="grid h-10 place-items-center rounded-lg text-slate-200 transition hover:bg-white/10"
+                type="button"
+                onClick={() => setIconQ("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                aria-label="Clear icon search"
               >
-                <Icon size={20} />
+                <X size={14} />
               </button>
-            );
-          })}
+            )}
+          </div>
+          {iconResults.length ? (
+            <div className="grid grid-cols-6 gap-1.5">
+              {iconResults.map((name, i) => {
+                const Icon = elementIcon(name);
+                return (
+                  <button
+                    key={name + i}
+                    onClick={() => onAdd(makeIconElement(name))}
+                    title={name}
+                    className="grid h-10 place-items-center rounded-lg text-slate-200 transition hover:bg-white/10"
+                  >
+                    <Icon size={20} />
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm text-slate-400">No icons match “{iconQ}”.</p>
+          )}
+          <p className="text-[10px] text-slate-500">{iconResults.length} of {ICONS.length} icons</p>
+        </div>
+      )}
+
+      {cat === "Illustrations" && (
+        <div className="space-y-2.5">
+          <p className="text-[11px] text-slate-500">
+            Flat vector illustrations. Click to drop one in as a draggable layer.
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {ILLUSTRATIONS.map((ill) => (
+              <button
+                key={ill.id}
+                onClick={() => onAdd(makeImageElement(ill.make()))}
+                title={ill.label}
+                className="group flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-2 transition hover:border-brand-500/40 hover:bg-white/[0.06]"
+              >
+                <img src={ill.make()} alt={ill.label} className="h-16 w-full rounded-lg object-contain" />
+                <span className="text-[10px] font-medium text-slate-400 group-hover:text-slate-200">{ill.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

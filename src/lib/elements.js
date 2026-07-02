@@ -297,24 +297,65 @@ export const EMOJI = [
 // lucide icon names (resolved to components via lib/elementIcons.jsx, which
 // imports only this curated set so the bundle stays tree-shaken).
 export const ICONS = [
-  "Star", "Heart", "Check", "CheckCircle", "CheckCircle2", "Zap", "Bell", "BellRing",
-  "Award", "Trophy", "Shield", "ShieldCheck", "Lock", "Unlock", "Key", "Sparkles",
-  "Flame", "ThumbsUp", "ThumbsDown", "Rocket", "TrendingUp", "TrendingDown", "Gift",
-  "Crown", "Target", "Smartphone", "Tablet", "Laptop", "Monitor", "Camera", "Music",
-  "Music2", "Headphones", "Mic", "Video", "Image", "Film", "Tv", "Radio", "Speaker",
-  "Volume2", "ShoppingCart", "ShoppingBag", "CreditCard", "Wallet", "DollarSign",
-  "Percent", "Plane", "Car", "Bike", "Truck", "Bus", "Dumbbell", "Activity", "Users",
-  "User", "UserPlus", "MessageCircle", "MessageSquare", "Mail", "Phone", "Send",
-  "Share2", "Link", "Play", "Pause", "Download", "Upload", "Search", "Settings",
-  "Sliders", "Filter", "Bookmark", "Tag", "Tags", "Gem", "Home", "Building2", "Store",
-  "Briefcase", "Package", "Box", "Calendar", "Clock", "MapPin", "Map", "Globe", "Compass",
-  "Navigation", "Flag", "Wifi", "Battery", "Cloud", "Sun", "Moon", "Umbrella", "Snowflake",
-  "Coffee", "Pizza", "Eye", "EyeOff", "Lightbulb", "Megaphone", "Bookmark", "Palette",
-  "Brush", "Droplet", "Feather", "Leaf", "Flower2", "Trees", "Mountain", "Waves", "Anchor",
-  "Code", "Terminal", "Cpu", "Database", "Server", "Github", "Smile", "Laugh", "Hand",
+  "Star", "Heart", "Check", "CheckCircle", "CheckCircle2", "BadgeCheck", "Zap", "Bell", "BellRing", "BellOff",
+  "Award", "Trophy", "Medal", "Shield", "ShieldCheck", "ShieldAlert", "Lock", "Unlock", "Key", "KeyRound", "Sparkles",
+  "Flame", "ThumbsUp", "ThumbsDown", "Rocket", "TrendingUp", "TrendingDown", "Gift", "PartyPopper",
+  "Crown", "Gem", "Target", "Smartphone", "Tablet", "Laptop", "Monitor", "MonitorSmartphone", "Watch", "Camera", "Music",
+  "Music2", "Headphones", "Mic", "Video", "Webcam", "Image", "Film", "Tv", "Radio", "Speaker",
+  "Volume2", "ShoppingCart", "ShoppingBag", "CreditCard", "Wallet", "Banknote", "Coins", "PiggyBank", "Receipt", "DollarSign",
+  "Percent", "BadgePercent", "BadgeDollarSign", "Calculator", "Plane", "Car", "Bike", "Truck", "Bus", "TrainFront", "Ship", "Sailboat", "Fuel",
+  "Dumbbell", "Activity", "HeartPulse", "Users", "Footprints", "PersonStanding", "Baby",
+  "User", "UserPlus", "UserCheck", "MessageCircle", "MessageSquare", "Mail", "Inbox", "AtSign", "Hash", "Phone", "PhoneCall", "Send", "Reply",
+  "Share2", "Link", "Play", "Pause", "Download", "Upload", "UploadCloud", "DownloadCloud", "Search", "Settings", "Settings2", "Wrench", "Hammer", "Cog",
+  "Sliders", "Filter", "Bookmark", "Tag", "Tags", "Sticker", "Pin", "Paperclip", "Home", "Building2", "Landmark", "Hotel", "School", "Factory", "Store",
+  "Briefcase", "Package", "Box", "Calendar", "CalendarDays", "CalendarCheck", "Clock", "AlarmClock", "Timer", "Hourglass", "MapPin", "Map", "Globe", "Compass",
+  "Navigation", "Flag", "Wifi", "WifiOff", "Network", "HardDrive", "Battery", "BatteryCharging", "Rss", "Podcast", "Bluetooth", "QrCode",
+  "Cloud", "CloudRain", "CloudSnow", "CloudLightning", "Wind", "Rainbow", "Sun", "Sunrise", "Sunset", "Moon", "Umbrella", "Snowflake", "Thermometer", "Droplets",
+  "Coffee", "Pizza", "Apple", "Cake", "Wine", "Beer", "IceCream", "Utensils", "ChefHat", "Carrot", "Croissant", "Egg", "Fish", "Sandwich", "Cookie", "Candy",
+  "Eye", "EyeOff", "Lightbulb", "Megaphone", "Palette", "Brush", "PenTool", "Pencil", "Highlighter", "Ruler", "Scissors", "Type", "List", "ListOrdered", "ListChecks", "Quote",
+  "Droplet", "Feather", "Leaf", "Sprout", "Flower2", "Trees", "Mountain", "Waves", "Anchor", "PawPrint", "Dog", "Cat", "Bird", "Bug",
+  "Code", "Terminal", "Cpu", "Database", "Server", "Github", "Bot", "Brain", "Atom", "FlaskConical", "Microscope", "Magnet", "Puzzle", "Ghost", "Keyboard", "Mouse",
+  "ClipboardList", "FileText", "Folder", "FolderOpen", "Save", "Printer", "Fingerprint", "ScanLine",
+  "Smile", "Frown", "Meh", "Laugh", "Hand", "HeartHandshake",
   "Plus", "Minus", "X", "ArrowRight", "ArrowUp", "RefreshCw", "Power", "Layers", "Grid3x3",
   "BarChart3", "PieChart", "LineChart",
 ];
+
+// Extra search keywords for icons whose lucide name isn't an obvious query.
+// searchIcons() matches the query against the icon name AND these tags.
+export const ICON_TAGS = {
+  BadgeCheck: "verified approved", ShieldCheck: "secure privacy safe", ShieldAlert: "warning security",
+  Zap: "fast speed power energy bolt", Sparkles: "ai magic shine new", Flame: "hot trending fire",
+  Rocket: "launch startup boost fast", TrendingUp: "growth analytics chart up", TrendingDown: "decline chart down",
+  Crown: "premium pro vip", Gem: "premium diamond value", Target: "goal aim marketing",
+  MonitorSmartphone: "responsive devices cross platform", DollarSign: "money price cost payment",
+  Wallet: "money payment finance", PiggyBank: "savings money finance", Coins: "earn money payout coins",
+  BadgePercent: "discount sale offer", Percent: "discount sale", Receipt: "invoice bill payment",
+  HeartPulse: "health fitness medical", Dumbbell: "fitness gym workout", Activity: "fitness pulse analytics",
+  Users: "team people community social", PersonStanding: "accessibility person user",
+  MessageCircle: "chat message support", MessageSquare: "chat comment", AtSign: "email mention username",
+  UploadCloud: "backup sync upload", DownloadCloud: "sync download", Wifi: "internet connection network",
+  QrCode: "scan code link", Fingerprint: "security biometric login", ScanLine: "scan face id",
+  Bot: "ai chatbot assistant robot", Brain: "ai smart intelligence", Cpu: "chip processor tech performance",
+  Lightbulb: "idea tip smart", Megaphone: "announce marketing promote", Palette: "design color theme",
+  Globe: "world language localization international translate",
+  BarChart3: "stats analytics chart", PieChart: "stats analytics", LineChart: "stats analytics trend",
+  Lock: "secure private", Star: "rating favorite review", Heart: "like love favorite",
+  Gift: "reward bonus free", PartyPopper: "celebrate launch success", Store: "shop marketplace",
+  ShoppingCart: "buy shop ecommerce", ShoppingBag: "buy shop purchase", CreditCard: "pay payment checkout",
+  Calendar: "date schedule booking", Clock: "time schedule", Timer: "time countdown",
+  Play: "video media start", Camera: "photo capture", Video: "record media", Music: "audio song sound",
+};
+
+/** Filter ICONS by a query against the icon name + its keyword tags. */
+export function searchIcons(query) {
+  const q = (query || "").trim().toLowerCase();
+  if (!q) return ICONS;
+  return ICONS.filter((name) => {
+    const hay = (name + " " + (ICON_TAGS[name] || "")).toLowerCase();
+    return hay.includes(q);
+  });
+}
 
 /* ------------------------- search-backed categories ------------------------- */
 // Photos/illustrations sourced live from the proxy image search (Pexels/Openverse).
