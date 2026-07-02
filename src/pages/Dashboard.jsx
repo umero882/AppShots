@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Trash2, Image as ImageIcon, Crown, Copy } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Crown, Copy, Shuffle } from "lucide-react";
 import Navbar from "../components/Navbar";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
 import { defaultProjectState } from "../lib/templates";
 import TemplatePicker from "../components/TemplatePicker";
-import { templateToProjectState, textPosFor } from "../lib/galleryTemplates";
+import { templateToProjectState, textPosFor, makeVariantState, nextVariantName } from "../lib/galleryTemplates";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -58,6 +58,20 @@ export default function Dashboard() {
     const copy = await backend.createProject(user.id, {
       name: `${p.name} copy`,
       state: JSON.parse(JSON.stringify(p.state)),
+    });
+    setProjects((list) => [copy, ...list]);
+  }
+
+  // A/B variant: a restyled copy (same content + device, distinct look) so users
+  // can upload two styles to the store and test which converts better.
+  async function abVariant(e, p) {
+    e.preventDefault();
+    e.stopPropagation();
+    const seed = Math.floor(Math.random() * 997);
+    const variantState = makeVariantState(p.state, seed);
+    const copy = await backend.createProject(user.id, {
+      name: nextVariantName(projects, p.name),
+      state: JSON.parse(JSON.stringify(variantState)),
     });
     setProjects((list) => [copy, ...list]);
   }
@@ -121,6 +135,14 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      onClick={(e) => abVariant(e, p)}
+                      className="rounded-lg p-2 text-slate-500 transition hover:bg-white/5 hover:text-brand-300"
+                      aria-label="Create A/B style variant"
+                      title="Create A/B variant (same content, new look)"
+                    >
+                      <Shuffle size={16} />
+                    </button>
                     <button
                       onClick={(e) => duplicate(e, p)}
                       className="rounded-lg p-2 text-slate-500 transition hover:bg-white/5 hover:text-white"

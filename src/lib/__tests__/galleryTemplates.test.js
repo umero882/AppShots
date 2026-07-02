@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { TEMPLATES, TEMPLATE_CATEGORIES, templateToProjectState } from "../galleryTemplates.js";
+import {
+  TEMPLATES, TEMPLATE_CATEGORIES, templateToProjectState,
+  variantBase, nextVariantName, makeVariantState,
+} from "../galleryTemplates.js";
 import { GRADIENTS, FONTS, LAYOUTS } from "../templates.js";
 
 const GIDS = new Set(GRADIENTS.map((g) => g.id));
@@ -40,5 +43,38 @@ describe("gallery templates", () => {
     for (const cat of TEMPLATE_CATEGORIES) {
       expect(TEMPLATES.some((t) => t.category === cat), `no template for ${cat}`).toBe(true);
     }
+  });
+});
+
+describe("A/B style variants", () => {
+  const base = templateToProjectState(TEMPLATES[0]);
+
+  it("strips the variant suffix to recover the base name", () => {
+    expect(variantBase("My App · Variant B")).toBe("My App");
+    expect(variantBase("My App")).toBe("My App");
+  });
+
+  it("assigns the next unused variant letter (original counts as A)", () => {
+    const projects = [{ name: "My App" }, { name: "My App · Variant B" }];
+    expect(nextVariantName(projects, "My App")).toBe("My App · Variant C");
+    // from an existing variant, still resolves against the same base
+    expect(nextVariantName(projects, "My App · Variant B")).toBe("My App · Variant C");
+    expect(nextVariantName([{ name: "Solo" }], "Solo")).toBe("Solo · Variant B");
+  });
+
+  it("keeps content + device but changes the visual style", () => {
+    const v = makeVariantState(base, 5);
+    expect(v.screens).toEqual(base.screens); // same headlines/screenshots
+    expect(v.deviceId).toBe(base.deviceId); // same store slot
+    // style differs (background and/or font/layout changed)
+    const styleChanged =
+      JSON.stringify(v.background) !== JSON.stringify(base.background) ||
+      v.text.font !== base.text.font ||
+      v.layoutId !== base.layoutId;
+    expect(styleChanged).toBe(true);
+  });
+
+  it("is deterministic for a given seed", () => {
+    expect(makeVariantState(base, 3)).toEqual(makeVariantState(base, 3));
   });
 });

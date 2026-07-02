@@ -43,6 +43,59 @@ export function applyTemplateStyle(prevState, template) {
   };
 }
 
+/* --------------------------- A/B style variants --------------------------- */
+
+const VARIANT_RE = /\s·\sVariant\s([A-Z])$/;
+
+/** The base project name, stripped of any "· Variant X" suffix. */
+export function variantBase(name = "") {
+  return name.replace(VARIANT_RE, "").trim();
+}
+
+/**
+ * Next unused "<base> · Variant X" name across a project list (the original
+ * counts as A, so new variants start at B).
+ */
+export function nextVariantName(projects, name) {
+  const base = variantBase(name);
+  const used = new Set();
+  for (const p of projects || []) {
+    if (variantBase(p.name) === base) {
+      const m = p.name.match(VARIANT_RE);
+      used.add(m ? m[1] : "A");
+    }
+  }
+  for (let i = 1; i < 26; i++) {
+    const L = String.fromCharCode(65 + i);
+    if (!used.has(L)) return `${base} · Variant ${L}`;
+  }
+  return `${base} · Variant`;
+}
+
+/**
+ * A restyled copy of a project's state for A/B testing: same screens (headlines,
+ * screenshots) and same device/orientation (you're testing the same store slot),
+ * but a visually distinct look pulled from a template whose background differs
+ * from the current one. `seed` picks which distinct style to apply.
+ */
+export function makeVariantState(state, seed = 0) {
+  const curBg = JSON.stringify(state.background || {});
+  const curFont = state.text?.font;
+  const distinct = TEMPLATES.filter(
+    (t) => JSON.stringify(t.style.background) !== curBg || t.style.text.font !== curFont
+  );
+  const pool = distinct.length ? distinct : TEMPLATES;
+  const pick = pool[((seed % pool.length) + pool.length) % pool.length];
+  const styled = applyTemplateStyle(state, pick);
+  return {
+    ...styled,
+    // Keep the store slot identical so A vs B compare like-for-like.
+    deviceId: state.deviceId,
+    orientation: state.orientation,
+    deviceScale: state.deviceScale ?? styled.deviceScale,
+  };
+}
+
 export function filterTemplates(templates, { category = "All", query = "" } = {}) {
   const q = query.trim().toLowerCase();
   return templates.filter(
