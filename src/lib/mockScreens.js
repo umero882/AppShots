@@ -34,17 +34,66 @@ const circ = (cx, cy, rad, fill, o = 1) =>
 
 export function mockDashboard(accent, { dark } = {}) {
   const p = palette(dark);
-  let s = bar(28, 70, 150, 16, p.text);
-  s += bar(28, 96, 90, 10, p.sub, 5, 0.6);
-  s += bar(28, 130, 150, 110, accent, 18);
-  s += bar(212, 130, 150, 110, p.card, 18);
-  s += circ(70, 175, 16, "#ffffff", 0.85) + bar(100, 165, 60, 10, "#ffffff", 5, 0.85);
+
+  // Header: greeting + avatar with a notification dot.
+  let s = bar(28, 56, 70, 9, p.sub, 5, 0.6);
+  s += bar(28, 70, 128, 17, p.text);
+  s += circ(336, 74, 18, accent) + circ(336, 74, 8, "#ffffff", 0.9);
+  s += circ(349, 63, 4, "#ef4444");
+
+  // Hero metric card (accent) with a big value, a pill, and a mini sparkline.
+  s += bar(28, 108, 334, 122, accent, 20);
+  s += bar(46, 128, 84, 10, "#ffffff", 5, 0.7);
+  s += bar(46, 148, 156, 24, "#ffffff", 6, 0.95);
+  s += bar(46, 186, 74, 16, "#ffffff", 8, 0.22) + bar(56, 191, 40, 6, "#ffffff", 3, 0.8);
+  const spx = (i) => 250 + Math.round(i * (96 / 5));
+  const spv = [0.4, 0.55, 0.35, 0.7, 0.6, 0.85];
+  const spts = spv.map((v, i) => `${spx(i)},${Math.round(206 - v * 44)}`).join(" ");
+  s += `<polyline points='${spts}' fill='none' stroke='#ffffff' stroke-width='3' stroke-linejoin='round' stroke-linecap='round' opacity='.9'/>`;
+
+  // Three KPI tiles.
+  const tw = 103;
+  for (let i = 0; i < 3; i++) {
+    const x = 28 + i * (tw + 12.5);
+    s += bar(x, 244, tw, 76, p.card, 16);
+    s += circ(x + 22, 268, 9, accent, 0.9);
+    s += bar(x + 16, 285, 52, 14, p.text, 6, 0.9);
+    s += bar(x + 16, 304, 64, 8, p.sub, 4, 0.65);
+  }
+
+  // Analytics card with gridlines, an area + line chart, and a marked point.
+  s += bar(28, 332, 334, 182, p.card, 20);
+  s += bar(46, 352, 96, 12, p.text, 6, 0.9);
+  s += circ(322, 358, 5, accent) + circ(300, 358, 5, accent, 0.4);
+  for (let g = 0; g < 3; g++) {
+    const gy = 402 + g * 43;
+    s += `<line x1='46' y1='${gy}' x2='344' y2='${gy}' stroke='${p.line}' stroke-width='1' opacity='.8'/>`;
+  }
+  const cx = (i) => 46 + Math.round(i * (298 / 6));
+  const cy = (v) => Math.round(488 - v * 118);
+  const cv = [0.3, 0.46, 0.38, 0.6, 0.5, 0.74, 0.9];
+  const cpts = cv.map((v, i) => `${cx(i)},${cy(v)}`).join(" ");
+  s += `<polygon points='${cx(0)},488 ${cpts} ${cx(6)},488' fill='${accent}' opacity='.14'/>`;
+  s += `<polyline points='${cpts}' fill='none' stroke='${accent}' stroke-width='4' stroke-linejoin='round' stroke-linecap='round'/>`;
+  s += circ(cx(6), cy(0.9), 6, accent) + circ(cx(6), cy(0.9), 3, "#ffffff");
+
+  // "Recent activity" list header + rows (leading icon, title/subtitle, amount).
+  s += bar(28, 532, 112, 12, p.text, 6, 0.9) + bar(302, 534, 60, 8, p.sub, 4, 0.6);
+  for (let i = 0; i < 3; i++) {
+    const y = 556 + i * 62;
+    s += bar(28, y, 334, 52, p.card, 14);
+    s += circ(58, y + 26, 15, accent, 0.9) + circ(58, y + 26, 6, "#ffffff", 0.85);
+    s += bar(88, y + 16, 150, 11, p.text, 6, 0.9);
+    s += bar(88, y + 33, 92, 8, p.sub, 4, 0.6);
+    s += bar(300, y + 20, 44, 12, p.text, 6, 0.85);
+  }
+
+  // Bottom tab bar (first tab active).
+  s += bar(28, 782, 334, 56, p.card, 26);
   for (let i = 0; i < 4; i++) {
-    const y = 270 + i * 78;
-    s += bar(28, y, 334, 60, p.card, 16);
-    s += circ(58, y + 30, 18, accent);
-    s += bar(92, y + 16, 180, 12, p.text, 6, 0.9);
-    s += bar(92, y + 36, 110, 9, p.sub, 5, 0.7);
+    const x = 72 + i * 83;
+    s += circ(x, 810, 6, i === 0 ? accent : p.sub, i === 0 ? 1 : 0.5);
+    if (i === 0) s += bar(x - 12, 824, 24, 4, accent, 2);
   }
   return wrap(s, dark);
 }
