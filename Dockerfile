@@ -1,5 +1,6 @@
 # ---- build stage: compile the SPA ----
-FROM node:20-alpine AS build
+# Node 22: Vite 8 requires Node >=20.19 || >=22.12; pin 22 so the build is stable.
+FROM node:22-alpine AS build
 # VITE_* vars are inlined into the bundle at build time, so they must be present
 # HERE (as build args), not just at runtime. The Supabase anon key is public
 # (RLS-protected) — safe to ship in the client. Set these as BUILD variables in
