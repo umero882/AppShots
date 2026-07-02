@@ -749,9 +749,11 @@ export default function Editor() {
     setSelectedDevice(null);
     const ext = format === "jpeg" ? "jpg" : "png";
     const origScreen = activeScreen;
+    let tailMsg = "";
     try {
       const files = [];
       let done = 0;
+      let failed = 0;
       const total = STORE_SIZE_EXPORT.length * state.screens.length;
       for (const did of STORE_SIZE_EXPORT) {
         const dev = getDevice(did);
@@ -760,25 +762,42 @@ export default function Editor() {
         const folder = `${dev.store === "ios" ? "app-store" : "google-play"}/${slug(dev.name)}-${oc.w}x${oc.h}`;
         for (let i = 0; i < state.screens.length; i++) {
           setActiveScreen(i);
+          setExportMsg(`Rendering ${dev.name} · ${done + 1}/${total}`);
+          // Yield a frame so the progress message paints before the next
+          // (main-thread-blocking) render starts.
+          await new Promise((r) => requestAnimationFrame(() => r()));
           // wait for the canvas to re-render at the new device + screen
           await new Promise((r) => setTimeout(r, 380));
-          if (canvasRef.current) {
-            const dataUrl = await renderNode(canvasRef.current, oc.w, { format, targetHeight: oc.h });
-            files.push({ name: `${folder}/${slug(name)}-${i + 1}.${ext}`, data: await dataUrlToBytes(dataUrl) });
+          // Never let one slow/failing device abort the whole export — collect
+          // what succeeds and report the rest.
+          try {
+            if (canvasRef.current) {
+              const dataUrl = await renderNode(canvasRef.current, oc.w, { format, targetHeight: oc.h });
+              files.push({ name: `${folder}/${slug(name)}-${i + 1}.${ext}`, data: await dataUrlToBytes(dataUrl) });
+            }
+          } catch {
+            failed++;
           }
-          setExportMsg(`Rendering ${dev.name} · ${++done}/${total}`);
+          done++;
         }
       }
       if (files.length) {
         const url = URL.createObjectURL(createZip(files));
         triggerDownload(url, `${slug(name)}-all-store-sizes.zip`);
         setTimeout(() => URL.revokeObjectURL(url), 5000);
+        if (failed) {
+          tailMsg = `Exported ${files.length}/${total} — ${failed} failed`;
+        }
+      } else {
+        tailMsg = "Export failed — please try again";
       }
     } finally {
       setExportDeviceId(null);
       setActiveScreen(origScreen);
-      setExportMsg("");
       setExporting(false);
+      // Show a short completion/error note (else clear the progress text).
+      setExportMsg(tailMsg);
+      if (tailMsg) setTimeout(() => setExportMsg(""), 4000);
     }
   }
 
