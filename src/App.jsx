@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import Inspiration from "./pages/Inspiration";
+import Tracker from "./pages/Tracker";
 import Editor from "./pages/Editor";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -22,6 +23,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tracker"
+        element={
+          <ProtectedRoute>
+            <Tracker />
           </ProtectedRoute>
         }
       />

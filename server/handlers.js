@@ -276,9 +276,69 @@ async function searchOpenverse(term) {
   };
 }
 
+/* ----------------------------- app store tracker ----------------------------- */
+// Apple iTunes Search API — public, no key, official. Looks up a competitor
+// app's own App Store listing (screenshots + metadata) for research/inspiration.
+// We proxy it server-side to dodge browser CORS and add a short cache.
+const ITUNES = "https://itunes.apple.com";
+const storeCache = new Map(); // key -> { at, data }
+const STORE_TTL = 10 * 60 * 1000; // 10 min
+
+function appIdFrom(input) {
+  const m = String(input || "").match(/id(\d{4,})/);
+  return m ? m[1] : null;
+}
+
+function normalizeApp(r) {
+  return {
+    id: r.trackId,
+    name: r.trackName,
+    developer: r.artistName || r.sellerName || "",
+    icon: r.artworkUrl512 || r.artworkUrl100 || r.artworkUrl60 || "",
+    genre: r.primaryGenreName || "",
+    rating: typeof r.averageUserRating === "number" ? Math.round(r.averageUserRating * 10) / 10 : null,
+    ratingCount: r.userRatingCount || 0,
+    price: r.formattedPrice || "",
+    version: r.version || "",
+    url: r.trackViewUrl || "",
+    screenshots: Array.isArray(r.screenshotUrls) ? r.screenshotUrls : [],
+    ipadScreenshots: Array.isArray(r.ipadScreenshotUrls) ? r.ipadScreenshotUrls : [],
+  };
+}
+
+export async function appStore({ q = "", id = "", country = "us" } = {}) {
+  const cc = /^[a-z]{2}$/i.test(country) ? country.toLowerCase() : "us";
+  const appId = appIdFrom(id) || appIdFrom(q);
+  const term = String(q || "").trim();
+  if (!appId && !term) throw new Error("store-bad-query");
+
+  const cacheKey = appId ? `id:${appId}:${cc}` : `q:${term.toLowerCase()}:${cc}`;
+  const hit = storeCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < STORE_TTL) return hit.data;
+
+  const url = appId
+    ? `${ITUNES}/lookup?id=${encodeURIComponent(appId)}&country=${cc}`
+    : `${ITUNES}/search?media=software&entity=software&limit=12&country=${cc}&term=${encodeURIComponent(term)}`;
+
+  let resp;
+  try {
+    resp = await fetch(url, { headers: { "User-Agent": "appshots" } });
+  } catch {
+    throw new Error("store-error");
+  }
+  if (!resp.ok) throw new Error("store-error");
+  const json = await resp.json().catch(() => ({}));
+  const results = Array.isArray(json.results)
+    ? json.results.map(normalizeApp).filter((a) => a.name)
+    : [];
+  const data = { results, country: cc };
+  storeCache.set(cacheKey, { at: Date.now(), data });
+  return data;
+}
+
 /** Map a handler error code to an HTTP status. */
 export function statusForError(code) {
   if (code === "no-llm-key" || code === "no-image-key") return 503;
-  if (code === "github-bad-url") return 400;
+  if (code === "github-bad-url" || code === "store-bad-query") return 400;
   return 502; // upstream/other
 }

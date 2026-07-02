@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Menu, X, LogOut, LayoutGrid } from "lucide-react";
+import { Menu, X, LogOut, LayoutGrid, Radar } from "lucide-react";
 import Logo from "./Logo";
 import { useAuth } from "../lib/auth";
 
@@ -41,6 +41,9 @@ export default function Navbar() {
         <div className="hidden items-center gap-3 md:flex">
           {user ? (
             <>
+              <Link to="/tracker" className="btn-ghost">
+                <Radar size={16} /> Tracker
+              </Link>
               <Link to="/dashboard" className="btn-ghost">
                 <LayoutGrid size={16} /> Dashboard
               </Link>
@@ -84,6 +87,9 @@ export default function Navbar() {
           <div className="pt-2 flex flex-col gap-2">
             {user ? (
               <>
+                <Link to="/tracker" className="btn-ghost" onClick={() => setOpen(false)}>
+                  Tracker
+                </Link>
                 <Link to="/dashboard" className="btn-ghost" onClick={() => setOpen(false)}>
                   Dashboard
                 </Link>
