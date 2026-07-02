@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ICONS, ICON_TAGS, searchIcons } from "../elements.js";
 import { ILLUSTRATIONS } from "../illustrations.js";
+import { PATTERNS, PATTERN_DEFAULTS, patternCss } from "../patterns.js";
 
 describe("icon search", () => {
   it("returns the full set for an empty query", () => {
@@ -46,5 +47,29 @@ describe("illustrations", () => {
   it("illustration ids are unique", () => {
     const ids = ILLUSTRATIONS.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("background patterns", () => {
+  it("every pattern renders a CSS background string using both colors", () => {
+    for (const pat of PATTERNS) {
+      const css = patternCss({ pattern: pat.id, patternFg: "#ff0000", patternBg: "#0000ff", patternScale: 24 });
+      expect(typeof css).toBe("string");
+      expect(css.length).toBeGreaterThan(0);
+      expect(css).toContain("#ff0000"); // pattern color
+      expect(css).toContain("#0000ff"); // base color
+      expect(css).not.toMatch(/NaN|undefined/);
+    }
+  });
+
+  it("falls back to defaults for an unknown/empty pattern", () => {
+    const css = patternCss({});
+    expect(css).toContain(PATTERN_DEFAULTS.patternFg);
+    expect(css).toContain(PATTERN_DEFAULTS.patternBg);
+  });
+
+  it("clamps tiny scales to a minimum", () => {
+    const css = patternCss({ pattern: "dots", patternScale: 1 });
+    expect(css).not.toMatch(/NaN|undefined/);
   });
 });

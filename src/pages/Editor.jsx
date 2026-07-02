@@ -43,6 +43,7 @@ import {
 } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
 import { ILLUSTRATIONS } from "../lib/illustrations";
+import { PATTERNS, PATTERN_DEFAULTS, patternCss } from "../lib/patterns";
 import { TEXT_EFFECTS, TEXT_PRESETS } from "../lib/textEffects";
 import {
   GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
@@ -1405,8 +1406,8 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
           </span>
         </button>
       )}
-      <div className="flex gap-2">
-        {["gradient", "solid", "image", "ai"].map((t) => {
+      <div className="grid grid-cols-5 gap-2">
+        {["gradient", "solid", "pattern", "image", "ai"].map((t) => {
           const active = t === "ai" ? effView === "ai" : effView === t;
           return (
             <button
@@ -1415,10 +1416,12 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
                 if (t === "ai") setView("ai");
                 else {
                   setView(t);
-                  onScreen({ background: { ...bg, type: t } });
+                  // Seed sensible pattern defaults on first switch.
+                  const patch = t === "pattern" ? { ...PATTERN_DEFAULTS, ...bg, type: t } : { ...bg, type: t };
+                  onScreen({ background: patch });
                 }
               }}
-              className={`flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition ${
+              className={`rounded-lg py-2 text-xs font-semibold capitalize transition ${
                 active ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300"
               }`}
             >
@@ -1518,6 +1521,60 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
               value={bg.solid}
               onChange={(e) => onScreen({ background: { ...bg, solid: e.target.value } })}
               className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
+            />
+          </div>
+        </div>
+      )}
+
+      {effView === "pattern" && (
+        <div className="space-y-4">
+          <div>
+            <p className="label">Pattern</p>
+            <div className="grid grid-cols-3 gap-2.5">
+              {PATTERNS.map((pat) => {
+                const preview = patternCss({ ...bg, pattern: pat.id, patternScale: 12 });
+                const on = (bg.pattern || PATTERN_DEFAULTS.pattern) === pat.id;
+                return (
+                  <button
+                    key={pat.id}
+                    onClick={() => onScreen({ background: { ...PATTERN_DEFAULTS, ...bg, type: "pattern", pattern: pat.id } })}
+                    title={pat.label}
+                    className={`h-14 rounded-xl ring-2 transition ${on ? "ring-white" : "ring-white/10 hover:ring-white/30"}`}
+                    style={{ background: preview }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="label">Pattern color</p>
+              <input
+                type="color"
+                value={bg.patternFg || PATTERN_DEFAULTS.patternFg}
+                onChange={(e) => onScreen({ background: { ...PATTERN_DEFAULTS, ...bg, type: "pattern", patternFg: e.target.value } })}
+                className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
+              />
+            </div>
+            <div>
+              <p className="label">Base color</p>
+              <input
+                type="color"
+                value={bg.patternBg || PATTERN_DEFAULTS.patternBg}
+                onChange={(e) => onScreen({ background: { ...PATTERN_DEFAULTS, ...bg, type: "pattern", patternBg: e.target.value } })}
+                className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
+              />
+            </div>
+          </div>
+          <div>
+            <p className="label">Scale · {bg.patternScale || PATTERN_DEFAULTS.patternScale}px</p>
+            <input
+              type="range"
+              min="10"
+              max="80"
+              value={bg.patternScale || PATTERN_DEFAULTS.patternScale}
+              onChange={(e) => onScreen({ background: { ...PATTERN_DEFAULTS, ...bg, type: "pattern", patternScale: Number(e.target.value) } })}
+              className="w-full"
             />
           </div>
         </div>

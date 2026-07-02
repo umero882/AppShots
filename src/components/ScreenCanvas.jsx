@@ -3,6 +3,7 @@ import { getDevice } from "../lib/devices";
 import { orientedCanvas, screenDevices, isFreeMode, panoramaStyle } from "../lib/deviceLayout";
 import { localizeScreen, isRtl } from "../lib/i18n";
 import { legibilityHalo } from "../lib/contrast";
+import { patternCss } from "../lib/patterns";
 import { textEffectStyle } from "../lib/textEffects";
 import ElementsLayer from "./ElementsLayer";
 import { DeviceMockup, DevicesLayer } from "./DeviceMockup";
@@ -10,6 +11,7 @@ import { PhotoFrame } from "./PhotoFrame";
 import { Live3DDevice } from "./Live3DDevice";
 
 export function backgroundCss(bg) {
+  if (bg.type === "pattern") return patternCss(bg);
   if (bg.type === "solid") return bg.solid;
   // AI-generated gradients carry a precomputed pure-CSS string (exports cleanly).
   if (bg.type === "gradient" && bg.aiGradient?.css) return bg.aiGradient.css;
@@ -25,6 +27,9 @@ export function backgroundCss(bg) {
 function backgroundImageCss(bg) {
   if (bg.type === "image" && bg.image) return `url("${bg.image}")`;
   if (bg.type === "solid") return "none";
+  // Patterns are a `background` shorthand (image + color), not a plain
+  // background-image, and don't span as a panorama — skip.
+  if (bg.type === "pattern") return "none";
   return backgroundCss(bg);
 }
 
