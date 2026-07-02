@@ -89,7 +89,9 @@ export const DEVICES = [
     id: "pixel-8",
     store: "android",
     name: "Pixel 8 Pro",
-    canvas: { w: 1080, h: 2400 },
+    // Capped to Google Play's max 2:1 aspect (native 1080×2400 = 2.22:1 is
+    // rejected). Width stays 1080 so text scaling + element positions are stable.
+    canvas: { w: 1080, h: 2160 },
     screen: { radius: 44, inset: 12 },
     bezel: { radius: 54, color: "#0b0b0e" },
     notch: "punch-hole",
@@ -99,7 +101,9 @@ export const DEVICES = [
     id: "galaxy-s24",
     store: "android",
     name: "Galaxy S24",
-    canvas: { w: 1080, h: 2340 },
+    // Capped to Google Play's max 2:1 aspect (native 1080×2340 = 2.17:1 is
+    // rejected). Width stays 1080 so text scaling + element positions are stable.
+    canvas: { w: 1080, h: 2160 },
     screen: { radius: 40, inset: 11 },
     bezel: { radius: 50, color: "#0b0b0e" },
     notch: "punch-hole",

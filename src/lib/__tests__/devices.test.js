@@ -65,4 +65,14 @@ describe("store screenshot-spec compliance", () => {
       }
     }
   });
+
+  it("every Android device stays within Google Play's 2:1 max aspect ratio", () => {
+    // "The maximum dimension of your screenshot can't be more than twice as long
+    // as the minimum dimension." Screenshots exceeding 2:1 are rejected.
+    for (const d of DEVICES.filter((x) => x.store === "android")) {
+      const { w, h } = d.canvas;
+      const ratio = Math.max(w, h) / Math.min(w, h);
+      expect(ratio, `${d.name} (${w}x${h}) exceeds Google Play's 2:1 aspect limit`).toBeLessThanOrEqual(2);
+    }
+  });
 });
