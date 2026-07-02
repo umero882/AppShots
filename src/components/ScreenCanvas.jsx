@@ -104,16 +104,32 @@ export default function ScreenCanvas({
   };
 
   const rtl = isRtl(locale);
+  // Deterministic vertical layout so the title + subtitle never overlap in the
+  // exported image. html-to-image rasterizes the DOM into an SVG <foreignObject>
+  // where a wrapped title's box height (unitless line-height) and sibling margins
+  // can mis-measure, painting the subtitle inside the title's span. Pixel
+  // line-heights make each line's box exactly N px (measured == painted), and a
+  // flex-column gap replaces the flaky margin.
+  const titleLine = Math.round(scaledFont * 1.12);
+  const subLine = Math.round(scaledSub * 1.3);
   const TextBlock = lscreen.heading ? (
     <div
       className="px-[8%] text-center"
       dir={rtl ? "rtl" : undefined}
-      style={{ fontFamily: font.stack, textAlign: state.text.align, direction: rtl ? "rtl" : undefined }}
+      style={{
+        fontFamily: font.stack,
+        textAlign: state.text.align,
+        direction: rtl ? "rtl" : undefined,
+        display: "flex",
+        flexDirection: "column",
+        rowGap: Math.round(scaledFont * 0.32),
+      }}
     >
       <div
         style={{
+          width: "100%",
           fontSize: scaledFont,
-          lineHeight: 1.1,
+          lineHeight: `${titleLine}px`,
           letterSpacing: "-0.02em",
           color: state.text.color,
           fontWeight: state.text.weight,
@@ -126,8 +142,9 @@ export default function ScreenCanvas({
       {lscreen.subheading ? (
         <div
           style={{
+            width: "100%",
             fontSize: scaledSub,
-            marginTop: scaledFont * 0.35,
+            lineHeight: `${subLine}px`,
             color: sub.color,
             fontWeight: sub.weight,
             textShadow: haloFor(sub.color, scaledSub),

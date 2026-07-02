@@ -21,6 +21,11 @@ export async function renderNode(node, targetWidth, { format = "png", scale = 1,
     (targetHeight != null ? targetHeight : (rect.height / rect.width) * targetWidth) * scale
   );
   const opts = { pixelRatio: 1, canvasWidth: outW, canvasHeight: outH, cacheBust: true, skipFonts: false };
+  // Wait for web fonts so the rasterized layout matches the on-screen metrics
+  // (a font-load race can wrap the headline differently and overlap the subtitle).
+  if (typeof document !== "undefined" && document.fonts?.ready) {
+    try { await document.fonts.ready; } catch { /* ignore */ }
+  }
   const raw = format === "jpeg"
     ? await toJpeg(node, { ...opts, quality: 0.95, backgroundColor: "#ffffff" })
     : await toPng(node, { ...opts, backgroundColor: "#ffffff" });
