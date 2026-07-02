@@ -57,7 +57,7 @@ export function filterTemplates(templates, { category = "All", query = "" } = {}
 /* ----------------------------- catalog ----------------------------- */
 
 export const TEMPLATE_CATEGORIES = [
-  "Minimal", "Bold", "Playful", "Dark", "Editorial", "Vibrant",
+  "Minimal", "Bold", "Playful", "Dark", "Editorial", "Vibrant", "Gradient", "Pattern",
 ];
 
 export function backgroundColors(background) {
@@ -92,6 +92,9 @@ function scaleFor(layoutId) {
 
 const gradBg = (gradient, solidFallback) => ({ type: "gradient", gradient, solid: solidFallback });
 const solidBg = (solid) => ({ type: "solid", gradient: "indigo", solid });
+const patBg = (pattern, fg, base, scale = 26) => ({
+  type: "pattern", pattern, patternFg: fg, patternBg: base, patternScale: scale,
+});
 
 // mk(id, name, category, accent, background, color, font, layoutId, deviceId, screens)
 function mk(id, name, category, accent, background, color, font, layoutId, deviceId, screens) {
@@ -246,5 +249,97 @@ export const TEMPLATES = [
   mk("playful-bubble", "Bubble", "Playful", "#065f46", gradBg("mint", "#14b8a6"), "#064e3b", "inter", "text-top", "iphone-69", [
     scr(mockChat("#065f46"), "Say more"),
     scr(mockOnboarding("#065f46"), "Pop in anytime"),
+  ]),
+
+  // ---------- Gradient (bold full-bleed gradients, light text) ----------
+  mk("gradient-sunset", "Sunset", "Gradient", "#fed7aa", gradBg("sunset", "#f97316"), "#4a044e", "inter", "text-top", "iphone-69", [
+    scr(mockOnboarding("#fed7aa"), "Rise and shine", "Everything you need to start"),
+    scr(mockDashboard("#fed7aa"), "Your day, sorted"),
+    scr(mockStats("#fed7aa"), "Watch it grow"),
+  ]),
+  mk("gradient-ocean", "Ocean", "Gradient", "#bae6fd", gradBg("ocean", "#0ea5e9"), "#0c4a6e", "inter", "text-bottom", "iphone-69", [
+    scr(mockDashboard("#bae6fd"), "Clarity, on tap"),
+    scr(mockMap("#bae6fd"), "Explore without limits"),
+    scr(mockProfile("#bae6fd"), "Made just for you"),
+  ]),
+  mk("gradient-grape", "Grape", "Gradient", "#e9d5ff", gradBg("grape", "#7c3aed"), "#ffffff", "inter", "text-top", "iphone-65", [
+    scr(mockMusic("#e9d5ff"), "Turn it up"),
+    scr(mockFeed("#e9d5ff"), "Endless discovery"),
+  ]),
+  mk("gradient-forest", "Forest", "Gradient", "#bbf7d0", gradBg("forest", "#16a34a"), "#052e16", "inter", "text-top", "iphone-69", [
+    scr(mockStats("#bbf7d0"), "Grow every day"),
+    scr(mockDashboard("#bbf7d0"), "Rooted in results"),
+  ]),
+  mk("gradient-peach", "Peach", "Gradient", "#fecdd3", gradBg("peach", "#fb7185"), "#4c0519", "inter", "centered", "iphone-69", [
+    scr(mockProfile("#fecdd3"), "Soft on the eyes"),
+    scr(mockChat("#fecdd3"), "Keep it warm"),
+  ]),
+  mk("gradient-mint", "Mint", "Gradient", "#99f6e4", gradBg("mint", "#14b8a6"), "#042f2e", "inter", "text-top", "pixel-8", [
+    scr(mockOnboarding("#99f6e4"), "A breath of fresh"),
+    scr(mockStats("#99f6e4"), "Feel the momentum"),
+  ]),
+
+  // ---------- Pattern (CSS-pattern backdrops) ----------
+  mk("pattern-dots", "Dot Grid", "Pattern", "#6366f1", patBg("dots", "#6366f1", "#0b1020", 26), "#ffffff", "inter", "text-top", "iphone-69", [
+    scr(mockDashboard("#6366f1", { dark: true }), "Focus on what matters", "Clean, quiet, quick"),
+    scr(mockStats("#6366f1", { dark: true }), "Numbers that add up"),
+  ]),
+  mk("pattern-grid", "Blueprint", "Pattern", "#38bdf8", patBg("grid", "#1e3a5f", "#0b1220", 30), "#e0f2fe", "mono", "text-top", "iphone-69", [
+    scr(mockOnboarding("#38bdf8", { dark: true }), "Built for builders"),
+    scr(mockDashboard("#38bdf8", { dark: true }), "Every detail, planned"),
+  ]),
+  mk("pattern-diagonal", "Momentum", "Pattern", "#f472b6", patBg("diagonal", "#831843", "#1a0b14", 22), "#fce7f3", "inter", "text-bottom", "iphone-65", [
+    scr(mockFeed("#f472b6", { dark: true }), "Always moving forward"),
+    scr(mockMusic("#f472b6", { dark: true }), "Ride the beat"),
+  ]),
+  mk("pattern-checker", "Arcade", "Pattern", "#a3e635", patBg("checker", "#365314", "#0a0f02", 34), "#ecfccb", "inter", "text-top", "galaxy-s24", [
+    scr(mockProfile("#a3e635", { dark: true }), "Play your way"),
+    scr(mockChat("#a3e635", { dark: true }), "Game on"),
+  ]),
+  mk("pattern-cross", "Weave", "Pattern", "#fbbf24", patBg("crosshatch", "#78350f", "#140c02", 24), "#fef3c7", "georgia", "centered", "ipad-11", [
+    scr(mockFeed("#fbbf24", { dark: true }), "Threads worth following"),
+    scr(mockProfile("#fbbf24", { dark: true }), "Woven together"),
+  ]),
+  mk("pattern-stripes", "Signal", "Pattern", "#22d3ee", patBg("stripes", "#0e7490", "#08131a", 20), "#cffafe", "inter", "text-top", "iphone-69", [
+    scr(mockStats("#22d3ee", { dark: true }), "Tune in to trends"),
+    scr(mockDashboard("#22d3ee", { dark: true }), "Crystal clear"),
+  ]),
+
+  // ---------- More minimal / bold / dark variety ----------
+  mk("minimal-canvas", "Canvas", "Minimal", "#0f172a", solidBg("#ffffff"), "#0f172a", "georgia", "centered", "iphone-69", [
+    scr(mockProfile("#0f172a"), "Less, but better"),
+    scr(mockDashboard("#0f172a"), "Room to breathe"),
+  ]),
+  mk("minimal-fog", "Fog", "Minimal", "#475569", solidBg("#e2e8f0"), "#1e293b", "inter", "text-top", "iphone-69", [
+    scr(mockOnboarding("#475569"), "Simple by design"),
+    scr(mockStats("#475569"), "Quietly powerful"),
+  ]),
+  mk("bold-ink", "Ink", "Bold", "#f8fafc", solidBg("#0f172a"), "#f8fafc", "inter", "text-top", "iphone-69", [
+    scr(mockDashboard("#f8fafc", { dark: true }), "Make a statement"),
+    scr(mockStats("#f8fafc", { dark: true }), "Bold by default"),
+  ]),
+  mk("bold-ember", "Ember", "Bold", "#fecaca", solidBg("#7f1d1d"), "#fff1f2", "inter", "text-bottom", "iphone-69", [
+    scr(mockFeed("#fecaca", { dark: true }), "Turn up the heat"),
+    scr(mockProfile("#fecaca", { dark: true }), "Unmistakable"),
+  ]),
+  mk("dark-obsidian", "Obsidian", "Dark", "#94a3b8", solidBg("#0a0a0a"), "#e5e7eb", "mono", "text-top", "pixel-8", [
+    scr(mockDashboard("#94a3b8", { dark: true }), "Engineered for speed"),
+    scr(mockStats("#94a3b8", { dark: true }), "Zero to fast"),
+  ]),
+  mk("dark-aurora", "Aurora", "Dark", "#a5f3fc", gradBg("slate", "#1e293b"), "#ecfeff", "inter", "text-top", "iphone-69", [
+    scr(mockMap("#a5f3fc", { dark: true }), "Chase the lights"),
+    scr(mockMusic("#a5f3fc", { dark: true }), "After hours"),
+  ]),
+  mk("vibrant-citrus", "Citrus", "Vibrant", "#fef08a", gradBg("sunset", "#f59e0b"), "#422006", "inter", "text-top", "galaxy-s24", [
+    scr(mockOnboarding("#fef08a"), "Fresh squeezed"),
+    scr(mockChat("#fef08a"), "Zesty and fast"),
+  ]),
+  mk("playful-candy", "Candy", "Playful", "#f5d0fe", gradBg("grape", "#c026d3"), "#ffffff", "inter", "centered", "iphone-69", [
+    scr(mockProfile("#f5d0fe"), "Sweet and simple"),
+    scr(mockFeed("#f5d0fe"), "Treat yourself"),
+  ]),
+  mk("editorial-mono", "Manuscript", "Editorial", "#57534e", solidBg("#f5f5f4"), "#1c1917", "georgia", "text-bottom", "ipad-13", [
+    scr(mockFeed("#57534e"), "Stories that stay"),
+    scr(mockProfile("#57534e"), "Written for you"),
   ]),
 ];

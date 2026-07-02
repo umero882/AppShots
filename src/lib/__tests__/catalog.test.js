@@ -10,9 +10,9 @@ const layoutIds = new Set(LAYOUTS.map((l) => l.id));
 const fontIds = new Set(FONTS.map((f) => f.id));
 
 describe("template catalog", () => {
-  it("has the six categories", () => {
+  it("has the expected categories", () => {
     expect(TEMPLATE_CATEGORIES).toEqual([
-      "Minimal", "Bold", "Playful", "Dark", "Editorial", "Vibrant",
+      "Minimal", "Bold", "Playful", "Dark", "Editorial", "Vibrant", "Gradient", "Pattern",
     ]);
   });
 
