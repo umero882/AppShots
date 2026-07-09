@@ -85,13 +85,29 @@ export function DeviceMockup({
   const glarePos = 50 + tiltY * 1.3;
   const glare = `linear-gradient(112deg, transparent ${glarePos - 28}%, rgba(255,255,255,0.14) ${glarePos}%, rgba(255,255,255,0.04) ${glarePos + 10}%, transparent ${glarePos + 22}%)`;
 
-  // Resolve the fit actually rendered. A "contain" screenshot is upgraded to
-  // "fill" when either assist applies, so it fills edge-to-edge instead of
-  // sitting in blurred side-bars. "fill" is always honored as-is.
+  // Resolve the fit actually rendered. The assists show the WHOLE screenshot
+  // edge-to-edge (stretch) instead of letting it crop or letterbox:
+  //  • forceFillIpad — iPad always stretches, whatever the fit toggle says: its
+  //    wide screen otherwise crops a phone-shaped shot (fill) or floats it in
+  //    blurred side-bars (contain);
+  //  • autoFill — a "contain" shot narrower than the screen stretches instead
+  //    of sitting in blurred side-bars.
+  // Explicit modes when no assist applies:
+  //  • fill        → cover, anchored TOP (keeps header/status bar, trims bottom)
+  //  • fill-center → cover, CENTERED    (trims top + bottom evenly, keeps middle)
+  //  • stretch     → distorts to the screen aspect so NOTHING is cropped and it
+  //    still fills edge-to-edge (AppLaunchpad-style; clean on splash screens)
+  //  • contain     → whole shot with blurred side-bars.
   const screenAR = canvas.w / canvas.h;
   const wouldLetterbox = autoFill && imgAR != null && imgAR < screenAR - 0.001;
-  const forceFill = (forceFillIpad && isIpad(device.id)) || wouldLetterbox;
-  const effFit = fit === "contain" && !forceFill ? "contain" : "fill";
+  const effFit =
+    (forceFillIpad && isIpad(device.id)) || (fit === "contain" && wouldLetterbox)
+      ? "stretch"
+      : fit;
+  // NB: our mode "fill" maps to CSS cover; mode "stretch" maps to CSS fill.
+  const imgStyle = effFit === "stretch"
+    ? { objectFit: "fill" }
+    : { objectFit: "cover", objectPosition: effFit === "fill-center" ? "center" : "top center" };
   const onImgLoad = (e) => {
     const { naturalWidth: nw, naturalHeight: nh } = e.currentTarget;
     if (nw && nh) setImgAR(nw / nh);
@@ -168,13 +184,14 @@ export function DeviceMockup({
                     />
                   </>
                 ) : (
-                  // fill: cover the screen edge-to-edge, anchored to the top so
-                  // headers/status bar stay and only the overflowing bottom trims.
+                  // fill/fill-center: cover the screen edge-to-edge (top-anchored
+                  // or centered crop). stretch: distort to the screen aspect so
+                  // the whole screenshot shows with no crop at all.
                   <img
                     src={image}
                     alt="app screenshot"
                     className="absolute inset-0 h-full w-full"
-                    style={{ objectFit: "cover", objectPosition: "top center" }}
+                    style={imgStyle}
                     crossOrigin="anonymous"
                     onLoad={onImgLoad}
                   />

@@ -23,17 +23,34 @@ describe("DeviceMockup", () => {
     expect(html).toContain("object-position:top center"); // top kept, bottom trims
     expect(html).not.toContain("blur(16px)"); // no blurred filler in fill mode
   });
+  it("centers the crop (trims top + bottom) when fit='fill-center'", () => {
+    const html = renderToStaticMarkup(<DeviceMockup device={getDevice("ipad-13")} image="data:img" width={200} fit="fill-center" />);
+    expect(html).toContain("object-fit:cover");
+    expect(html).toContain("object-position:center"); // not "top center"
+    expect(html).not.toContain("blur(16px)");
+  });
+  it("stretches to the screen shape (no crop, no bars) when fit='stretch'", () => {
+    const html = renderToStaticMarkup(<DeviceMockup device={getDevice("ipad-13")} image="data:img" width={200} fit="stretch" />);
+    expect(html).toContain("object-fit:fill"); // distorts to fill — nothing cropped
+    expect(html).not.toContain("object-fit:cover");
+    expect(html).not.toContain("blur(16px)");
+  });
   it("shows the whole screenshot with blurred sides when fit='contain'", () => {
     const html = renderToStaticMarkup(<DeviceMockup device={getDevice("ipad-13")} image="data:img" width={200} fit="contain" />);
     expect(html).toContain("object-fit:contain");
     expect(html).toContain("blur(16px)");
   });
-  it("forces an iPad 'contain' mockup to fill when forceFillIpad is on", () => {
-    const html = renderToStaticMarkup(
-      <DeviceMockup device={getDevice("ipad-13")} image="data:img" width={200} fit="contain" forceFillIpad />
-    );
-    expect(html).toContain("object-fit:cover"); // upgraded to fill edge-to-edge
-    expect(html).not.toContain("blur(16px)"); // no letterbox filler
+  it("stretches an iPad mockup edge-to-edge (no crop) when forceFillIpad is on", () => {
+    // The assist overrides ANY fit — "fill" would crop the bottom, "contain"
+    // would letterbox; both must render the whole screenshot instead.
+    for (const fit of ["contain", "fill", "fill-center"]) {
+      const html = renderToStaticMarkup(
+        <DeviceMockup device={getDevice("ipad-13")} image="data:img" width={200} fit={fit} forceFillIpad />
+      );
+      expect(html).toContain("object-fit:fill"); // whole shot, stretched
+      expect(html).not.toContain("object-fit:cover"); // never cropped
+      expect(html).not.toContain("blur(16px)"); // no letterbox filler
+    }
   });
   it("leaves a non-iPad 'contain' mockup letterboxed under forceFillIpad", () => {
     const html = renderToStaticMarkup(

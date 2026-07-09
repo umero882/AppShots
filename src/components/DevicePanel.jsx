@@ -218,10 +218,12 @@ function Live3DSection({
 
 function FitToggle({ value, onChange }) {
   const opts = [
-    { id: "contain", label: "Fit" },
-    { id: "fill", label: "Fill" },
+    { id: "contain", label: "Fit", hint: "Show the whole screenshot; fill the side gaps with a blurred extension" },
+    { id: "fill", label: "Fill", hint: "Fill edge-to-edge, keep the top — only the overflowing bottom trims" },
+    { id: "fill-center", label: "Center", hint: "Fill edge-to-edge, centered — trims top + bottom evenly (keeps the middle)" },
+    { id: "stretch", label: "Stretch", hint: "Stretch to the screen's shape — the whole screenshot shows edge-to-edge with nothing cropped (great for splash screens)" },
   ];
-  const cur = value === "contain" ? "contain" : "fill"; // fill is the default
+  const cur = opts.some((o) => o.id === value) ? value : "fill"; // fill is the default
   return (
     <div>
       <p className="label">Screenshot</p>
@@ -230,8 +232,8 @@ function FitToggle({ value, onChange }) {
           <button
             key={o.id}
             onClick={() => onChange(o.id)}
-            title={o.id === "contain" ? "Show the whole screenshot; fill the side gaps with a blurred extension" : "Fill the screen edge-to-edge, keep the top, trim the overflowing bottom"}
-            className={`flex-1 px-3 py-1.5 text-xs font-semibold transition ${
+            title={o.hint}
+            className={`flex-1 px-2 py-1.5 text-xs font-semibold transition ${
               cur === o.id ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300 hover:text-white"
             }`}
           >
@@ -247,8 +249,8 @@ function FitToggle({ value, onChange }) {
 // floating in blurred side-bars, from a different angle — see templates.js.
 function FillAssist({ state, update }) {
   const rows = [
-    { key: "autoFill", label: "Auto-fill narrow shots", hint: "Screenshots narrower than the screen fill instead of showing blurred side-bars." },
-    { key: "ipadForceFill", label: "iPad always fills", hint: "iPad mockups ignore “Fit” and always fill edge-to-edge." },
+    { key: "autoFill", label: "Auto-fill narrow shots", hint: "Screenshots narrower than the screen show in full (stretched edge-to-edge) instead of blurred side-bars." },
+    { key: "ipadForceFill", label: "iPad always fills", hint: "iPad mockups always show the whole screenshot edge-to-edge (stretched) — nothing cropped, no side-bars." },
   ];
   return (
     <div className="space-y-2">

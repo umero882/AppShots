@@ -61,11 +61,12 @@ export function defaultProjectState() {
     },
     deviceScale: 0.78,
     deviceFit: "fill", // fill the device screen edge-to-edge by default (no blurred sides)
-    // Fill-assist — two INDEPENDENT options that stop a screenshot floating in
-    // blurred side-bars (both default on; legacy projects opt in via `!== false`):
-    //  • autoFill: any mockup whose screenshot is narrower than its screen (would
-    //    letterbox in "Fit") is auto-filled instead of showing side-bars.
-    //  • ipadForceFill: iPad mockups always fill edge-to-edge, ignoring "Fit".
+    // Fill-assist — two INDEPENDENT options that keep a screenshot from cropping
+    // or floating in blurred side-bars (both default on; legacy projects opt in
+    // via `!== false`). Both show the WHOLE shot edge-to-edge (stretch):
+    //  • autoFill: a mockup whose screenshot is narrower than its screen (would
+    //    letterbox in "Fit") stretches instead of showing side-bars.
+    //  • ipadForceFill: iPad mockups always stretch, whatever the fit toggle says.
     autoFill: true,
     ipadForceFill: true,
     screens: [defaultScreen()],
