@@ -134,3 +134,12 @@ export const DEVICES = [
 export function getDevice(id) {
   return DEVICES.find((d) => d.id === id) || DEVICES[0];
 }
+
+/**
+ * True for the iPad family. Its wide 3:4 screen letterboxes a phone-shaped
+ * screenshot badly (big blurred side-bars), so the editor can force these to
+ * fill edge-to-edge.
+ */
+export function isIpad(id) {
+  return typeof id === "string" && id.startsWith("ipad");
+}

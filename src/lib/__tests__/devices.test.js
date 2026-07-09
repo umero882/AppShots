@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEVICES, getDevice, STORES } from "../devices.js";
+import { DEVICES, getDevice, STORES, isIpad } from "../devices.js";
 
 describe("devices", () => {
   it("offers a healthy spread of iOS and Android devices", () => {
@@ -27,6 +27,14 @@ describe("devices", () => {
   });
   it("getDevice falls back to the first device for an unknown id", () => {
     expect(getDevice("nope")).toBe(DEVICES[0]);
+  });
+  it("isIpad recognises the iPad family only", () => {
+    expect(isIpad("ipad-13")).toBe(true);
+    expect(isIpad("ipad-129")).toBe(true);
+    expect(isIpad("ipad-11")).toBe(true);
+    expect(isIpad("iphone-69")).toBe(false);
+    expect(isIpad("android-tablet")).toBe(false);
+    expect(isIpad(undefined)).toBe(false);
   });
 });
 

@@ -243,6 +243,33 @@ function FitToggle({ value, onChange }) {
   );
 }
 
+// Two independent fill-assist switches (project-level). Each stops a screenshot
+// floating in blurred side-bars, from a different angle — see templates.js.
+function FillAssist({ state, update }) {
+  const rows = [
+    { key: "autoFill", label: "Auto-fill narrow shots", hint: "Screenshots narrower than the screen fill instead of showing blurred side-bars." },
+    { key: "ipadForceFill", label: "iPad always fills", hint: "iPad mockups ignore “Fit” and always fill edge-to-edge." },
+  ];
+  return (
+    <div className="space-y-2">
+      {rows.map((r) => (
+        <label key={r.key} className="flex cursor-pointer items-start justify-between gap-3">
+          <span className="text-xs text-slate-300">
+            {r.label}
+            <span className="mt-0.5 block text-[11px] text-slate-500">{r.hint}</span>
+          </span>
+          <input
+            type="checkbox"
+            checked={state[r.key] !== false}
+            onChange={(e) => update({ [r.key]: e.target.checked })}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-brand-500"
+          />
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function Slider({ label, value, min, max, step = 1, suffix = "", onChange }) {
   return (
     <div>
@@ -361,6 +388,7 @@ export default function DevicePanel({
             if (free) devices.forEach((d) => onChange(d.id, { fit: f }));
           }}
         />
+        <FillAssist state={state} update={update} />
 
         {!free ? (
           <>

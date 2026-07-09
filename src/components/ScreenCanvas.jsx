@@ -231,6 +231,8 @@ export default function ScreenCanvas({
             orientation={state.orientation}
             color={state.frameColor}
             fit={state.deviceFit}
+            autoFill={state.autoFill !== false}
+            forceFillIpad={state.ipadForceFill !== false}
           />
         )}
       </div>
@@ -272,6 +274,8 @@ export default function ScreenCanvas({
           width={width}
           getDevice={getDevice}
           defaultColor={state.frameColor}
+          autoFill={state.autoFill !== false}
+          forceFillIpad={state.ipadForceFill !== false}
           editable={editableDevices}
           selectedId={selectedDevice}
           onSelect={onSelectDevice}

@@ -5,6 +5,7 @@ import {
 } from "../lib/elements";
 import { orientedCanvas, frameColorOf } from "../lib/deviceLayout";
 import { frameSpec, railGradient, shade, mix } from "../lib/deviceFrames";
+import { isIpad } from "../lib/devices";
 
 /**
  * A realistic device mockup: a metal rail (brushed gradient) around a black
@@ -17,9 +18,21 @@ import { frameSpec, railGradient, shade, mix } from "../lib/deviceFrames";
  * screen glare that shifts with the angle, and a contact shadow on the ground —
  * the cues that make the tilt actually read as 3D.
  */
-export function DeviceMockup({ device, image, width, orientation = "portrait", color, tiltX = 0, tiltY = 0, fit = "fill" }) {
+export function DeviceMockup({
+  device, image, width, orientation = "portrait", color,
+  tiltX = 0, tiltY = 0, fit = "fill",
+  // Fill-assist (opt-in; ScreenCanvas turns these on from project state). Both
+  // upgrade a letterboxing "contain" to "fill" so the screenshot never floats in
+  // blurred side-bars — they're independent, either can force the fill:
+  //  • forceFillIpad: iPad always fills (its wide screen letterboxes phone shots);
+  //  • autoFill: fill whenever the screenshot is narrower than the screen.
+  autoFill = false, forceFillIpad = false,
+}) {
   const canvas = orientedCanvas(device, orientation);
   const w = width;
+  // Natural aspect (w/h) of the loaded screenshot, needed to detect letterboxing
+  // for autoFill. Unknown until the image loads (and in SSR/tests) → null.
+  const [imgAR, setImgAR] = useState(null);
   const spec = frameSpec(device);
   const land = orientation === "landscape";
 
@@ -72,6 +85,18 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
   const glarePos = 50 + tiltY * 1.3;
   const glare = `linear-gradient(112deg, transparent ${glarePos - 28}%, rgba(255,255,255,0.14) ${glarePos}%, rgba(255,255,255,0.04) ${glarePos + 10}%, transparent ${glarePos + 22}%)`;
 
+  // Resolve the fit actually rendered. A "contain" screenshot is upgraded to
+  // "fill" when either assist applies, so it fills edge-to-edge instead of
+  // sitting in blurred side-bars. "fill" is always honored as-is.
+  const screenAR = canvas.w / canvas.h;
+  const wouldLetterbox = autoFill && imgAR != null && imgAR < screenAR - 0.001;
+  const forceFill = (forceFillIpad && isIpad(device.id)) || wouldLetterbox;
+  const effFit = fit === "contain" && !forceFill ? "contain" : "fill";
+  const onImgLoad = (e) => {
+    const { naturalWidth: nw, naturalHeight: nh } = e.currentTarget;
+    if (nw && nh) setImgAR(nw / nh);
+  };
+
   return (
     <div className="relative" style={{ width: w, height: h }}>
       {/* soft contact shadow on the ground, drifting + narrowing with tilt */}
@@ -121,7 +146,7 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
           >
             <div className="relative h-full w-full overflow-hidden bg-white" style={{ borderRadius: screenR }}>
               {image ? (
-                fit === "contain" ? (
+                effFit === "contain" ? (
                   <>
                     {/* whole screenshot, never cropped; a blurred cover copy fills
                         the letterbox area so it reads as intentional. */}
@@ -139,6 +164,7 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
                       className="absolute inset-0 h-full w-full"
                       style={{ objectFit: "contain" }}
                       crossOrigin="anonymous"
+                      onLoad={onImgLoad}
                     />
                   </>
                 ) : (
@@ -150,6 +176,7 @@ export function DeviceMockup({ device, image, width, orientation = "portrait", c
                     className="absolute inset-0 h-full w-full"
                     style={{ objectFit: "cover", objectPosition: "top center" }}
                     crossOrigin="anonymous"
+                    onLoad={onImgLoad}
                   />
                 )
               ) : (
@@ -258,6 +285,8 @@ export function DevicesLayer({
   width,
   getDevice,
   defaultColor = null,
+  autoFill = false,
+  forceFillIpad = false,
   editable = false,
   selectedId = null,
   onSelect,
@@ -366,6 +395,8 @@ export function DevicesLayer({
               tiltX={d.tiltX}
               tiltY={d.tiltY}
               fit={d.fit}
+              autoFill={autoFill}
+              forceFillIpad={forceFillIpad}
             />
 
             {selected && (

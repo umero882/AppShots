@@ -28,6 +28,19 @@ describe("DeviceMockup", () => {
     expect(html).toContain("object-fit:contain");
     expect(html).toContain("blur(16px)");
   });
+  it("forces an iPad 'contain' mockup to fill when forceFillIpad is on", () => {
+    const html = renderToStaticMarkup(
+      <DeviceMockup device={getDevice("ipad-13")} image="data:img" width={200} fit="contain" forceFillIpad />
+    );
+    expect(html).toContain("object-fit:cover"); // upgraded to fill edge-to-edge
+    expect(html).not.toContain("blur(16px)"); // no letterbox filler
+  });
+  it("leaves a non-iPad 'contain' mockup letterboxed under forceFillIpad", () => {
+    const html = renderToStaticMarkup(
+      <DeviceMockup device={getDevice("iphone-69")} image="data:img" width={200} fit="contain" forceFillIpad />
+    );
+    expect(html).toContain("object-fit:contain"); // iPhone is unaffected by the iPad rule
+  });
   it("paints the metal rail with a custom frame color", () => {
     const html = renderToStaticMarkup(<DeviceMockup device={ios} width={200} color="#d6d6d8" />);
     expect(html).toContain("#d6d6d8"); // base color appears in the rail gradient
