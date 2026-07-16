@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { userFromAuthUser, rowToProject, BACKEND_MODE } from "../backend.js";
+import { describe, it, expect, beforeAll } from "vitest";
+import { userFromAuthUser, rowToProject, BACKEND_MODE, backend } from "../backend.js";
 
 describe("userFromAuthUser", () => {
   it("maps a supabase auth user to the app user shape", () => {
@@ -45,5 +45,29 @@ describe("rowToProject", () => {
 describe("BACKEND_MODE", () => {
   it("falls back to local without Supabase env vars (test env)", () => {
     expect(BACKEND_MODE).toBe("local");
+  });
+});
+
+describe("localBackend.updateProfile", () => {
+  // vitest runs in the node env (no DOM), so give localBackend an in-memory store.
+  beforeAll(() => {
+    if (typeof globalThis.localStorage === "undefined") {
+      const store = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => store.set(k, String(v)),
+        removeItem: (k) => store.delete(k),
+        clear: () => store.clear(),
+      };
+    }
+  });
+
+  it("renames the signed-in user and never leaks the password", async () => {
+    const email = `u${Math.floor(Math.random() * 1e9)}@example.com`;
+    const created = await backend.signUp({ name: "Old Name", email, password: "pw123456" });
+    const updated = await backend.updateProfile({ name: "New Name" });
+    expect(updated.id).toBe(created.id);
+    expect(updated.name).toBe("New Name");
+    expect(updated.password).toBeUndefined();
   });
 });

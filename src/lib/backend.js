@@ -94,6 +94,18 @@ const localBackend = {
     return this._publicUser(users[idx]);
   },
 
+  async updateProfile({ name }) {
+    await delay(150);
+    const session = read(LS.session, null);
+    if (!session) throw new Error("Not signed in.");
+    const users = read(LS.users, []);
+    const idx = users.findIndex((u) => u.id === session.userId);
+    if (idx === -1) throw new Error("Account not found.");
+    if (name !== undefined) users[idx].name = name.trim() || users[idx].name;
+    write(LS.users, users);
+    return this._publicUser(users[idx]);
+  },
+
   _startSession(user) {
     write(LS.session, { userId: user.id, ts: Date.now() });
     return this._publicUser(user);
@@ -165,7 +177,7 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   onAuthStateChanged,
-  updateProfile,
+  updateProfile as fbUpdateProfile,
 } from "firebase/auth";
 import {
   collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where,
@@ -246,6 +258,12 @@ function makeSupabaseBackend() {
 
     async upgradePlan(plan) {
       const { data, error } = await supabase.auth.updateUser({ data: { plan } });
+      if (error) throw new Error(error.message);
+      return userFromAuthUser(data.user);
+    },
+
+    async updateProfile({ name }) {
+      const { data, error } = await supabase.auth.updateUser({ data: { name } });
       if (error) throw new Error(error.message);
       return userFromAuthUser(data.user);
     },
@@ -383,7 +401,7 @@ function makeFirebaseBackend() {
         throw new Error(fbAuthError(e));
       }
       const displayName = name || email.split("@")[0];
-      try { await updateProfile(cred.user, { displayName }); } catch { /* non-fatal */ }
+      try { await fbUpdateProfile(cred.user, { displayName }); } catch { /* non-fatal */ }
       const profile = { name: displayName, email: cred.user.email, plan: "free", createdAt: Date.now() };
       try { await setDoc(doc(db, "users", cred.user.uid), profile); } catch { /* rules may block; UX still works */ }
       return userFromFirebaseUser(cred.user, profile);
@@ -428,6 +446,17 @@ function makeFirebaseBackend() {
       const u = auth.currentUser;
       if (!u) throw new Error("Not signed in.");
       await setDoc(doc(db, "users", u.uid), { plan }, { merge: true });
+      const profile = await loadProfile(db, u.uid);
+      return userFromFirebaseUser(u, profile);
+    },
+
+    async updateProfile({ name }) {
+      const { auth, db } = getFirebase();
+      const u = auth.currentUser;
+      if (!u) throw new Error("Not signed in.");
+      const displayName = (name || "").trim() || u.displayName || (u.email ? u.email.split("@")[0] : "User");
+      try { await fbUpdateProfile(u, { displayName }); } catch { /* non-fatal */ }
+      await setDoc(doc(db, "users", u.uid), { name: displayName }, { merge: true });
       const profile = await loadProfile(db, u.uid);
       return userFromFirebaseUser(u, profile);
     },

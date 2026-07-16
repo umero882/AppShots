@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Inspiration from "./pages/Inspiration";
 import Tracker from "./pages/Tracker";
 import Editor from "./pages/Editor";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -39,6 +40,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Editor />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Settings />
           </ProtectedRoute>
         }
       />

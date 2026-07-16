@@ -1,8 +1,15 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Menu, X, LogOut, LayoutGrid, Radar } from "lucide-react";
+import { Menu, X, LogOut, LayoutGrid, Radar, Settings as SettingsIcon } from "lucide-react";
 import Logo from "./Logo";
 import { useAuth } from "../lib/auth";
+
+/** First letters of up to two name words, for the avatar chip. */
+function navInitials(name = "") {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
+}
 
 export default function Navbar() {
   const { user, signOut } = useAuth();
@@ -50,6 +57,14 @@ export default function Navbar() {
               <button onClick={handleSignOut} className="btn-ghost">
                 <LogOut size={16} /> Sign out
               </button>
+              <Link
+                to="/settings"
+                title="Profile & settings"
+                aria-label="Profile & settings"
+                className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xs font-bold text-white transition hover:brightness-110"
+              >
+                {navInitials(user.name)}
+              </Link>
             </>
           ) : (
             <>
@@ -92,6 +107,9 @@ export default function Navbar() {
                 </Link>
                 <Link to="/dashboard" className="btn-ghost" onClick={() => setOpen(false)}>
                   Dashboard
+                </Link>
+                <Link to="/settings" className="btn-ghost" onClick={() => setOpen(false)}>
+                  <SettingsIcon size={16} /> Profile &amp; settings
                 </Link>
                 <button onClick={handleSignOut} className="btn-ghost">
                   Sign out
