@@ -94,7 +94,7 @@ const localBackend = {
     return this._publicUser(users[idx]);
   },
 
-  async updateProfile({ name }) {
+  async updateProfile({ name, avatar }) {
     await delay(150);
     const session = read(LS.session, null);
     if (!session) throw new Error("Not signed in.");
@@ -102,6 +102,7 @@ const localBackend = {
     const idx = users.findIndex((u) => u.id === session.userId);
     if (idx === -1) throw new Error("Account not found.");
     if (name !== undefined) users[idx].name = name.trim() || users[idx].name;
+    if (avatar !== undefined) users[idx].avatar = avatar; // data-URL string, or null to remove
     write(LS.users, users);
     return this._publicUser(users[idx]);
   },
@@ -197,6 +198,7 @@ export function userFromAuthUser(u) {
     email: u.email,
     name: meta.name || (u.email ? u.email.split("@")[0] : "User"),
     plan: meta.plan || "free",
+    avatar: meta.avatar || null,
   };
 }
 
@@ -262,8 +264,11 @@ function makeSupabaseBackend() {
       return userFromAuthUser(data.user);
     },
 
-    async updateProfile({ name }) {
-      const { data, error } = await supabase.auth.updateUser({ data: { name } });
+    async updateProfile({ name, avatar }) {
+      const patch = {};
+      if (name !== undefined) patch.name = name;
+      if (avatar !== undefined) patch.avatar = avatar; // data-URL string, or null to remove
+      const { data, error } = await supabase.auth.updateUser({ data: patch });
       if (error) throw new Error(error.message);
       return userFromAuthUser(data.user);
     },
@@ -341,6 +346,7 @@ export function userFromFirebaseUser(u, profile) {
     email: u.email,
     name: p.name || u.displayName || (u.email ? u.email.split("@")[0] : "User"),
     plan: p.plan || "free",
+    avatar: p.avatar || u.photoURL || null,
   };
 }
 
@@ -450,13 +456,20 @@ function makeFirebaseBackend() {
       return userFromFirebaseUser(u, profile);
     },
 
-    async updateProfile({ name }) {
+    async updateProfile({ name, avatar }) {
       const { auth, db } = getFirebase();
       const u = auth.currentUser;
       if (!u) throw new Error("Not signed in.");
-      const displayName = (name || "").trim() || u.displayName || (u.email ? u.email.split("@")[0] : "User");
-      try { await fbUpdateProfile(u, { displayName }); } catch { /* non-fatal */ }
-      await setDoc(doc(db, "users", u.uid), { name: displayName }, { merge: true });
+      const patch = {};
+      if (name !== undefined) {
+        const displayName = (name || "").trim() || u.displayName || (u.email ? u.email.split("@")[0] : "User");
+        patch.name = displayName;
+        try { await fbUpdateProfile(u, { displayName }); } catch { /* non-fatal */ }
+      }
+      // Logo lives in the Firestore user doc (not Auth photoURL — data-URLs can
+      // exceed its length limit). null removes it.
+      if (avatar !== undefined) patch.avatar = avatar;
+      await setDoc(doc(db, "users", u.uid), patch, { merge: true });
       const profile = await loadProfile(db, u.uid);
       return userFromFirebaseUser(u, profile);
     },

@@ -8,7 +8,7 @@ describe("userFromAuthUser", () => {
       email: "a@b.com",
       user_metadata: { name: "Alice", plan: "pro" },
     });
-    expect(u).toEqual({ id: "uid-1", email: "a@b.com", name: "Alice", plan: "pro" });
+    expect(u).toEqual({ id: "uid-1", email: "a@b.com", name: "Alice", plan: "pro", avatar: null });
   });
   it("defaults name from the email and plan to free", () => {
     const u = userFromAuthUser({ id: "x", email: "bob@x.com", user_metadata: {} });
@@ -69,5 +69,16 @@ describe("localBackend.updateProfile", () => {
     expect(updated.id).toBe(created.id);
     expect(updated.name).toBe("New Name");
     expect(updated.password).toBeUndefined();
+  });
+
+  it("sets and removes the profile logo without touching the name", async () => {
+    const email = `u${Math.floor(Math.random() * 1e9)}@example.com`;
+    await backend.signUp({ name: "Logo User", email, password: "pw123456" });
+    const withLogo = await backend.updateProfile({ avatar: "data:image/png;base64,AAAA" });
+    expect(withLogo.avatar).toBe("data:image/png;base64,AAAA");
+    expect(withLogo.name).toBe("Logo User");
+    const removed = await backend.updateProfile({ avatar: null });
+    expect(removed.avatar).toBeNull();
+    expect(removed.name).toBe("Logo User");
   });
 });

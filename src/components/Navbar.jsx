@@ -61,9 +61,19 @@ export default function Navbar() {
                 to="/settings"
                 title="Profile & settings"
                 aria-label="Profile & settings"
-                className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xs font-bold text-white transition hover:brightness-110"
+                className="transition hover:brightness-110"
               >
-                {navInitials(user.name)}
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt=""
+                    className="h-9 w-9 rounded-full border border-white/10 bg-ink-900 object-cover"
+                  />
+                ) : (
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xs font-bold text-white">
+                    {navInitials(user.name)}
+                  </span>
+                )}
               </Link>
             </>
           ) : (
