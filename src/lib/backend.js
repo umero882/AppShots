@@ -389,7 +389,9 @@ export function fromFirestoreFields(fields) {
   return obj;
 }
 
-/** Map a Firestore REST document ({ name, fields }) → the app project shape. */
+/** Map a Firestore REST document ({ name, fields }) → the app project shape.
+ *  `state` is inline for small projects; large ones carry a `stateBlob` URL that
+ *  the backend hydrates from the same-origin blob store on load. */
 export function restDocToProject(docPath, fields) {
   const r = fromFirestoreFields(fields);
   return {
@@ -397,10 +399,15 @@ export function restDocToProject(docPath, fields) {
     userId: r.userId,
     name: r.name,
     state: r.state,
+    stateBlob: r.stateBlob || null,
     createdAt: r.createdAt || Date.now(),
     updatedAt: r.updatedAt || r.createdAt || Date.now(),
   };
 }
+
+// Above this serialized size, a project's state is stored in the same-origin
+// blob store instead of inline in Firestore (whose doc limit is 1 MB).
+const STATE_INLINE_MAX = 700 * 1024;
 
 /** Friendly copy for the Firebase auth error codes users can actually hit. */
 function fbAuthError(e, fallback) {
@@ -466,6 +473,45 @@ function makeFirebaseBackend() {
     } catch {
       return null;
     }
+  }
+
+  // --- same-origin blob store (for project state too big for a Firestore doc) ---
+  async function putStateBlob(state) {
+    const t = await token();
+    const res = await fetch("/api/blob", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+      body: JSON.stringify(state),
+    });
+    if (!res.ok) throw new Error("Couldn't save the project (blob store).");
+    return (await res.json()).url; // "/api/blob/{id}"
+  }
+  async function getStateBlob(url) {
+    const res = await fetch(url); // same-origin GET, unguessable id
+    if (!res.ok) throw new Error("Couldn't load the project (blob store).");
+    return res.json();
+  }
+  async function deleteStateBlob(url) {
+    try {
+      const t = await token();
+      await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${t}` } });
+    } catch { /* best-effort cleanup */ }
+  }
+  // Turn { state, stateBlob } → the app project shape with `state` fully resolved.
+  async function hydrate(project) {
+    if (project.stateBlob && project.state == null) {
+      try { project.state = await getStateBlob(project.stateBlob); } catch { project.state = {}; }
+    }
+    delete project.stateBlob;
+    return project;
+  }
+  // Choose inline vs blob storage for a state object; returns Firestore fields.
+  async function stateFields(state) {
+    const json = JSON.stringify(state ?? {});
+    if (json.length > STATE_INLINE_MAX) {
+      return { stateBlob: await putStateBlob(state), state: null };
+    }
+    return { state: state ?? {}, stateBlob: null };
   }
 
   return {
@@ -565,39 +611,47 @@ function makeFirebaseBackend() {
           },
         },
       });
-      return (rows || [])
+      const projects = (rows || [])
         .filter((row) => row.document)
-        .map((row) => restDocToProject(row.document.name, row.document.fields))
-        .sort((a, b) => b.updatedAt - a.updatedAt);
+        .map((row) => restDocToProject(row.document.name, row.document.fields));
+      const hydrated = await Promise.all(projects.map(hydrate));
+      return hydrated.sort((a, b) => b.updatedAt - a.updatedAt);
     },
 
     async getProject(id) {
       const d = await fs(`/projects/${id}`);
-      return d ? restDocToProject(d.name, d.fields) : null;
+      return d ? hydrate(restDocToProject(d.name, d.fields)) : null;
     },
 
     async createProject(userId, data) {
       const now = Date.now();
-      const payload = {
+      const state = data.state || {};
+      const fields = {
         userId,
         name: data.name || "Untitled project",
-        state: data.state || {},
         createdAt: now,
         updatedAt: now,
+        ...(await stateFields(state)),
       };
-      const created = await fs(`/projects`, { method: "POST", body: { fields: toFirestoreFields(payload) } });
-      return { id: created.name.split("/").pop(), ...payload };
+      const created = await fs(`/projects`, { method: "POST", body: { fields: toFirestoreFields(fields) } });
+      return { id: created.name.split("/").pop(), userId, name: fields.name, state, createdAt: now, updatedAt: now };
     },
 
     async updateProject(id, patch) {
       const upd = { updatedAt: Date.now() };
       if (patch.name !== undefined) upd.name = patch.name;
-      if (patch.state !== undefined) upd.state = patch.state;
+      if (patch.state !== undefined) Object.assign(upd, await stateFields(patch.state));
       const d = await patchDoc(`/projects/${id}`, upd);
-      return d ? restDocToProject(d.name, d.fields) : null;
+      return d ? hydrate(restDocToProject(d.name, d.fields)) : null;
     },
 
     async deleteProject(id) {
+      // Best-effort: remove the state blob too, if any, before deleting the doc.
+      try {
+        const d = await fs(`/projects/${id}`);
+        const blobUrl = d?.fields?.stateBlob?.stringValue;
+        if (blobUrl) await deleteStateBlob(blobUrl);
+      } catch { /* ignore */ }
       await fs(`/projects/${id}`, { method: "DELETE" });
       return true;
     },

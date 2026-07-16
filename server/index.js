@@ -12,6 +12,7 @@ import { existsSync, statSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { route } from "./router.js";
+import { handleBlob } from "./blob.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, "..", "dist");
@@ -64,6 +65,13 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === "/healthz") {
       res.writeHead(200, { "content-type": "text/plain" });
       res.end("ok");
+      return;
+    }
+
+    // Blob store needs raw request/response (binary), so handle it before the
+    // JSON router consumes the body.
+    if (u.pathname === "/api/blob" || u.pathname.startsWith("/api/blob/")) {
+      await handleBlob(req, res, u.pathname);
       return;
     }
 

@@ -27,21 +27,49 @@ sorted client-side.
 
 ## Data model
 
-| Collection        | Doc         | Fields                                                     |
-| ----------------- | ----------- | ---------------------------------------------------------- |
-| `users/{uid}`     | per user    | `name`, `email`, `plan` (`free`/`pro`), `createdAt`        |
-| `projects/{id}`   | per project | `userId`, `name`, `state`, `createdAt`, `updatedAt` (ms)   |
+| Collection        | Doc         | Fields                                                                    |
+| ----------------- | ----------- | ------------------------------------------------------------------------ |
+| `users/{uid}`     | per user    | `name`, `email`, `plan` (`free`/`pro`), `avatar`, `createdAt`            |
+| `projects/{id}`   | per project | `userId`, `name`, `createdAt`, `updatedAt` (ms), **and** `state` inline **or** `stateBlob` URL |
 
 ## How it's wired
 
-- `src/lib/firebase.js` — lazy SDK init from baked config (`VITE_FIREBASE_*` overrides).
+- `src/lib/firebase.js` — lazy Auth SDK init from baked config (`VITE_FIREBASE_*` overrides).
 - `src/lib/backend.js` → `makeFirebaseBackend()` — implements the shared `backend`
-  contract (auth + projects). Selection precedence:
+  contract. **Auth** uses the SDK; **Firestore** uses the **REST API** (`/v1`) with
+  the user's ID token, because the streaming Web SDK hangs behind some networks
+  (see the CRITICAL note above). Selection precedence:
   **Firebase (default) → Supabase (if configured) → localStorage**.
 - Disabled automatically under tests, and manually via `VITE_FIREBASE_DISABLED=1`.
 
+## Large projects: same-origin blob store
+
+Firestore docs cap at **1 MB**, but a project's `state` embeds full-res screenshot
+data-URLs and can be much larger. So the backend stores project state **hybrid**:
+
+- **≤ 700 KB** → inline in the Firestore `projects/{id}.state` field (as before).
+- **> 700 KB** → uploaded to the app's **own server** at `POST /api/blob`, with only
+  the returned same-origin URL kept in `projects/{id}.stateBlob`. Loaded back
+  transparently on `getProject`/`listProjects`.
+
+Why the app's own server and not Firebase Storage? In the affected networks,
+`firebasestorage.googleapis.com` is blocked too (it hangs like Firestore
+streaming did). Same-origin blob URLs are always reachable and never taint the
+export canvas (images stay data-URLs inside the blob).
+
+- `server/blob.js` — `POST /api/blob` (auth: Firebase ID token), `GET /api/blob/{id}`
+  (public, unguessable id), `DELETE` (owner). Stored on disk under `BLOB_DIR`.
+- `server/firebaseAuth.js` — verifies the ID token (RS256 vs Google certs) server-side.
+
 ## Production (Coolify)
 
-Nothing to set — the baked config ships in the client bundle, so a normal deploy
-of `main` is enough. (If you ever move to a different Firebase project, set the
-`VITE_FIREBASE_*` build args in Coolify instead of editing code.)
+1. **Client build** — nothing to set; the baked Firebase config ships in the bundle.
+2. **Persistent volume (REQUIRED for large projects)** — the blob store writes to
+   `BLOB_DIR` (`/app/data/blobs` in the image). **Mount a Coolify persistent volume
+   at `/app/data`**, or blobs (large projects) are lost on every redeploy. Small
+   projects live in Firestore and are unaffected.
+   *(If you skip the volume, small projects still work; large projects save but
+   don't survive a redeploy.)*
+3. The server must be able to reach `www.googleapis.com` to fetch token-signing
+   certs (Coolify's network can; a normal deploy is fine). Cert fetch has an 8 s
+   timeout so it fails fast rather than hanging if ever unreachable.

@@ -4,6 +4,7 @@
  * a production Node/serverless wrapper later.
  */
 import { route } from "./router.js";
+import { handleBlob } from "./blob.js";
 
 function readJson(req) {
   return new Promise((resolve) => {
@@ -28,6 +29,11 @@ export function apiProxyPlugin() {
         if (!req.url || !req.url.startsWith("/api/")) return next();
         try {
           const u = new URL(req.url, "http://localhost");
+          // Blob store needs raw body/binary — handle before the JSON reader.
+          if (u.pathname === "/api/blob" || u.pathname.startsWith("/api/blob/")) {
+            await handleBlob(req, res, u.pathname);
+            return;
+          }
           const query = Object.fromEntries(u.searchParams);
           const body = req.method === "POST" ? await readJson(req) : {};
           const result = await route({ method: req.method, path: u.pathname, query, body });
