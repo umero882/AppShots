@@ -1,0 +1,24 @@
+rules_version = '2';
+
+// AppShots Firestore security rules — owner-only access.
+// Publish in the Firebase console: Firestore Database → Rules → paste → Publish
+// (or `firebase deploy --only firestore:rules` with the CLI).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Per-user profile doc (display name + plan). Only the owner may read/write it.
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Projects are owned by the signed-in user who created them.
+    match /projects/{projectId} {
+      // Read/modify/delete only your own projects.
+      allow read, update, delete:
+        if request.auth != null && resource.data.userId == request.auth.uid;
+      // On create, the new doc must be stamped with the caller's own uid.
+      allow create:
+        if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}

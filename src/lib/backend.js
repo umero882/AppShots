@@ -160,6 +160,17 @@ const localBackend = {
  * `plan` are stored in the auth user's metadata (no separate profiles table).
  */
 import { createClient } from "@supabase/supabase-js";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut as fbSignOut,
+  onAuthStateChanged,
+  updateProfile,
+} from "firebase/auth";
+import {
+  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where,
+} from "firebase/firestore";
+import { getFirebase, hasFirebase } from "./firebase";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -295,7 +306,181 @@ function makeSupabaseBackend() {
   };
 }
 
-export const BACKEND_MODE = hasSupabase ? "supabase" : "local";
+/* ------------------------------- Firebase backend ------------------------------- *
+ * Real backend (auth + projects) on Firebase project `appshots-76a56`. Enabled by
+ * default (config baked into src/firebase.js), off only in tests / when disabled.
+ * Auth is email/password; the display name + plan live in a `users/{uid}` doc, and
+ * projects live in the top-level `projects` collection. Owner-only access is
+ * enforced by `firestore.rules` — publish them in the Firebase console.
+ */
 
-// Use Supabase when configured, else the zero-setup localStorage backend.
-export const backend = hasSupabase ? makeSupabaseBackend() : localBackend;
+/** Map a Firebase Auth user (+ optional Firestore profile) → the app user shape. */
+export function userFromFirebaseUser(u, profile) {
+  if (!u) return null;
+  const p = profile || {};
+  return {
+    id: u.uid,
+    email: u.email,
+    name: p.name || u.displayName || (u.email ? u.email.split("@")[0] : "User"),
+    plan: p.plan || "free",
+  };
+}
+
+/** Map a Firestore `projects` doc snapshot → the app project shape. */
+export function docToProject(snap) {
+  if (!snap || !snap.exists?.()) return null;
+  const r = snap.data() || {};
+  return {
+    id: snap.id,
+    userId: r.userId,
+    name: r.name,
+    state: r.state,
+    createdAt: r.createdAt || Date.now(),
+    updatedAt: r.updatedAt || r.createdAt || Date.now(),
+  };
+}
+
+/** Friendly copy for the Firebase auth error codes users can actually hit. */
+function fbAuthError(e, fallback) {
+  const code = e?.code || "";
+  if (code === "auth/email-already-in-use") return "An account with this email already exists.";
+  if (code === "auth/invalid-email") return "Enter a valid email address.";
+  if (code === "auth/weak-password") return "Password should be at least 6 characters.";
+  if (["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(code))
+    return "Invalid email or password.";
+  if (code === "auth/operation-not-allowed")
+    return "Email/password sign-in isn't enabled for this Firebase project yet.";
+  return fallback || e?.message || "Something went wrong.";
+}
+
+function makeFirebaseBackend() {
+  // Firebase restores a persisted session asynchronously — currentUser is null
+  // until the first auth-state emission, so resolve on that for getCurrentUser.
+  function authReady(auth) {
+    return new Promise((resolve) => {
+      const unsub = onAuthStateChanged(auth, (u) => {
+        unsub();
+        resolve(u);
+      });
+    });
+  }
+  async function loadProfile(db, uid) {
+    try {
+      const snap = await getDoc(doc(db, "users", uid));
+      return snap.exists() ? snap.data() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    async signUp({ name, email, password }) {
+      const { auth, db } = getFirebase();
+      let cred;
+      try {
+        cred = await createUserWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        throw new Error(fbAuthError(e));
+      }
+      const displayName = name || email.split("@")[0];
+      try { await updateProfile(cred.user, { displayName }); } catch { /* non-fatal */ }
+      const profile = { name: displayName, email: cred.user.email, plan: "free", createdAt: Date.now() };
+      try { await setDoc(doc(db, "users", cred.user.uid), profile); } catch { /* rules may block; UX still works */ }
+      return userFromFirebaseUser(cred.user, profile);
+    },
+
+    async signIn({ email, password }) {
+      const { auth, db } = getFirebase();
+      let cred;
+      try {
+        cred = await signInWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        throw new Error(fbAuthError(e, "Invalid email or password."));
+      }
+      const profile = await loadProfile(db, cred.user.uid);
+      return userFromFirebaseUser(cred.user, profile);
+    },
+
+    async signOut() {
+      const { auth } = getFirebase();
+      await fbSignOut(auth);
+    },
+
+    async getCurrentUser() {
+      const { auth, db } = getFirebase();
+      const u = auth.currentUser || (await authReady(auth));
+      if (!u) return null;
+      const profile = await loadProfile(db, u.uid);
+      return userFromFirebaseUser(u, profile);
+    },
+
+    onAuthChange(cb) {
+      const { auth, db } = getFirebase();
+      return onAuthStateChanged(auth, async (u) => {
+        if (!u) return cb(null);
+        const profile = await loadProfile(db, u.uid);
+        cb(userFromFirebaseUser(u, profile));
+      });
+    },
+
+    async upgradePlan(plan) {
+      const { auth, db } = getFirebase();
+      const u = auth.currentUser;
+      if (!u) throw new Error("Not signed in.");
+      await setDoc(doc(db, "users", u.uid), { plan }, { merge: true });
+      const profile = await loadProfile(db, u.uid);
+      return userFromFirebaseUser(u, profile);
+    },
+
+    /* --- projects --- */
+    async listProjects(userId) {
+      const { db } = getFirebase();
+      // Filter by owner; sort client-side to avoid needing a composite index.
+      const snap = await getDocs(query(collection(db, "projects"), where("userId", "==", userId)));
+      return snap.docs.map(docToProject).sort((a, b) => b.updatedAt - a.updatedAt);
+    },
+
+    async getProject(id) {
+      const { db } = getFirebase();
+      return docToProject(await getDoc(doc(db, "projects", id)));
+    },
+
+    async createProject(userId, data) {
+      const { db } = getFirebase();
+      const now = Date.now();
+      const payload = {
+        userId,
+        name: data.name || "Untitled project",
+        state: data.state || {},
+        createdAt: now,
+        updatedAt: now,
+      };
+      const ref = await addDoc(collection(db, "projects"), payload);
+      return { id: ref.id, ...payload };
+    },
+
+    async updateProject(id, patch) {
+      const { db } = getFirebase();
+      const upd = { updatedAt: Date.now() };
+      if (patch.name !== undefined) upd.name = patch.name;
+      if (patch.state !== undefined) upd.state = patch.state;
+      await updateDoc(doc(db, "projects", id), upd);
+      return docToProject(await getDoc(doc(db, "projects", id)));
+    },
+
+    async deleteProject(id) {
+      const { db } = getFirebase();
+      await deleteDoc(doc(db, "projects", id));
+      return true;
+    },
+  };
+}
+
+// Precedence: Firebase (default) → Supabase (if configured) → localStorage.
+export const BACKEND_MODE = hasFirebase ? "firebase" : hasSupabase ? "supabase" : "local";
+
+export const backend = hasFirebase
+  ? makeFirebaseBackend()
+  : hasSupabase
+    ? makeSupabaseBackend()
+    : localBackend;
