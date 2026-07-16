@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import {
   userFromAuthUser, rowToProject, BACKEND_MODE, backend,
-  toFirestoreFields, fromFirestoreFields, restDocToProject,
+  toFirestoreFields, fromFirestoreFields, restDocToProject, containsLargeString,
 } from "../backend.js";
 
 describe("userFromAuthUser", () => {
@@ -76,6 +76,19 @@ describe("Firestore REST codec", () => {
     expect(p.userId).toBe("u1");
     expect(p.state).toEqual({ x: 1 });
     expect(p.updatedAt).toBe(200);
+  });
+});
+
+describe("containsLargeString (Firestore 1500-byte index guard)", () => {
+  it("is false for small/image-free state", () => {
+    expect(containsLargeString({ a: "hi", n: 5, arr: [1, 2], deep: { x: "y" } })).toBe(false);
+  });
+  it("is true when any nested string exceeds the indexed-field limit", () => {
+    const dataUrl = "data:image/png;base64," + "A".repeat(5000);
+    expect(containsLargeString({ screens: [{ image: dataUrl }] })).toBe(true);
+  });
+  it("catches a large string at the top level too", () => {
+    expect(containsLargeString({ avatar: "x".repeat(2000) })).toBe(true);
   });
 });
 

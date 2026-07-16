@@ -409,6 +409,17 @@ export function restDocToProject(docPath, fields) {
 // blob store instead of inline in Firestore (whose doc limit is 1 MB).
 const STATE_INLINE_MAX = 700 * 1024;
 
+// Firestore auto-indexes every field and REJECTS any write whose indexed value
+// exceeds 1500 bytes. A screenshot/logo data-URL blows past that, so state that
+// contains such a value must be offloaded to the blob store, not stored inline.
+const FIRESTORE_INDEXED_MAX = 1400;
+export function containsLargeString(v) {
+  if (typeof v === "string") return v.length > FIRESTORE_INDEXED_MAX;
+  if (Array.isArray(v)) return v.some(containsLargeString);
+  if (v && typeof v === "object") return Object.values(v).some(containsLargeString);
+  return false;
+}
+
 /** Friendly copy for the Firebase auth error codes users can actually hit. */
 function fbAuthError(e, fallback) {
   const code = e?.code || "";
@@ -491,6 +502,22 @@ function makeFirebaseBackend() {
     if (!res.ok) throw new Error("Couldn't load the project (blob store).");
     return res.json();
   }
+  // Upload an image data-URL as raw bytes → a same-origin "/api/blob/{id}" URL
+  // usable directly in an <img src>. (The data-URL itself can't be stored inline
+  // in Firestore — it exceeds the 1500-byte indexed-field limit.)
+  async function putImageBlob(dataUrl) {
+    const t = await token();
+    const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+    const mime = m ? m[1] : "image/png";
+    const bytes = Uint8Array.from(atob(m ? m[2] : ""), (c) => c.charCodeAt(0));
+    const res = await fetch("/api/blob", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": mime },
+      body: bytes,
+    });
+    if (!res.ok) throw new Error("Couldn't upload the logo.");
+    return (await res.json()).url;
+  }
   async function deleteStateBlob(url) {
     try {
       const t = await token();
@@ -508,7 +535,9 @@ function makeFirebaseBackend() {
   // Choose inline vs blob storage for a state object; returns Firestore fields.
   async function stateFields(state) {
     const json = JSON.stringify(state ?? {});
-    if (json.length > STATE_INLINE_MAX) {
+    // Offload when too big for the doc OR when any inline value would exceed the
+    // 1500-byte indexed-field limit (e.g. a screenshot data-URL).
+    if (json.length > STATE_INLINE_MAX || containsLargeString(state)) {
       return { stateBlob: await putStateBlob(state), state: null };
     }
     return { state: state ?? {}, stateBlob: null };
@@ -582,9 +611,15 @@ function makeFirebaseBackend() {
         patch.name = displayName;
         try { await fbUpdateProfile(u, { displayName }); } catch { /* non-fatal */ }
       }
-      // Logo lives in the Firestore user doc (not Auth photoURL — data-URLs can
-      // exceed its length limit). null removes it.
-      if (avatar !== undefined) patch.avatar = avatar;
+      // A freshly uploaded logo is a data-URL — too big for an indexed Firestore
+      // field, so store it in the blob store and keep only the short URL. null
+      // removes it; an existing "/api/blob/..." URL passes through untouched.
+      if (avatar !== undefined) {
+        patch.avatar =
+          typeof avatar === "string" && avatar.startsWith("data:")
+            ? await putImageBlob(avatar)
+            : avatar;
+      }
       let profile = null;
       if (Object.keys(patch).length) {
         const d = await patchDoc(`/users/${u.uid}`, patch);

@@ -72,7 +72,13 @@ export default function Settings() {
     setError("");
     setSaved(false);
     try {
-      await updateProfile({ name: trimmed, avatar });
+      const u = await updateProfile({ name: trimmed, avatar });
+      // Sync local state to what was persisted (e.g. the logo is now a blob URL,
+      // not the data-URL we uploaded) so the preview + dirty-check settle.
+      if (u) {
+        setName(u.name || trimmed);
+        setAvatar(u.avatar ?? null);
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
