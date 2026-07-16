@@ -470,11 +470,19 @@ function makeFirebaseBackend() {
 
   // PATCH a doc writing ONLY the given fields (setDoc-merge semantics). Returns
   // the full updated document ({ name, fields }).
-  function patchDoc(docPath, data) {
-    const mask = Object.keys(data)
+  //
+  // A masked PATCH updates fields of an EXISTING doc — but Firestore returns 404
+  // if the doc doesn't exist yet (updateMask can't create one). So on 404 we fall
+  // back to a maskless PATCH, which upserts (creates it). The mask is built from
+  // the ENCODED fields so an undefined value can never mask-delete a field.
+  async function patchDoc(docPath, data) {
+    const fields = toFirestoreFields(data);
+    const mask = Object.keys(fields)
       .map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`)
       .join("&");
-    return fs(docPath, { method: "PATCH", query: "?" + mask, body: { fields: toFirestoreFields(data) } });
+    const res = await fs(docPath, { method: "PATCH", query: "?" + mask, body: { fields } });
+    if (res !== null) return res;
+    return fs(docPath, { method: "PATCH", body: { fields } }); // create (upsert)
   }
 
   async function loadProfile(uid) {
