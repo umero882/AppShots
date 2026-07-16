@@ -180,10 +180,7 @@ import {
   onAuthStateChanged,
   updateProfile as fbUpdateProfile,
 } from "firebase/auth";
-import {
-  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where,
-} from "firebase/firestore";
-import { getFirebase, hasFirebase } from "./firebase";
+import { getFirebase, hasFirebase, firebaseConfig } from "./firebase";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -330,12 +327,17 @@ function makeSupabaseBackend() {
 }
 
 /* ------------------------------- Firebase backend ------------------------------- *
- * Real backend (auth + projects) on Firebase project `appshots-76a56`. Enabled by
- * default (config baked into src/firebase.js), off only in tests / when disabled.
- * Auth is email/password; the display name + plan live in a `users/{uid}` doc, and
- * projects live in the top-level `projects` collection. Owner-only access is
- * enforced by `firestore.rules` — publish them in the Firebase console.
+ * Real backend on Firebase project `appshots-76a56`. Auth uses the Firebase SDK
+ * (email/password). Firestore is accessed over its REST API (/v1) with the
+ * signed-in user's ID token — NOT the streaming Web SDK, whose long-lived "Listen
+ * channel" is 503'd/blocked behind some networks (antivirus SSL scanning, VPNs,
+ * proxies) and makes every read/write hang ~30s before failing. REST is plain
+ * request/response, so it stays fast and resilient. Owner-only access is still
+ * enforced by `firestore.rules`. Display name + plan + logo live in `users/{uid}`,
+ * projects in the top-level `projects` collection.
  */
+
+const FS_BASE = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
 
 /** Map a Firebase Auth user (+ optional Firestore profile) → the app user shape. */
 export function userFromFirebaseUser(u, profile) {
@@ -350,12 +352,48 @@ export function userFromFirebaseUser(u, profile) {
   };
 }
 
-/** Map a Firestore `projects` doc snapshot → the app project shape. */
-export function docToProject(snap) {
-  if (!snap || !snap.exists?.()) return null;
-  const r = snap.data() || {};
+/* -- Firestore REST value codec: plain JS <-> Firestore typed `Value`s -- */
+export function toFirestoreValue(v) {
+  if (v === null || v === undefined) return { nullValue: null };
+  const t = typeof v;
+  if (t === "string") return { stringValue: v };
+  if (t === "boolean") return { booleanValue: v };
+  if (t === "number") return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(toFirestoreValue) } };
+  if (t === "object") return { mapValue: { fields: toFirestoreFields(v) } };
+  return { nullValue: null };
+}
+export function toFirestoreFields(obj) {
+  const fields = {};
+  for (const [k, val] of Object.entries(obj)) {
+    if (val === undefined) continue; // Firestore can't store undefined
+    fields[k] = toFirestoreValue(val);
+  }
+  return fields;
+}
+export function fromFirestoreValue(v) {
+  if (!v || typeof v !== "object") return null;
+  if ("nullValue" in v) return null;
+  if ("stringValue" in v) return v.stringValue;
+  if ("booleanValue" in v) return v.booleanValue;
+  if ("integerValue" in v) return Number(v.integerValue);
+  if ("doubleValue" in v) return v.doubleValue;
+  if ("timestampValue" in v) return v.timestampValue;
+  if ("arrayValue" in v) return (v.arrayValue.values || []).map(fromFirestoreValue);
+  if ("mapValue" in v) return fromFirestoreFields(v.mapValue.fields || {});
+  return null;
+}
+export function fromFirestoreFields(fields) {
+  const obj = {};
+  for (const [k, val] of Object.entries(fields || {})) obj[k] = fromFirestoreValue(val);
+  return obj;
+}
+
+/** Map a Firestore REST document ({ name, fields }) → the app project shape. */
+export function restDocToProject(docPath, fields) {
+  const r = fromFirestoreFields(fields);
   return {
-    id: snap.id,
+    id: (docPath || "").split("/").pop(),
     userId: r.userId,
     name: r.name,
     state: r.state,
@@ -388,10 +426,43 @@ function makeFirebaseBackend() {
       });
     });
   }
-  async function loadProfile(db, uid) {
+
+  // The signed-in user's Firebase ID token (auto-refreshed) for REST auth.
+  async function token() {
+    const { auth } = getFirebase();
+    const u = auth.currentUser;
+    if (!u) throw new Error("Not signed in.");
+    return u.getIdToken();
+  }
+
+  // One authenticated Firestore REST call. Returns parsed JSON, null on 404,
+  // throws on other errors. `path` is relative to the documents root.
+  async function fs(path, { method = "GET", body, query = "" } = {}) {
+    const t = await token();
+    const res = await fetch(FS_BASE + path + query, {
+      method,
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 404) return null;
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error?.message || `Firestore request failed (${res.status}).`);
+    return json;
+  }
+
+  // PATCH a doc writing ONLY the given fields (setDoc-merge semantics). Returns
+  // the full updated document ({ name, fields }).
+  function patchDoc(docPath, data) {
+    const mask = Object.keys(data)
+      .map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`)
+      .join("&");
+    return fs(docPath, { method: "PATCH", query: "?" + mask, body: { fields: toFirestoreFields(data) } });
+  }
+
+  async function loadProfile(uid) {
     try {
-      const snap = await getDoc(doc(db, "users", uid));
-      return snap.exists() ? snap.data() : null;
+      const d = await fs(`/users/${uid}`);
+      return d ? fromFirestoreFields(d.fields) : null;
     } catch {
       return null;
     }
@@ -399,7 +470,7 @@ function makeFirebaseBackend() {
 
   return {
     async signUp({ name, email, password }) {
-      const { auth, db } = getFirebase();
+      const { auth } = getFirebase();
       let cred;
       try {
         cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -409,19 +480,19 @@ function makeFirebaseBackend() {
       const displayName = name || email.split("@")[0];
       try { await fbUpdateProfile(cred.user, { displayName }); } catch { /* non-fatal */ }
       const profile = { name: displayName, email: cred.user.email, plan: "free", createdAt: Date.now() };
-      try { await setDoc(doc(db, "users", cred.user.uid), profile); } catch { /* rules may block; UX still works */ }
+      try { await patchDoc(`/users/${cred.user.uid}`, profile); } catch { /* rules may block; UX still works */ }
       return userFromFirebaseUser(cred.user, profile);
     },
 
     async signIn({ email, password }) {
-      const { auth, db } = getFirebase();
+      const { auth } = getFirebase();
       let cred;
       try {
         cred = await signInWithEmailAndPassword(auth, email, password);
       } catch (e) {
         throw new Error(fbAuthError(e, "Invalid email or password."));
       }
-      const profile = await loadProfile(db, cred.user.uid);
+      const profile = await loadProfile(cred.user.uid);
       return userFromFirebaseUser(cred.user, profile);
     },
 
@@ -431,33 +502,32 @@ function makeFirebaseBackend() {
     },
 
     async getCurrentUser() {
-      const { auth, db } = getFirebase();
+      const { auth } = getFirebase();
       const u = auth.currentUser || (await authReady(auth));
       if (!u) return null;
-      const profile = await loadProfile(db, u.uid);
+      const profile = await loadProfile(u.uid);
       return userFromFirebaseUser(u, profile);
     },
 
     onAuthChange(cb) {
-      const { auth, db } = getFirebase();
+      const { auth } = getFirebase();
       return onAuthStateChanged(auth, async (u) => {
         if (!u) return cb(null);
-        const profile = await loadProfile(db, u.uid);
+        const profile = await loadProfile(u.uid);
         cb(userFromFirebaseUser(u, profile));
       });
     },
 
     async upgradePlan(plan) {
-      const { auth, db } = getFirebase();
+      const { auth } = getFirebase();
       const u = auth.currentUser;
       if (!u) throw new Error("Not signed in.");
-      await setDoc(doc(db, "users", u.uid), { plan }, { merge: true });
-      const profile = await loadProfile(db, u.uid);
-      return userFromFirebaseUser(u, profile);
+      const d = await patchDoc(`/users/${u.uid}`, { plan });
+      return userFromFirebaseUser(u, d ? fromFirestoreFields(d.fields) : { plan });
     },
 
     async updateProfile({ name, avatar }) {
-      const { auth, db } = getFirebase();
+      const { auth } = getFirebase();
       const u = auth.currentUser;
       if (!u) throw new Error("Not signed in.");
       const patch = {};
@@ -469,26 +539,44 @@ function makeFirebaseBackend() {
       // Logo lives in the Firestore user doc (not Auth photoURL — data-URLs can
       // exceed its length limit). null removes it.
       if (avatar !== undefined) patch.avatar = avatar;
-      await setDoc(doc(db, "users", u.uid), patch, { merge: true });
-      const profile = await loadProfile(db, u.uid);
-      return userFromFirebaseUser(u, profile);
+      let profile = null;
+      if (Object.keys(patch).length) {
+        const d = await patchDoc(`/users/${u.uid}`, patch);
+        profile = d ? fromFirestoreFields(d.fields) : null;
+      }
+      return userFromFirebaseUser(u, profile || (await loadProfile(u.uid)));
     },
 
     /* --- projects --- */
     async listProjects(userId) {
-      const { db } = getFirebase();
-      // Filter by owner; sort client-side to avoid needing a composite index.
-      const snap = await getDocs(query(collection(db, "projects"), where("userId", "==", userId)));
-      return snap.docs.map(docToProject).sort((a, b) => b.updatedAt - a.updatedAt);
+      // runQuery filters by owner; sort client-side (no composite index needed).
+      const rows = await fs(":runQuery", {
+        method: "POST",
+        body: {
+          structuredQuery: {
+            from: [{ collectionId: "projects" }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: "userId" },
+                op: "EQUAL",
+                value: { stringValue: userId },
+              },
+            },
+          },
+        },
+      });
+      return (rows || [])
+        .filter((row) => row.document)
+        .map((row) => restDocToProject(row.document.name, row.document.fields))
+        .sort((a, b) => b.updatedAt - a.updatedAt);
     },
 
     async getProject(id) {
-      const { db } = getFirebase();
-      return docToProject(await getDoc(doc(db, "projects", id)));
+      const d = await fs(`/projects/${id}`);
+      return d ? restDocToProject(d.name, d.fields) : null;
     },
 
     async createProject(userId, data) {
-      const { db } = getFirebase();
       const now = Date.now();
       const payload = {
         userId,
@@ -497,22 +585,20 @@ function makeFirebaseBackend() {
         createdAt: now,
         updatedAt: now,
       };
-      const ref = await addDoc(collection(db, "projects"), payload);
-      return { id: ref.id, ...payload };
+      const created = await fs(`/projects`, { method: "POST", body: { fields: toFirestoreFields(payload) } });
+      return { id: created.name.split("/").pop(), ...payload };
     },
 
     async updateProject(id, patch) {
-      const { db } = getFirebase();
       const upd = { updatedAt: Date.now() };
       if (patch.name !== undefined) upd.name = patch.name;
       if (patch.state !== undefined) upd.state = patch.state;
-      await updateDoc(doc(db, "projects", id), upd);
-      return docToProject(await getDoc(doc(db, "projects", id)));
+      const d = await patchDoc(`/projects/${id}`, upd);
+      return d ? restDocToProject(d.name, d.fields) : null;
     },
 
     async deleteProject(id) {
-      const { db } = getFirebase();
-      await deleteDoc(doc(db, "projects", id));
+      await fs(`/projects/${id}`, { method: "DELETE" });
       return true;
     },
   };

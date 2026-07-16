@@ -12,7 +12,8 @@
  */
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+// Firestore is accessed over its REST API (see backend.js), not the streaming Web
+// SDK — so we deliberately do NOT import getFirestore here.
 
 const DEFAULT_CONFIG = {
   apiKey: "AIzaSyBogR7znlj6E66a-sBFC4p1OuT_5RIPjOA",
@@ -47,15 +48,13 @@ export const hasFirebase =
 
 let app = null;
 let authInstance = null;
-let dbInstance = null;
 
-/** Lazily initialize (memoized) and return the Firebase app/auth/firestore handles. */
+/** Lazily initialize (memoized) and return the Firebase app + auth handles. */
 export function getFirebase() {
-  if (!hasFirebase) return { app: null, auth: null, db: null };
+  if (!hasFirebase) return { app: null, auth: null };
   if (!app) {
     app = initializeApp(firebaseConfig);
     authInstance = getAuth(app);
-    dbInstance = getFirestore(app);
     // Analytics is optional + browser-only; load it guarded so it never throws
     // (e.g. blocked by an ad-blocker, or unsupported environment).
     if (firebaseConfig.measurementId) {
@@ -68,5 +67,5 @@ export function getFirebase() {
         .catch(() => {});
     }
   }
-  return { app, auth: authInstance, db: dbInstance };
+  return { app, auth: authInstance };
 }

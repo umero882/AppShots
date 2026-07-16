@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { userFromAuthUser, rowToProject, BACKEND_MODE, backend } from "../backend.js";
+import {
+  userFromAuthUser, rowToProject, BACKEND_MODE, backend,
+  toFirestoreFields, fromFirestoreFields, restDocToProject,
+} from "../backend.js";
 
 describe("userFromAuthUser", () => {
   it("maps a supabase auth user to the app user shape", () => {
@@ -39,6 +42,40 @@ describe("rowToProject", () => {
   });
   it("returns null for no row", () => {
     expect(rowToProject(null)).toBeNull();
+  });
+});
+
+describe("Firestore REST codec", () => {
+  it("round-trips nested project state losslessly", () => {
+    const state = {
+      deviceScale: 0.82, size: 70, on: true, missing: null,
+      screens: [{ heading: "Hi", image: null, tags: ["a", "b"] }],
+      bg: { type: "gradient", nested: { deep: 1 } },
+    };
+    expect(fromFirestoreFields(toFirestoreFields(state))).toEqual(state);
+  });
+  it("encodes each JS type to the right Firestore Value", () => {
+    const f = toFirestoreFields({ s: "x", i: 5, d: 1.5, b: false, n: null });
+    expect(f.s).toEqual({ stringValue: "x" });
+    expect(f.i).toEqual({ integerValue: "5" });
+    expect(f.d).toEqual({ doubleValue: 1.5 });
+    expect(f.b).toEqual({ booleanValue: false });
+    expect(f.n).toEqual({ nullValue: null });
+  });
+  it("omits undefined fields (Firestore can't store them)", () => {
+    const f = toFirestoreFields({ a: 1, b: undefined });
+    expect("b" in f).toBe(false);
+  });
+  it("maps a REST document path + fields to the app project shape", () => {
+    const fields = toFirestoreFields({ userId: "u1", name: "P", state: { x: 1 }, createdAt: 100, updatedAt: 200 });
+    const p = restDocToProject(
+      "projects/appshots-76a56/databases/(default)/documents/projects/abc123",
+      fields
+    );
+    expect(p.id).toBe("abc123");
+    expect(p.userId).toBe("u1");
+    expect(p.state).toEqual({ x: 1 });
+    expect(p.updatedAt).toBe(200);
   });
 });
 
