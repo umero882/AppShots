@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { User, Mail, Crown, Check, LogOut, Sparkles, Upload, Trash2 } from "lucide-react";
 import Navbar from "../components/Navbar";
@@ -13,11 +13,20 @@ export function initials(name = "") {
   return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
 }
 
-/** The user's logo if set, otherwise an initials chip. */
+/** The user's logo if set (and it loads), otherwise an initials chip. Falls back
+ *  to initials if the image fails to load (e.g. a missing/deleted blob) so a broken
+ *  reference never renders a broken-image icon. */
 export function Avatar({ avatar, name, size = "h-16 w-16", text = "text-lg", extra = "" }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [avatar]); // retry when the source changes
   const base = `${size} shrink-0 rounded-2xl ${extra}`;
-  return avatar ? (
-    <img src={avatar} alt="Profile logo" className={`${base} border border-white/10 bg-ink-900 object-cover`} />
+  return avatar && !failed ? (
+    <img
+      src={avatar}
+      alt="Profile logo"
+      onError={() => setFailed(true)}
+      className={`${base} border border-white/10 bg-ink-900 object-cover`}
+    />
   ) : (
     <div className={`${base} grid place-items-center bg-gradient-to-br from-brand-400 to-brand-600 ${text} font-bold text-white`}>
       {initials(name)}

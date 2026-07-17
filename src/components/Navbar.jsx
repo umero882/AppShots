@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu, X, LogOut, LayoutGrid, Radar, Settings as SettingsIcon } from "lucide-react";
 import Logo from "./Logo";
 import { useAuth } from "../lib/auth";
@@ -15,6 +15,9 @@ export default function Navbar() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  // Fall back to initials if the avatar image fails to load (e.g. missing blob).
+  const [avatarError, setAvatarError] = useState(false);
+  useEffect(() => setAvatarError(false), [user?.avatar]);
 
   const links = [
     { label: "Features", href: "/#features" },
@@ -63,10 +66,11 @@ export default function Navbar() {
                 aria-label="Profile & settings"
                 className="transition hover:brightness-110"
               >
-                {user.avatar ? (
+                {user.avatar && !avatarError ? (
                   <img
                     src={user.avatar}
                     alt=""
+                    onError={() => setAvatarError(true)}
                     className="h-9 w-9 rounded-full border border-white/10 bg-ink-900 object-cover"
                   />
                 ) : (
