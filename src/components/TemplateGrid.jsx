@@ -33,8 +33,8 @@ export function TemplatePreview({ template, onUse, onClose }) {
       role="dialog"
       aria-label={`Preview of ${template.name}`}
     >
-      <div className="card max-h-[88vh] w-full max-w-3xl overflow-hidden p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
+      <div className="card flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-white">{template.name}</h3>
             <p className="text-xs text-slate-500">
@@ -45,14 +45,16 @@ export function TemplatePreview({ template, onUse, onClose }) {
             <X size={18} />
           </button>
         </div>
-        <div className="scroll-thin flex gap-4 overflow-x-auto pb-2">
+        {/* Previews scroll in the space between the pinned header and footer, so the
+            action buttons are never clipped by max-h on short viewports. */}
+        <div className="scroll-thin flex min-h-0 flex-1 items-start gap-4 overflow-auto pb-2">
           {template.screens.map((s, i) => (
             <div key={i} className="shrink-0">
               <ScreenCanvas state={state} screen={s} width={200} />
             </div>
           ))}
         </div>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex shrink-0 justify-end gap-2">
           <button onClick={onClose} className="btn-ghost">Cancel</button>
           <button onClick={onUse} className="btn-primary">
             <Check size={16} /> Use this template
