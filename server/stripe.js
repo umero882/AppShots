@@ -196,7 +196,9 @@ export function entitlementFromSubscription(sub) {
     stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,
     stripeSubscriptionId: sub.id,
     priceId: price.id || null,
-    currentPeriodEnd: sub.current_period_end || null,
+    // Newer API versions (2025-03-31.basil+) moved current_period_end from the
+    // subscription onto its line items — read either so the renewal date survives.
+    currentPeriodEnd: sub.current_period_end || item?.current_period_end || null,
     cancelAtPeriodEnd: !!sub.cancel_at_period_end,
     updatedAt: Date.now(),
   };

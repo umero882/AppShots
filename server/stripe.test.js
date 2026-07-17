@@ -97,6 +97,18 @@ describe("entitlementFromSubscription", () => {
     );
     expect(e.cancelAtPeriodEnd).toBe(true);
   });
+
+  it("reads current_period_end from the line item when absent on the subscription", () => {
+    // API 2025-03-31.basil+ relocates the period fields onto items.
+    const e = entitlementFromSubscription({
+      id: "sub_1",
+      status: "active",
+      customer: "cus_1",
+      cancel_at_period_end: false,
+      items: { data: [{ current_period_end: 1_900_000_000, price: { metadata: { plan: "pro" } } }] },
+    });
+    expect(e.currentPeriodEnd).toBe(1_900_000_000);
+  });
 });
 
 describe("publicEntitlement", () => {
