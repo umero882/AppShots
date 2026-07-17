@@ -51,6 +51,38 @@ export function AuthProvider({ children }) {
     return u;
   }, []);
 
+  // Redirect to Stripe hosted Checkout for a paid plan. Returns a URL to redirect
+  // to (real billing), or null when the active backend has no hosted Checkout
+  // (offline demo) — the caller then just navigates on.
+  const startCheckout = useCallback(async ({ plan, interval }) => {
+    return backend.startCheckout({ plan, interval });
+  }, []);
+
+  // Open the Stripe billing portal (self-service plan changes / cancel / payment).
+  const openBillingPortal = useCallback(async () => {
+    return backend.openBillingPortal();
+  }, []);
+
+  // Re-read entitlement from the server (pass { sessionId } after a Checkout return
+  // to reconcile immediately) and fold the resulting plan into the current user.
+  const refreshEntitlement = useCallback(async (opts) => {
+    const ent = await backend.getEntitlement(opts);
+    setUser((prev) =>
+      prev
+        ? {
+            ...prev,
+            plan: ent.plan || prev.plan,
+            subscription: {
+              status: ent.status,
+              currentPeriodEnd: ent.currentPeriodEnd,
+              cancelAtPeriodEnd: ent.cancelAtPeriodEnd,
+            },
+          }
+        : prev
+    );
+    return ent;
+  }, []);
+
   const updateProfile = useCallback(async (patch) => {
     const u = await backend.updateProfile(patch);
     setUser(u);
@@ -58,7 +90,20 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, upgrade, updateProfile }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signIn,
+        signUp,
+        signOut,
+        upgrade,
+        updateProfile,
+        startCheckout,
+        openBillingPortal,
+        refreshEntitlement,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Plus, Trash2, Image as ImageIcon, Crown, Copy, Shuffle } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Plus, Trash2, Image as ImageIcon, Crown, Copy, Shuffle, CheckCircle2 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
@@ -10,12 +10,14 @@ import TemplatePicker from "../components/TemplatePicker";
 import { templateToProjectState, textPosFor, makeVariantState, nextVariantName } from "../lib/galleryTemplates";
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, refreshEntitlement } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [checkoutOk, setCheckoutOk] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -29,6 +31,20 @@ export default function Dashboard() {
       active = false;
     };
   }, [user.id]);
+
+  // Returning from Stripe Checkout: reconcile entitlement live (don't wait for the
+  // webhook), confirm the upgrade, and strip the query so a refresh won't re-fire.
+  useEffect(() => {
+    if (searchParams.get("checkout") !== "success") return;
+    const sessionId = searchParams.get("session_id") || undefined;
+    setCheckoutOk(true);
+    refreshEntitlement({ sessionId }).catch(() => {});
+    const next = new URLSearchParams(searchParams);
+    next.delete("checkout");
+    next.delete("session_id");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function createFrom(template) {
     setPickerOpen(false);
@@ -80,6 +96,21 @@ export default function Dashboard() {
     <div className="min-h-screen bg-ink-950">
       <Navbar />
       <main className="mx-auto max-w-7xl px-5 py-10">
+        {checkoutOk && (
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+            <CheckCircle2 size={18} className="shrink-0" />
+            <span>
+              You’re on the <span className="font-semibold capitalize">{user.plan}</span> plan — thanks for
+              upgrading! Watermark-free, full-resolution exports are unlocked.
+            </span>
+            <button
+              onClick={() => setCheckoutOk(false)}
+              className="ml-auto shrink-0 text-emerald-300/70 hover:text-emerald-200"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white">

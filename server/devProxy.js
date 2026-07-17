@@ -5,6 +5,7 @@
  */
 import { route } from "./router.js";
 import { handleBlob } from "./blob.js";
+import { handleStripe } from "./stripe.js";
 
 function readJson(req) {
   return new Promise((resolve) => {
@@ -32,6 +33,11 @@ export function apiProxyPlugin() {
           // Blob store needs raw body/binary — handle before the JSON reader.
           if (u.pathname === "/api/blob" || u.pathname.startsWith("/api/blob/")) {
             await handleBlob(req, res, u.pathname);
+            return;
+          }
+          // Stripe needs raw bodies (webhook signatures) + headers (auth).
+          if (u.pathname === "/api/stripe" || u.pathname.startsWith("/api/stripe/")) {
+            await handleStripe(req, res, u.pathname, Object.fromEntries(u.searchParams));
             return;
           }
           const query = Object.fromEntries(u.searchParams);

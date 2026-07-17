@@ -25,8 +25,22 @@ export function Avatar({ avatar, name, size = "h-16 w-16", text = "text-lg", ext
   );
 }
 
+/** Format a Unix (seconds) timestamp as a short date, or "" if absent. */
+export function formatDate(unixSeconds) {
+  if (!unixSeconds) return "";
+  try {
+    return new Date(unixSeconds * 1000).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
 export default function Settings() {
-  const { user, updateProfile, signOut } = useAuth();
+  const { user, updateProfile, signOut, openBillingPortal } = useAuth();
   const navigate = useNavigate();
   const fileRef = useRef(null);
 
@@ -36,12 +50,34 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [portalError, setPortalError] = useState("");
 
   const trimmed = name.trim();
   const nameChanged = !!trimmed && trimmed !== user?.name;
   const avatarChanged = (avatar || null) !== (user?.avatar || null);
   const dirty = nameChanged || avatarChanged;
   const isPaid = !!user?.plan && user.plan !== "free";
+  const sub = user?.subscription || null;
+  const pastDue = sub?.status === "past_due";
+
+  async function openPortal() {
+    if (portalBusy) return;
+    setPortalBusy(true);
+    setPortalError("");
+    try {
+      const url = await openBillingPortal();
+      if (url) {
+        window.location.href = url;
+        return;
+      }
+      // No hosted portal on this backend (offline demo) — send to pricing.
+      navigate("/pricing");
+    } catch (e) {
+      setPortalError(e?.message || "Couldn't open the billing portal.");
+      setPortalBusy(false);
+    }
+  }
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -198,12 +234,35 @@ export default function Settings() {
                     ? "Watermark-free, full-resolution exports."
                     : "Free forever — exports include a small watermark."}
                 </p>
+                {isPaid && sub?.currentPeriodEnd && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {sub.cancelAtPeriodEnd
+                      ? `Cancels on ${formatDate(sub.currentPeriodEnd)}`
+                      : `Renews on ${formatDate(sub.currentPeriodEnd)}`}
+                  </p>
+                )}
               </div>
             </div>
-            <Link to="/pricing" className={isPaid ? "btn-ghost" : "btn-primary"}>
-              {isPaid ? "Manage plan" : "Upgrade to Pro"}
-            </Link>
+            <div className="flex items-center gap-2">
+              {isPaid ? (
+                <>
+                  <button type="button" onClick={openPortal} disabled={portalBusy} className="btn-primary">
+                    {portalBusy ? "Opening…" : "Manage billing"}
+                  </button>
+                  <Link to="/pricing" className="btn-ghost">Change plan</Link>
+                </>
+              ) : (
+                <Link to="/pricing" className="btn-primary">Upgrade to Pro</Link>
+              )}
+            </div>
           </div>
+
+          {pastDue && (
+            <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300">
+              Your last payment failed. Update your card in “Manage billing” to keep your plan.
+            </p>
+          )}
+          {portalError && <p className="mt-4 text-sm text-red-400">{portalError}</p>}
         </section>
 
         {/* Account */}

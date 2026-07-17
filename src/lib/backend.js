@@ -94,6 +94,21 @@ const localBackend = {
     return this._publicUser(users[idx]);
   },
 
+  // Billing (offline demo): no hosted Checkout — simulate the upgrade and signal
+  // "no redirect" by returning null so the UI just navigates on.
+  async startCheckout({ plan }) {
+    await this.upgradePlan(plan);
+    return null;
+  },
+  async openBillingPortal() {
+    return null;
+  },
+  async getEntitlement() {
+    const u = await this.getCurrentUser();
+    const plan = u?.plan || "free";
+    return { plan, status: plan !== "free" ? "active" : "none" };
+  },
+
   async updateProfile({ name, avatar }) {
     await delay(150);
     const session = read(LS.session, null);
@@ -259,6 +274,20 @@ function makeSupabaseBackend() {
       const { data, error } = await supabase.auth.updateUser({ data: { plan } });
       if (error) throw new Error(error.message);
       return userFromAuthUser(data.user);
+    },
+
+    // Billing parity for the Supabase fallback (no Stripe proxy wired here).
+    async startCheckout({ plan }) {
+      await this.upgradePlan(plan);
+      return null;
+    },
+    async openBillingPortal() {
+      return null;
+    },
+    async getEntitlement() {
+      const u = await this.getCurrentUser();
+      const plan = u?.plan || "free";
+      return { plan, status: plan !== "free" ? "active" : "none" };
     },
 
     async updateProfile({ name, avatar }) {
@@ -551,6 +580,40 @@ function makeFirebaseBackend() {
     return { state: state ?? {}, stateBlob: null };
   }
 
+  // --- Stripe subscription billing (server-owned entitlement) ---------------
+  // Plan/entitlement is authoritative on the SERVER (derived from Stripe), NOT the
+  // Firestore `plan` field (which the client could self-write). We read it from the
+  // authenticated /api/stripe/subscription endpoint. `query` selects a live sync
+  // (?sync=1 or ?session_id=...) vs the fast cached read.
+  async function fetchEntitlement(query = "") {
+    try {
+      const t = await token();
+      const res = await fetch("/api/stripe/subscription" + query, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (!res.ok) return null; // 503 in dev without Stripe keys, etc. — fall back
+      return await res.json(); // { plan, status, currentPeriodEnd, cancelAtPeriodEnd }
+    } catch {
+      return null;
+    }
+  }
+
+  // Build the app user, overriding `plan` with the server entitlement when available.
+  async function buildUser(u, profile) {
+    const base = userFromFirebaseUser(u, profile);
+    if (!base) return null;
+    const ent = await fetchEntitlement();
+    if (ent && ent.plan) {
+      base.plan = ent.plan;
+      base.subscription = {
+        status: ent.status,
+        currentPeriodEnd: ent.currentPeriodEnd,
+        cancelAtPeriodEnd: ent.cancelAtPeriodEnd,
+      };
+    }
+    return base;
+  }
+
   return {
     async signUp({ name, email, password }) {
       const { auth } = getFirebase();
@@ -576,7 +639,7 @@ function makeFirebaseBackend() {
         throw new Error(fbAuthError(e, "Invalid email or password."));
       }
       const profile = await loadProfile(cred.user.uid);
-      return userFromFirebaseUser(cred.user, profile);
+      return buildUser(cred.user, profile);
     },
 
     async signOut() {
@@ -589,7 +652,7 @@ function makeFirebaseBackend() {
       const u = auth.currentUser || (await authReady(auth));
       if (!u) return null;
       const profile = await loadProfile(u.uid);
-      return userFromFirebaseUser(u, profile);
+      return buildUser(u, profile);
     },
 
     onAuthChange(cb) {
@@ -597,16 +660,50 @@ function makeFirebaseBackend() {
       return onAuthStateChanged(auth, async (u) => {
         if (!u) return cb(null);
         const profile = await loadProfile(u.uid);
-        cb(userFromFirebaseUser(u, profile));
+        cb(await buildUser(u, profile));
       });
     },
 
     async upgradePlan(plan) {
+      // Legacy demo path — real plan changes go through Stripe Checkout / the
+      // billing portal and are applied server-side. Kept for API parity; the
+      // server entitlement (buildUser) is authoritative, so this can't grant access.
       const { auth } = getFirebase();
       const u = auth.currentUser;
       if (!u) throw new Error("Not signed in.");
       const d = await patchDoc(`/users/${u.uid}`, { plan });
       return userFromFirebaseUser(u, d ? fromFirestoreFields(d.fields) : { plan });
+    },
+
+    /** Create a Stripe Checkout session and return its hosted URL to redirect to. */
+    async startCheckout({ plan, interval }) {
+      const t = await token();
+      const res = await fetch("/api/stripe/create-checkout-session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ plan, interval }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) throw new Error(json.detail || json.error || "Couldn't start checkout.");
+      return json.url;
+    },
+
+    /** Create a Stripe billing-portal session and return its hosted URL. */
+    async openBillingPortal() {
+      const t = await token();
+      const res = await fetch("/api/stripe/create-portal-session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) throw new Error(json.detail || json.error || "Couldn't open the billing portal.");
+      return json.url;
+    },
+
+    /** Read the server entitlement. Pass { sessionId } or { sync:true } to reconcile live. */
+    async getEntitlement({ sessionId, sync } = {}) {
+      const q = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : sync ? "?sync=1" : "";
+      return (await fetchEntitlement(q)) || { plan: "free", status: "none" };
     },
 
     async updateProfile({ name, avatar }) {

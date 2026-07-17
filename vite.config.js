@@ -14,6 +14,12 @@ export default defineConfig(({ mode }) => {
     "STABILITY_API_KEY",
     "GITHUB_TOKEN",
     "PEXELS_API_KEY",
+    // Stripe (server-only — never bundled into the client)
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_AUTOMATIC_TAX",
+    "APP_URL",
+    "SUB_DIR",
   ]) {
     if (env[k] && !process.env[k]) process.env[k] = env[k];
   }

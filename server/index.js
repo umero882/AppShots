@@ -13,6 +13,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { route } from "./router.js";
 import { handleBlob } from "./blob.js";
+import { handleStripe } from "./stripe.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, "..", "dist");
@@ -72,6 +73,13 @@ const server = http.createServer(async (req, res) => {
     // JSON router consumes the body.
     if (u.pathname === "/api/blob" || u.pathname.startsWith("/api/blob/")) {
       await handleBlob(req, res, u.pathname);
+      return;
+    }
+
+    // Stripe needs raw bodies (webhook signatures) and request headers (auth), so
+    // it also bypasses the generic JSON router.
+    if (u.pathname === "/api/stripe" || u.pathname.startsWith("/api/stripe/")) {
+      await handleStripe(req, res, u.pathname, Object.fromEntries(u.searchParams));
       return;
     }
 

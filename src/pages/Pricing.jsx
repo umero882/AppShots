@@ -54,9 +54,10 @@ const plans = [
 
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
-  const { user, upgrade } = useAuth();
+  const { user, startCheckout } = useAuth();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(null);
+  const [error, setError] = useState(null);
 
   async function choose(plan) {
     if (plan.id === "free") {
@@ -67,12 +68,17 @@ export default function Pricing() {
       navigate("/signup");
       return;
     }
-    // Demo upgrade. In production this would redirect to Stripe Checkout.
     setBusy(plan.id);
+    setError(null);
     try {
-      await upgrade(plan.id);
-      navigate("/dashboard");
-    } finally {
+      const url = await startCheckout({ plan: plan.id, interval: yearly ? "year" : "month" });
+      if (url) {
+        window.location.href = url; // redirect to Stripe hosted Checkout
+        return;
+      }
+      navigate("/dashboard"); // offline demo backend — no hosted Checkout
+    } catch (e) {
+      setError(e.message || "Couldn't start checkout. Please try again.");
       setBusy(null);
     }
   }
@@ -107,6 +113,12 @@ export default function Pricing() {
             </button>
           </div>
         </div>
+
+        {error && (
+          <p className="mx-auto mt-6 max-w-md rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-center text-sm text-red-300">
+            {error}
+          </p>
+        )}
 
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
           {plans.map((p) => {
@@ -151,8 +163,7 @@ export default function Pricing() {
         </div>
 
         <p className="mt-10 text-center text-xs text-slate-500">
-          This is a demo. Payments are simulated — wire up Stripe Checkout with the
-          keys in <code className="text-slate-400">.env.local</code> to take real payments.
+          Secure checkout by Stripe. Cancel anytime — manage your plan from Settings.
         </p>
       </section>
       <Footer />

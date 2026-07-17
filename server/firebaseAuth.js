@@ -41,9 +41,10 @@ function b64urlToJson(s) {
 
 /**
  * Pure verifier (certs injected) — exported for tests. Throws on any failure,
- * returns the uid (`sub`) on success. `nowSec` overridable for deterministic tests.
+ * returns the full token claims (`payload`) on success. `nowSec` overridable for
+ * deterministic tests.
  */
-export function verifyIdTokenWithCerts(idToken, certs, nowSec = Math.floor(Date.now() / 1000)) {
+export function verifyIdTokenClaimsWithCerts(idToken, certs, nowSec = Math.floor(Date.now() / 1000)) {
   const parts = (idToken || "").split(".");
   if (parts.length !== 3) throw new Error("malformed-token");
   const header = b64urlToJson(parts[0]);
@@ -63,14 +64,27 @@ export function verifyIdTokenWithCerts(idToken, certs, nowSec = Math.floor(Date.
   const okSig = cryptoVerify("RSA-SHA256", signed, publicKey, b64urlToBuf(parts[2]));
   if (!okSig) throw new Error("bad-signature");
 
-  return payload.sub;
+  return payload;
 }
 
-/** Verify the token from an `Authorization: Bearer <token>` header → uid. */
-export async function verifyIdToken(authHeader) {
+/**
+ * Pure verifier returning just the uid (`sub`) — kept for callers that only need
+ * identity. Exported for tests.
+ */
+export function verifyIdTokenWithCerts(idToken, certs, nowSec = Math.floor(Date.now() / 1000)) {
+  return verifyIdTokenClaimsWithCerts(idToken, certs, nowSec).sub;
+}
+
+/** Verify the token from an `Authorization: Bearer <token>` header → full claims. */
+export async function verifyIdTokenClaims(authHeader) {
   const token = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
   if (!token) throw new Error("missing-token");
   const now = Math.floor(Date.now() / 1000);
   const certs = await getCerts(Date.now());
-  return verifyIdTokenWithCerts(token, certs, now);
+  return verifyIdTokenClaimsWithCerts(token, certs, now);
+}
+
+/** Verify the token from an `Authorization: Bearer <token>` header → uid. */
+export async function verifyIdToken(authHeader) {
+  return (await verifyIdTokenClaims(authHeader)).sub;
 }
