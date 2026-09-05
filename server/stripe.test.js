@@ -5,6 +5,7 @@ import {
   constructWebhookEvent,
   entitlementFromSubscription,
   publicEntitlement,
+  recordInMode,
 } from "./stripe.js";
 
 describe("encodeForm", () => {
@@ -131,5 +132,40 @@ describe("publicEntitlement", () => {
       currentPeriodEnd: 123,
       cancelAtPeriodEnd: false,
     });
+  });
+});
+
+describe("recordInMode", () => {
+  const pro = { plan: "pro", status: "active", stripeCustomerId: "cus_test1", stripeSubscriptionId: "sub_1" };
+
+  it("returns the record unchanged when it was written in the current mode", () => {
+    expect(recordInMode({ ...pro, mode: "live" }, "live")).toEqual({ ...pro, mode: "live" });
+    expect(recordInMode({ ...pro, mode: "test" }, "test")).toEqual({ ...pro, mode: "test" });
+  });
+
+  it("treats a legacy record without a mode as test-mode", () => {
+    expect(recordInMode(pro, "test")).toEqual(pro);
+  });
+
+  it("resets a record from the other mode to free and drops the stale ids", () => {
+    const out = recordInMode(pro, "live");
+    expect(out.plan).toBe("free");
+    expect(out.status).toBe("none");
+    expect(out.stripeCustomerId).toBeUndefined();
+    expect(out.stripeSubscriptionId).toBeUndefined();
+    expect(out.mode).toBe("live");
+    expect(out.migratedFrom).toBe("test");
+    // Sandbox purchases must not leak a paid plan into production.
+    expect(publicEntitlement(out)).toMatchObject({ plan: "free", status: "none" });
+  });
+
+  it("also resets a live record when the server runs on a test key", () => {
+    const out = recordInMode({ ...pro, mode: "live" }, "test");
+    expect(out.plan).toBe("free");
+    expect(out.stripeCustomerId).toBeUndefined();
+  });
+
+  it("passes null through", () => {
+    expect(recordInMode(null, "live")).toBeNull();
   });
 });

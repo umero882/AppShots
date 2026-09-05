@@ -35,6 +35,11 @@ const webhookSecret = () => process.env.STRIPE_WEBHOOK_SECRET || "";
 // Stripe Tax is opt-out (auto-on) but falls back gracefully if the account hasn't
 // finished Tax setup — see createCheckoutSession.
 const taxEnabled = () => process.env.STRIPE_AUTOMATIC_TAX !== "false";
+// Which Stripe mode the configured key talks to. Customer/subscription ids are
+// mode-specific, so records remember the mode they were written in.
+const keyMode = () => (secretKey().startsWith("sk_live_") ? "live" : "test");
+// Stripe's error code for "that id doesn't exist here" (deleted, or another mode).
+const isMissing = (e) => e?.stripeCode === "resource_missing";
 
 /* --------------------------------- plan catalog --------------------------------- */
 // Stable price lookup_keys created by scripts/stripe/setup.mjs. Referencing prices
@@ -45,6 +50,20 @@ export const PLAN_LOOKUP_KEYS = {
   team: { month: "team_monthly", year: "team_yearly" },
 };
 const FREE = Object.freeze({ plan: "free", status: "none" });
+
+/**
+ * Project a stored record into the Stripe mode we're running in. A record written
+ * in the OTHER mode (e.g. a sandbox purchase from before the key was switched to
+ * live) is meaningless here: its customer/subscription ids don't exist in this
+ * mode, so it must neither grant a plan nor be reused for Checkout/portal calls.
+ * Legacy records without a `mode` were all written in test mode.
+ */
+export function recordInMode(rec, mode) {
+  if (!rec) return null;
+  const recMode = rec.mode || "test";
+  if (recMode === mode) return rec;
+  return { ...FREE, mode, updatedAt: Date.now(), migratedFrom: recMode };
+}
 
 /* ------------------------------- form-url encoding ------------------------------ */
 // Stripe expects application/x-www-form-urlencoded with PHP-style bracket nesting,
@@ -131,7 +150,7 @@ const custPath = (cid) => path.join(CUST_DIR, `${cid}.json`);
 export function readRecord(uid) {
   if (!validUid(uid)) return null;
   try {
-    return JSON.parse(readFileSync(recPath(uid), "utf8"));
+    return recordInMode(JSON.parse(readFileSync(recPath(uid), "utf8")), keyMode());
   } catch {
     return null;
   }
@@ -139,7 +158,7 @@ export function readRecord(uid) {
 function writeRecord(uid, rec) {
   if (!validUid(uid)) return;
   ensureDirs();
-  writeFileSync(recPath(uid), JSON.stringify(rec));
+  writeFileSync(recPath(uid), JSON.stringify({ ...rec, mode: keyMode() }));
 }
 function linkCustomer(cid, uid) {
   if (!validCid(cid) || !validUid(uid)) return;
@@ -214,7 +233,9 @@ function pickSubscription(subs) {
 /** Live-reconcile a user's entitlement from Stripe and persist it. */
 export async function reconcile(uid) {
   const rec = readRecord(uid);
-  const customerId = rec?.stripeCustomerId;
+  // No linked customer (or the link came from the other Stripe mode): see if this
+  // mode already knows the user before declaring them free — recovers a lost link.
+  let customerId = rec?.stripeCustomerId || (await findCustomerByUid(uid));
   if (!customerId) {
     const free = { ...FREE, updatedAt: Date.now() };
     writeRecord(uid, free);
@@ -226,44 +247,76 @@ export async function reconcile(uid) {
     limit: 10,
     "expand[0]": "data.items.data.price",
   }).join("&");
-  const res = await stripeRequest("GET", "/subscriptions?" + q, null);
-  const sub = pickSubscription(res.data);
+  let subs;
+  try {
+    subs = (await stripeRequest("GET", "/subscriptions?" + q, null)).data;
+  } catch (e) {
+    if (!isMissing(e)) throw e;
+    // The stored customer doesn't exist in this mode (deleted, or a stale id) —
+    // drop the link so nothing keeps granting a plan off it.
+    const free = { ...FREE, updatedAt: Date.now() };
+    writeRecord(uid, free);
+    return publicEntitlement(free);
+  }
+  const sub = pickSubscription(subs);
   const next = sub
     ? { ...entitlementFromSubscription(sub), stripeCustomerId: customerId }
     : { ...FREE, stripeCustomerId: customerId, updatedAt: Date.now() };
   writeRecord(uid, next);
+  linkCustomer(customerId, uid);
   return publicEntitlement(next);
 }
 
 /* ------------------------------- customers -------------------------------------- */
-async function getOrCreateCustomer(uid, email) {
-  const rec = readRecord(uid);
-  if (rec?.stripeCustomerId) return rec.stripeCustomerId;
-
-  // Cross-check Stripe in case the on-disk record was lost, to avoid duplicates.
+/** Find this user's customer in the CURRENT Stripe mode via the firebase_uid tag. */
+async function findCustomerByUid(uid) {
   try {
     const found = await stripeRequest(
       "GET",
       "/customers/search?" + encodeForm({ query: `metadata['firebase_uid']:'${uid}'`, limit: 1 }).join("&"),
       null
     );
-    if (found.data?.[0]?.id) {
-      const cid = found.data[0].id;
-      writeRecord(uid, { ...(rec || {}), stripeCustomerId: cid, updatedAt: Date.now() });
-      linkCustomer(cid, uid);
-      return cid;
-    }
+    return found.data?.[0]?.id || null;
   } catch {
-    /* search may be unavailable/eventually-consistent — fall through to create */
+    return null; // search may be unavailable/eventually-consistent
+  }
+}
+
+/** True if the customer id exists (and isn't deleted) in the current Stripe mode. */
+async function customerExists(cid) {
+  try {
+    const c = await stripeRequest("GET", `/customers/${encodeURIComponent(cid)}`, null);
+    return !c.deleted;
+  } catch (e) {
+    if (isMissing(e)) return false;
+    return true; // transient error — don't block checkout on a re-validation
+  }
+}
+
+async function getOrCreateCustomer(uid, email) {
+  const rec = readRecord(uid);
+  if (rec?.stripeCustomerId && (await customerExists(rec.stripeCustomerId))) return rec.stripeCustomerId;
+
+  // A stored id that failed validation is stale: start the record over rather than
+  // carrying a plan that belonged to a customer who no longer exists here.
+  const hadStaleId = !!rec?.stripeCustomerId;
+  const base = hadStaleId ? { ...FREE } : rec || {};
+
+  // Cross-check Stripe in case the on-disk record was lost, to avoid duplicates.
+  const found = await findCustomerByUid(uid);
+  if (found) {
+    writeRecord(uid, { ...base, stripeCustomerId: found, updatedAt: Date.now() });
+    linkCustomer(found, uid);
+    return found;
   }
 
   const created = await stripeRequest(
     "POST",
     "/customers",
     { email: email || undefined, metadata: { firebase_uid: uid } },
-    { idempotencyKey: `cust_${uid}` }
+    { idempotencyKey: hadStaleId ? undefined : `cust_${uid}` }
   );
-  writeRecord(uid, { ...(rec || {}), stripeCustomerId: created.id, updatedAt: Date.now() });
+  writeRecord(uid, { ...base, stripeCustomerId: created.id, updatedAt: Date.now() });
   linkCustomer(created.id, uid);
   return created.id;
 }
@@ -384,6 +437,12 @@ async function createPortalSession(req, res, uid) {
     });
     return sendJson(res, 200, { url: session.url });
   } catch (e) {
+    if (isMissing(e)) {
+      // Stale customer id (deleted, or from the other Stripe mode): drop the link
+      // so the plan stops being granted off it; the user can subscribe afresh.
+      writeRecord(uid, { ...FREE, updatedAt: Date.now() });
+      return sendJson(res, 400, { error: "no-customer" });
+    }
     // Most common cause: the Customer Portal isn't activated in the Dashboard yet.
     return sendJson(res, 500, { error: "portal-failed", detail: e.message });
   }

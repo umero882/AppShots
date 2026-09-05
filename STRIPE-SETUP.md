@@ -105,3 +105,34 @@ plan unlocked; verify self-service in **Settings → Manage billing**.
 1. Swap `STRIPE_SECRET_KEY` to `sk_live_...` and re-run `npm run stripe:setup`.
 2. Add a **live** webhook endpoint and set the live `STRIPE_WEBHOOK_SECRET`.
 3. Confirm `APP_URL` and the persistent `/app/data` volume are set in Coolify.
+
+## Live status (Next Tech Labs account) — configured 2026-09-05
+
+Account `acct_1TtlkRFhhbA8gpnZ` is fully activated (charges + payouts enabled,
+country AE, prices charged in USD). Live mode has been provisioned via the API:
+
+| Item | Live-mode value |
+|---|---|
+| Products | `prod_VChW42eJCcHcPK` (Pro), `prod_VChWtybwvIWJbe` (Team) |
+| Prices | `pro_monthly` / `pro_yearly` / `team_monthly` / `team_yearly` (created by `stripe:setup` in LIVE mode) |
+| Webhook | `we_1UCI7iFhhbA8gpnZrIGVRTDg` → `/api/stripe/webhook`, 6 events, signing secret saved at `C:\Admin\Coolify\Coolify Secret\appshots-STRIPE_WEBHOOK_SECRET-live.txt` |
+| Customer Portal | `bpc_1UCI9EFhhbA8gpnZzWkKkIIG` (default, live): cancel at period end, plan switch Pro↔Team, card/invoice/tax-id updates |
+| Stripe Tax | active (head office Sharjah, AE); Checkout runs with `automatic_tax` |
+
+Smoke-tested live (no charge): a Pro Checkout Session with tax and a portal session
+both succeed. The publishable key (`pk_live_…`) and the restricted "Master" key
+(`rk_live_…`) are **not used** — hosted Checkout needs only the secret key server-side.
+
+Secrets live outside the repo: `C:\Admin\Stripe\Next Tech Labs\` (API keys) and the
+Coolify Secret folder above (webhook secret). `.env.local` stays on **test** keys for
+local development; only Coolify holds the live values.
+
+### Test → live switch: what happens to sandbox purchases
+
+Entitlement records are stamped with the Stripe mode they were written in. When the
+server runs on a key of the other mode (e.g. after swapping `sk_test_` → `sk_live_`),
+a record from the old mode is treated as **free** and its customer/subscription ids
+are ignored — sandbox purchases never grant a paid plan in production, and Checkout
+creates a fresh live customer instead of reusing a test id. Stale ids that Stripe
+reports as `resource_missing` (e.g. a customer deleted in the Dashboard) are handled
+the same way: the link is dropped and the user can subscribe again.
