@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import AuthShell from "../components/AuthShell";
 import { useAuth } from "../lib/auth";
 
@@ -7,13 +7,15 @@ export default function Login() {
   const { signIn, requestPasswordReset } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const from = location.state?.from || "/dashboard";
 
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   // "login" | "reset" — the reset view reuses the email already typed above.
-  const [mode, setMode] = useState("login");
+  // /login?mode=reset opens the reset view directly (used by expired-link pages).
+  const [mode, setMode] = useState(searchParams.get("mode") === "reset" ? "reset" : "login");
   const [resetSentTo, setResetSentTo] = useState("");
 
   async function submit(e) {

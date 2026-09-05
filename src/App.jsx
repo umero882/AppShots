@@ -3,6 +3,7 @@ import Landing from "./pages/Landing";
 import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import AuthAction from "./pages/AuthAction";
 import Dashboard from "./pages/Dashboard";
 import Inspiration from "./pages/Inspiration";
 import Tracker from "./pages/Tracker";
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/inspiration" element={<Inspiration />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/auth/action" element={<AuthAction />} />
       <Route
         path="/dashboard"
         element={

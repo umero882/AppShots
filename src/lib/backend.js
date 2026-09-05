@@ -200,6 +200,9 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
+  applyActionCode as fbApplyActionCode,
   onAuthStateChanged,
   updateProfile as fbUpdateProfile,
 } from "firebase/auth";
@@ -475,6 +478,9 @@ function fbAuthError(e, fallback) {
   if (code === "auth/operation-not-allowed")
     return "Email/password sign-in isn't enabled for this Firebase project yet.";
   if (code === "auth/too-many-requests") return "Too many attempts. Please wait a few minutes and try again.";
+  if (code === "auth/expired-action-code") return "This link has expired. Request a new one and try again.";
+  if (code === "auth/invalid-action-code") return "This link is invalid or has already been used. Request a new one.";
+  if (code === "auth/user-disabled") return "This account has been disabled.";
   if (code === "auth/network-request-failed") return "Network error. Check your connection and try again.";
   return fallback || e?.message || "Something went wrong.";
 }
@@ -679,6 +685,34 @@ function makeFirebaseBackend() {
             throw new Error(fbAuthError(e2));
           }
         }
+        throw new Error(fbAuthError(e));
+      }
+    },
+
+    // --- email action links (our /auth/action page is the template's Action URL) ---
+    /** Validate a reset code from the email link; resolves the account's email. */
+    async checkPasswordResetCode({ code }) {
+      const { auth } = getFirebase();
+      try {
+        return await verifyPasswordResetCode(auth, code);
+      } catch (e) {
+        throw new Error(fbAuthError(e));
+      }
+    },
+    async completePasswordReset({ code, password }) {
+      const { auth } = getFirebase();
+      try {
+        await confirmPasswordReset(auth, code, password);
+      } catch (e) {
+        throw new Error(fbAuthError(e));
+      }
+    },
+    /** Apply a verify-email / recover-email code from the link. */
+    async applyActionCode({ code }) {
+      const { auth } = getFirebase();
+      try {
+        await fbApplyActionCode(auth, code);
+      } catch (e) {
         throw new Error(fbAuthError(e));
       }
     },
