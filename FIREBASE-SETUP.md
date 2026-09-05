@@ -73,3 +73,39 @@ export canvas (images stay data-URLs inside the blob).
 3. The server must be able to reach `www.googleapis.com` to fetch token-signing
    certs (Coolify's network can; a normal deploy is fine). Cert fetch has an 8 s
    timeout so it fails fast rather than hanging if ever unreachable.
+
+## Branded password-reset emails (self-sent)
+
+Firebase refuses to customize this project's auth email templates — subject, body,
+and action URL all return `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED` (Blaze and a verified
+custom sender domain didn't lift it). So the server sends the reset email itself:
+
+1. `POST /api/auth/password-reset { email }` (called by the login page's
+   "Forgot password?" form).
+2. The server asks Identity Toolkit for the reset **link** (`accounts:sendOobCode`
+   with `returnOobLink: true`) using a service account — Firebase sends nothing.
+3. It takes the one-time `oobCode` from that link and builds a link to **our**
+   branded page `/auth/action`, which completes the reset with the Firebase SDK.
+4. It emails a fully branded message through SMTP (`server/smtp.js`, zero-dep).
+
+Unknown addresses get the same `{ ok: true }` (no account enumeration); 3 requests
+per address per 15 min, 30/min globally. If the env below is missing the endpoint
+answers **501** and the client silently falls back to Firebase's own email.
+
+### Setup
+
+- Service account with **Firebase Authentication Admin**
+  (`roles/firebaseauth.admin`): `appshots-auth-mailer@appshots-76a56.iam.gserviceaccount.com`,
+  key at `C:\Admin\AppShots Credentials\appshots-auth-mailer.json`.
+- Runtime env on Coolify (never build args):
+  `FIREBASE_SERVICE_ACCOUNT` (key JSON, base64 is fine), `SMTP_HOST=smtp.hostinger.com`,
+  `SMTP_PORT=465`, `SMTP_USER` / `SMTP_PASS` (a real Hostinger mailbox on
+  nextechlabs.tech — aliases can't authenticate), `EMAIL_FROM="AppShots <mailbox>"`,
+  `APP_URL`.
+- Root-domain DNS at Hostinger already carries SPF/DKIM/MX for Hostinger mail, so
+  messages from `@nextechlabs.tech` authenticate. (The `appshots.` subdomain's
+  SPF/DKIM belong to Firebase's sender and are unaffected.)
+
+Firebase-side branding that *did* stick: sender name "AppShots", public-facing name
+"AppShots", verified sender domain `appshots.nextechlabs.tech` for the emails
+Firebase still sends itself (email verification, fallback resets).

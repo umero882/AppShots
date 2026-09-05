@@ -669,6 +669,23 @@ function makeFirebaseBackend() {
     // password, then continues to our /login. Unknown addresses resolve silently
     // so the form can't be used to enumerate accounts.
     async requestPasswordReset({ email }) {
+      // Preferred: our server sends a branded email (see server/authEmail.js).
+      // It answers 501 when not configured, and we also fall back on network
+      // errors, so a user always gets *some* reset email.
+      try {
+        const r = await fetch("/api/auth/password-reset", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (r.ok) return;
+        if (r.status === 400) throw new Error("Enter a valid email address.");
+        if (r.status === 429) throw new Error("Too many attempts. Please wait a few minutes and try again.");
+        // 501 (not configured) or 5xx upstream trouble → Firebase's own email below.
+      } catch (e) {
+        if (e instanceof Error && !/^(TypeError|AbortError)/.test(e.name) && !/fetch/i.test(e.message)) throw e;
+      }
+
       const { auth } = getFirebase();
       const settings = { url: `${window.location.origin}/login` };
       try {
