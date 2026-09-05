@@ -45,6 +45,13 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // Email a password-reset link. Resolves even for unknown addresses (no account
+  // enumeration); throws only for invalid input, rate limits, or network errors.
+  const requestPasswordReset = useCallback(async (email) => {
+    if (!backend.requestPasswordReset) throw new Error("Password reset isn't available on this backend.");
+    await backend.requestPasswordReset({ email: String(email || "").trim() });
+  }, []);
+
   const upgrade = useCallback(async (plan) => {
     const u = await backend.upgradePlan(plan);
     setUser(u);
@@ -97,6 +104,7 @@ export function AuthProvider({ children }) {
         signIn,
         signUp,
         signOut,
+        requestPasswordReset,
         upgrade,
         updateProfile,
         startCheckout,

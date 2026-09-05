@@ -65,6 +65,13 @@ const localBackend = {
     return this._startSession(user);
   },
 
+  // Offline demo has no mailbox to send to; behave like a real backend (don't
+  // reveal whether the address exists) and resolve.
+  async requestPasswordReset({ email }) {
+    await delay();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || "")) throw new Error("Enter a valid email address.");
+  },
+
   async signOut() {
     localStorage.removeItem(LS.session);
   },
@@ -192,6 +199,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
+  sendPasswordResetEmail,
   onAuthStateChanged,
   updateProfile as fbUpdateProfile,
 } from "firebase/auth";
@@ -252,6 +260,13 @@ function makeSupabaseBackend() {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error("Invalid email or password.");
       return userFromAuthUser(data.user);
+    },
+
+    async requestPasswordReset({ email }) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      if (error) throw new Error(error.message);
     },
 
     async signOut() {
@@ -459,6 +474,8 @@ function fbAuthError(e, fallback) {
     return "Invalid email or password.";
   if (code === "auth/operation-not-allowed")
     return "Email/password sign-in isn't enabled for this Firebase project yet.";
+  if (code === "auth/too-many-requests") return "Too many attempts. Please wait a few minutes and try again.";
+  if (code === "auth/network-request-failed") return "Network error. Check your connection and try again.";
   return fallback || e?.message || "Something went wrong.";
 }
 
@@ -640,6 +657,30 @@ function makeFirebaseBackend() {
       }
       const profile = await loadProfile(cred.user.uid);
       return buildUser(cred.user, profile);
+    },
+
+    // Firebase emails a reset link; its hosted action page collects the new
+    // password, then continues to our /login. Unknown addresses resolve silently
+    // so the form can't be used to enumerate accounts.
+    async requestPasswordReset({ email }) {
+      const { auth } = getFirebase();
+      const settings = { url: `${window.location.origin}/login` };
+      try {
+        await sendPasswordResetEmail(auth, email, settings);
+      } catch (e) {
+        if (e?.code === "auth/user-not-found") return;
+        // Continue-URL not whitelisted in Firebase → still send, just without it.
+        if (e?.code === "auth/unauthorized-continue-uri") {
+          try {
+            await sendPasswordResetEmail(auth, email);
+            return;
+          } catch (e2) {
+            if (e2?.code === "auth/user-not-found") return;
+            throw new Error(fbAuthError(e2));
+          }
+        }
+        throw new Error(fbAuthError(e));
+      }
     },
 
     async signOut() {
