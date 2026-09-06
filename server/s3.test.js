@@ -80,6 +80,22 @@ describe("s3 operations over a fake fetch", () => {
     await expect(putObject(cfg, "k", "v", { fetchImpl: failing })).rejects.toThrow(/s3-put-failed: SignatureDoesNotMatch/);
   });
 
+  it("bucketExists maps HEAD 404 to false; createBucket PUTs the bucket and tolerates 'already owned'", async () => {
+    const { bucketExists, createBucket } = await import("./s3.js");
+    const seen = [];
+    const mk = (status, body = "") => async (url, init) => {
+      seen.push({ url, method: init.method });
+      return { ok: status < 400, status, text: async () => body, arrayBuffer: async () => new ArrayBuffer(0) };
+    };
+    expect(await bucketExists(cfg, { fetchImpl: mk(404) })).toBe(false);
+    expect(await bucketExists(cfg, { fetchImpl: mk(200) })).toBe(true);
+    expect(seen[0]).toEqual({ url: "https://s3.amazonaws.com/examplebucket", method: "HEAD" });
+    expect(await createBucket(cfg, { fetchImpl: mk(200) })).toEqual({ created: true });
+    expect(seen[2]).toEqual({ url: "https://s3.amazonaws.com/examplebucket", method: "PUT" });
+    expect(await createBucket(cfg, { fetchImpl: mk(409, "<Error><Code>BucketAlreadyOwnedByYou</Code></Error>") })).toEqual({ created: false });
+    await expect(createBucket(cfg, { fetchImpl: mk(403, "<Error><Code>AccessDenied</Code></Error>") })).rejects.toThrow(/s3-put-failed: AccessDenied/);
+  });
+
   it("reads config from env and reports whether it's complete", () => {
     expect(s3Configured(s3ConfigFromEnv({}))).toBe(false);
     const c = s3ConfigFromEnv({ BACKUP_S3_ENDPOINT: "https://x", BACKUP_S3_BUCKET: "b", BACKUP_S3_ACCESS_KEY: "a", BACKUP_S3_SECRET_KEY: "s" });

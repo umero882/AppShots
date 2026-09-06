@@ -95,6 +95,28 @@ export async function deleteObject(cfg, key, { fetchImpl } = {}) {
   await request(cfg, { method: "DELETE", key }, { fetchImpl });
 }
 
+/** True if the bucket exists and we can reach it (HEAD bucket → 200). */
+export async function bucketExists(cfg, { fetchImpl } = {}) {
+  try {
+    await request(cfg, { method: "HEAD" }, { fetchImpl });
+    return true;
+  } catch (e) {
+    if (e.status === 404) return false;
+    throw e;
+  }
+}
+
+/** Create the bucket (idempotent: an existing bucket you own is fine). */
+export async function createBucket(cfg, { fetchImpl } = {}) {
+  try {
+    await request(cfg, { method: "PUT" }, { fetchImpl });
+    return { created: true };
+  } catch (e) {
+    if (/BucketAlreadyOwnedByYou|BucketAlreadyExists/.test(e.message)) return { created: false };
+    throw e;
+  }
+}
+
 /** List all objects under a prefix (follows continuation tokens). */
 export async function listObjects(cfg, prefix = "", { fetchImpl } = {}) {
   const out = [];
