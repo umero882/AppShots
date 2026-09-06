@@ -154,6 +154,18 @@ the volume to S3-compatible object storage — **Cloudflare R2** in production
 `npm run backup:restore -- appshots/appshots-….tar.gz --into /tmp/restore` to inspect,
 or without `--into` to overwrite the live data dir (stop writes first: Coolify → Stop).
 
+**Last drill — 2026-09-06, passed.** `appshots-2026-09-06T15-15-16Z.tar.gz` (83.56 MB
+compressed) restored to a scratch directory: 431 files, **214 blobs / 127.79 MB
+uncompressed**, 214 metadata files, **zero orphans** (no blob without its metadata and
+none the other way), every metadata file parseable, 1 entitlement record and 2 customer
+links, all valid JSON. An untested backup is not a backup; re-run this after any change
+to `server/tarball.js` or `server/backup-cli.js`.
+
+That snapshot predates the first live purchase by four minutes, so its entitlement
+record reads `plan=free` for an account that is now Pro — which is the system working as
+designed, not a gap: Stripe is the source of truth and `GET /api/stripe/subscription?sync=1`
+rebuilds the record from it. The blobs are the part that only exists here.
+
 ## SEO and social cards
 
 Everything a crawler or link unfurler needs is a static file in `public/`, so it
