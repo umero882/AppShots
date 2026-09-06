@@ -11,6 +11,7 @@
     "start": "node server/index.js",
     "serve": "npm run build && node server/index.js",
     "stripe:setup": "node --env-file=.env.local scripts/stripe/setup.mjs",
+    "og:image": "node scripts/og/make-og-image.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "backup": "node server/backup-cli.js backup",

@@ -1,0 +1,13 @@
+# AppShots — https://appshots.nextechlabs.tech
+# Public marketing + legal pages are crawlable; the app itself is not.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /auth/action
+Disallow: /dashboard
+Disallow: /tracker
+Disallow: /editor/
+Disallow: /settings
+
+Sitemap: https://appshots.nextechlabs.tech/sitemap.xml

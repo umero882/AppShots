@@ -14,30 +14,12 @@ import { fileURLToPath } from "url";
 import { route } from "./router.js";
 import { handleBlob } from "./blob.js";
 import { handleStripe } from "./stripe.js";
+import { contentTypeFor, cacheControlFor } from "./static.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, "..", "dist");
 const PORT = process.env.PORT || 3000;
 
-const MIME = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".gif": "image/gif",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".txt": "text/plain; charset=utf-8",
-  ".map": "application/json; charset=utf-8",
-};
 
 function readBody(req) {
   return new Promise((resolve) => {
@@ -104,15 +86,10 @@ const server = http.createServer(async (req, res) => {
     if (!isFile) {
       filePath = path.join(DIST, "index.html"); // SPA fallback
     }
-    const ext = path.extname(filePath).toLowerCase();
     const data = await readFile(filePath);
-    const cache =
-      ext === ".html" || filePath.endsWith("index.html")
-        ? "no-cache"
-        : "public, max-age=31536000, immutable";
     res.writeHead(200, {
-      "content-type": MIME[ext] || "application/octet-stream",
-      "cache-control": cache,
+      "content-type": contentTypeFor(filePath),
+      "cache-control": cacheControlFor(filePath, DIST),
     });
     res.end(data);
   } catch (e) {
