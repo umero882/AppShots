@@ -87,6 +87,8 @@ export function describeApiError(err, fallback = "Something went wrong — pleas
       const mb = Math.round((Number(info.limit) || 0) / 1048576);
       return `You've used all ${mb} MB of storage on the ${info.plan || "free"} plan. Delete something, or upgrade for more room.`;
     }
+    case "email-verification-required":
+      return "Verify your email address to use the AI features — check your inbox, or resend the link from your dashboard.";
     case "rate-limited":
       return "You're going a bit fast — wait a minute and try again.";
     case "capacity-reached":

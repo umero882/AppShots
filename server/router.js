@@ -9,7 +9,7 @@
  */
 import { capabilities, suggest, image, search, translate, appStore, statusForError } from "./handlers.js";
 import { requestPasswordReset, sendVerificationEmail } from "./authEmail.js";
-import { verifyIdToken } from "./firebaseAuth.js";
+import { verifyIdTokenClaims } from "./firebaseAuth.js";
 import { readRecord, publicEntitlement } from "./stripe.js";
 import { consume, refund } from "./usage.js";
 import { deleteAccount } from "./account.js";
@@ -44,18 +44,22 @@ function planFor(uid) {
 async function meter(key, headers, deps) {
   const kind = METERED[key];
   if (!kind) return null;
-  const verify = deps.verifyIdToken || verifyIdToken;
+  const verify = deps.verifyIdTokenClaims || verifyIdTokenClaims;
   const charge = deps.consume || consume;
   const plans = deps.planFor || planFor;
 
-  let uid;
+  let claims;
   try {
-    uid = await verify(headers.authorization || headers.Authorization);
+    claims = await verify(headers.authorization || headers.Authorization);
   } catch {
     // Never leak why the token failed — expired, forged and absent look alike.
     throw new Error("unauthorized");
   }
-  return { uid, ...charge({ uid, plan: await plans(uid), kind }) };
+  const uid = claims.sub;
+  return {
+    uid,
+    ...charge({ uid, plan: await plans(uid), kind, emailVerified: claims.email_verified }),
+  };
 }
 
 export async function route({ method, path, query = {}, body = {}, headers = {} }, deps = {}) {

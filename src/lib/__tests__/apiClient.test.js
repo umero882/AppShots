@@ -129,6 +129,12 @@ describe("describeApiError", () => {
     expect(msg).toContain("Pro");
   });
 
+  it("tells an unverified user exactly what to do", () => {
+    const msg = describeApiError(new ApiError("email-verification-required", { kind: "image" }));
+    expect(msg).toMatch(/verify your email/i);
+    expect(msg).toMatch(/resend/i);
+  });
+
   it("explains the other blocks in the user's terms", () => {
     expect(describeApiError(new ApiError("unauthorized"))).toMatch(/sign in/i);
     expect(describeApiError(new ApiError("rate-limited"))).toMatch(/fast/i);

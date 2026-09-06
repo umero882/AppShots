@@ -57,6 +57,20 @@ export const PAID_ONLY = {
   translate: { feature: "Localization sets", requiredPlan: "pro" },
 };
 
+/**
+ * Kinds a FREE account must verify its email address to use.
+ *
+ * Per-user quotas assume the user is a person. Nothing stopped one person from
+ * signing up with twenty made-up addresses and collecting twenty free
+ * allowances, and these three are the ones that spend money per call.
+ *
+ * Scoped to the free plan on purpose: the gate exists to stop throwaway
+ * accounts farming free AI, and someone who has paid is not that. Blocking a
+ * paying customer over an unclicked email link would be a worse bug than the
+ * one this prevents.
+ */
+export const VERIFY_REQUIRED = new Set(["suggest", "image", "translate"]);
+
 function num(v, dflt) {
   const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? n : dflt;
@@ -135,12 +149,18 @@ function burstExceeded(uid, now) {
  * Thrown errors carry `.info` (limit/remaining/resetAt/plan) which the router
  * merges into the JSON body so the UI can explain the block.
  */
-export function consume({ uid, plan = "free", kind, now = Date.now() }) {
+export function consume({ uid, plan = "free", kind, emailVerified, now = Date.now() }) {
   if (!KINDS.includes(kind)) throw new Error("unknown-usage-kind");
   if (!validUid(uid)) throw fail("unauthorized", {});
 
   const paid = PAID_ONLY[kind];
   if (paid && plan === "free") throw fail("plan-required", { kind, plan, ...paid });
+
+  // Only an explicit false blocks: the claim is always present on a real Firebase
+  // token, and locking someone out over a missing field would be the worse bug.
+  if (emailVerified === false && plan === "free" && VERIFY_REQUIRED.has(kind)) {
+    throw fail("email-verification-required", { kind });
+  }
 
   const limit = limitFor(plan, kind);
   const day = utcDay(now);

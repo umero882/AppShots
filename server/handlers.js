@@ -345,6 +345,7 @@ export function statusForError(code) {
   if (code === "unauthorized") return 401;
   if (code === "rate-limited" || code === "quota-exceeded") return 429;
   if (code === "plan-required") return 403;
+  if (code === "email-verification-required") return 403;
   if (code === "billing-cleanup-failed") return 502; // deletion aborted; nothing else was removed // authenticated, but the plan doesn't include it
   if (code === "capacity-reached") return 503; // instance-wide daily ceiling, not the user's fault
   return 502; // upstream/other

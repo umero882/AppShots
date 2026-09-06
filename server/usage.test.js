@@ -134,6 +134,41 @@ describe("paid-only features", () => {
   });
 });
 
+describe("email verification", () => {
+  const unverified = { emailVerified: false };
+
+  it("blocks free AI calls from an unverified address", () => {
+    for (const kind of ["suggest", "image"]) {
+      const err = grab(() => consume({ uid: `v-${kind}`, plan: "free", kind, ...unverified, now: T0 }));
+      expect(err.message, kind).toBe("email-verification-required");
+    }
+  });
+
+  it("still allows the cheap proxies — a new account should feel alive at once", () => {
+    for (const kind of ["search", "appStore"]) {
+      expect(() => consume({ uid: `v2-${kind}`, plan: "free", kind, ...unverified, now: T0 })).not.toThrow();
+    }
+  });
+
+  it("never blocks a paying customer over an unclicked link", () => {
+    expect(() => consume({ uid: "v3", plan: "pro", kind: "image", ...unverified, now: T0 })).not.toThrow();
+    expect(() => consume({ uid: "v4", plan: "team", kind: "translate", ...unverified, now: T0 })).not.toThrow();
+  });
+
+  it("allows a verified free account", () => {
+    expect(() => consume({ uid: "v5", plan: "free", kind: "image", emailVerified: true, now: T0 })).not.toThrow();
+  });
+
+  it("does not block when the claim is absent — a missing field must not lock anyone out", () => {
+    expect(() => consume({ uid: "v6", plan: "free", kind: "image", now: T0 })).not.toThrow();
+  });
+
+  it("charges nothing for a blocked call", () => {
+    grab(() => consume({ uid: "v7", plan: "free", kind: "image", ...unverified, now: T0 }));
+    expect(usageSummary("v7", "free", T0).kinds.image.used).toBe(0);
+  });
+});
+
 describe("burst limiting", () => {
   it("stops a flood inside one minute, then lets it resume", () => {
     // 'search' has a large daily allowance, so only the burst window can bite.

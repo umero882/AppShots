@@ -29,9 +29,9 @@ let deps;
 beforeEach(() => {
   vi.clearAllMocks();
   deps = {
-    verifyIdToken: vi.fn(async (header) => {
+    verifyIdTokenClaims: vi.fn(async (header) => {
       if (header !== "Bearer good-token") throw new Error("invalid-token");
-      return "uid-123";
+      return { sub: "uid-123", email_verified: true };
     }),
     planFor: vi.fn(async () => "free"),
     consume: vi.fn(({ kind, plan }) => ({ kind, plan, limit: 5, used: 1, remaining: 4, resetAt: "2026-09-07T00:00:00.000Z" })),
@@ -83,7 +83,25 @@ describe("metered endpoints charge the caller", () => {
   it.each(METERED)("%s %s charges its own kind", async (method, path, kind) => {
     const res = await route({ method, path, headers: TOKEN, query: { q: "x" } }, deps);
     expect(res.status).toBe(200);
-    expect(deps.consume).toHaveBeenCalledWith({ uid: "uid-123", plan: "free", kind });
+    expect(deps.consume).toHaveBeenCalledWith({ uid: "uid-123", plan: "free", kind, emailVerified: true });
+  });
+
+  it("passes the email_verified claim through to the quota check", async () => {
+    deps.verifyIdTokenClaims = vi.fn(async () => ({ sub: "uid-123", email_verified: false }));
+    await route({ method: "POST", path: "/api/ai/image", headers: TOKEN }, deps);
+    expect(deps.consume).toHaveBeenCalledWith(expect.objectContaining({ emailVerified: false }));
+  });
+
+  it("answers 403 when a free account has not verified its email", async () => {
+    const err = new Error("email-verification-required");
+    err.info = { kind: "image" };
+    deps.consume = vi.fn(() => {
+      throw err;
+    });
+    const res = await route({ method: "POST", path: "/api/ai/image", headers: TOKEN }, deps);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("email-verification-required");
+    expect(handlers.image).not.toHaveBeenCalled();
   });
 
   it("takes the plan from the server-side entitlement, not the request", async () => {
@@ -166,7 +184,7 @@ describe("unmetered routes", () => {
   it("serves capabilities without a token", async () => {
     const res = await route({ method: "GET", path: "/api/capabilities", headers: {} }, deps);
     expect(res.status).toBe(200);
-    expect(deps.verifyIdToken).not.toHaveBeenCalled();
+    expect(deps.verifyIdTokenClaims).not.toHaveBeenCalled();
   });
 
   it("leaves the auth-email routes open — they authenticate themselves", async () => {

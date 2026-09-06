@@ -226,8 +226,17 @@ with our keys, the last two proxy outbound requests from our IP. They are gated 
    editor shows the control locked with an upgrade link rather than hiding it, and
    locale sets already saved in a free user's project keep working — only new
    translation requests are gated.
-4. **Burst.** 20 metered requests per user per rolling minute → `429 rate-limited`.
-5. **Instance ceiling.** A whole-app daily cap per kind (images default 300) →
+4. **Verified email.** A **free** account must have a verified address to use
+   `suggest`, `image` or `translate` → `403 email-verification-required`. Per-user
+   quotas assume the user is a person, and nothing else stopped one person signing up
+   with twenty made-up addresses for twenty free allowances. Scoped to the free plan
+   deliberately: the gate exists to stop throwaway accounts farming free AI, and
+   someone who has paid is not that — blocking a paying customer over an unclicked
+   link would be a worse bug than the one it prevents. The cheap proxies (`search`,
+   `appStore`) stay open so a new account feels alive immediately, and only an
+   explicit `email_verified: false` blocks, never a missing claim.
+5. **Burst.** 20 metered requests per user per rolling minute → `429 rate-limited`.
+6. **Instance ceiling.** A whole-app daily cap per kind (images default 300) →
    `503 capacity-reached`. This is the backstop a per-user quota cannot provide:
    throwaway signups each get their own free allowance, but not their own ceiling.
 
