@@ -3,14 +3,12 @@
  * Sits beside seo.test.js, which guards robots.txt, the sitemap and the social
  * card in index.html — this one guards the pages themselves.
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
 import { describe, expect, it } from "vitest";
 
 import { PAGES, PUBLIC_ROUTES, SITEMAP_ROUTES, SITE_URL, normalisePath, seoFor } from "../lib/seo";
+import { buildSitemap } from "../../scripts/sitemap.mjs";
 
-const sitemap = readFileSync(path.resolve(process.cwd(), "public/sitemap.xml"), "utf8");
+const sitemap = buildSitemap([]);
 const sitemapPaths = Array.from(sitemap.matchAll(/<loc>([^<]+)<\/loc>/g))
   .map((m) => m[1].replace(SITE_URL, ""))
   .map((p) => (p === "/" ? "/" : p.replace(/\/$/, "")));

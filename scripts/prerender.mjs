@@ -19,6 +19,11 @@
  * description and canonical. The client bundle then hydrates the same tree, so
  * nothing about the app changes for a person with JavaScript.
  *
+ * It also renders the blog. Articles are not in the page map — they arrive in
+ * the database between deploys — so they are fetched here and each one becomes
+ * its own directory, with the article's data written into the page as JSON so
+ * hydration matches, and a copy on disk for client-side navigation.
+ *
  * It runs as part of `npm run build`, after the client and SSR builds. It FAILS
  * the build rather than writing a page that would be worse than none: an empty
  * body, a canonical that did not change, or two pages sharing a title all stop
@@ -30,6 +35,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { fetchPosts } from "./blog/posts.mjs";
+import { buildSitemap } from "./sitemap.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -77,9 +85,60 @@ function setCanonical(html, href) {
   return existing.test(html) ? html.replace(existing, tag) : html.replace(/<\/head>/i, `    ${tag}\n  </head>`);
 }
 
+/**
+ * Embed JSON in the page.
+ *
+ * `<` is escaped rather than the string being dropped in raw: a body
+ * containing the characters `</script>` would otherwise end the tag early and
+ * spill the rest of the article into the document as markup. Articles are
+ * machine-written prose about app stores, so this is unlikely and it is also
+ * the entire reason the escape exists.
+ */
+function jsonScript(id, type, data) {
+  const json = JSON.stringify(data).replace(/</g, "\\u003c");
+  return `<script id="${id}" type="${type}">${json}</script>`;
+}
+
+function beforeBodyEnd(html, snippet) {
+  return html.replace(/<\/body>/i, `    ${snippet}\n  </body>`);
+}
+
+function beforeHeadEnd(html, snippet) {
+  return html.replace(/<\/head>/i, `    ${snippet}\n  </head>`);
+}
+
 /** "/" -> dist/index.html, "/pricing" -> dist/pricing/index.html */
 function outputFor(route) {
   return route === "/" ? path.join(DIST, "index.html") : path.join(DIST, route.replace(/^\//, ""), "index.html");
+}
+
+/** What the index page and the cards need — everything except the body. */
+function listEntry(post) {
+  const { html, ...rest } = post;
+  return rest;
+}
+
+/**
+ * Structured data for an article. Google uses it to show the headline and date
+ * in a result; without it an article is just another page.
+ */
+function articleLd(post, seo, siteUrl) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.description,
+    datePublished: post.publishedAt,
+    dateModified: post.updatedAt || post.publishedAt,
+    mainEntityOfPage: { "@type": "WebPage", "@id": seo.canonical },
+    image: seo.ogImage,
+    author: { "@type": "Organization", name: "Next Tech Labs", url: siteUrl },
+    publisher: {
+      "@type": "Organization",
+      name: "AppShots",
+      url: siteUrl,
+    },
+  };
 }
 
 async function main() {
@@ -90,30 +149,73 @@ async function main() {
     fail(`the server build is missing at ${path.relative(ROOT, SSR)} — run \`vite build --ssr\` first.`);
   }
 
-  const [{ render }, seo, template] = await Promise.all([
+  const [{ render }, seoModule, template] = await Promise.all([
     import(pathToFileURL(SSR).href),
     import(pathToFileURL(path.join(ROOT, "src", "lib", "seo.js")).href),
     readFile(path.join(DIST, "index.html"), "utf8"),
   ]);
+  const { PUBLIC_ROUTES, SITE_URL, seoFor, seoForPost } = seoModule;
 
   if (!/<div id="root"><\/div>/.test(template)) {
     fail('dist/index.html has no empty <div id="root"></div> to render into.');
   }
+
+  // Articles first: the page count, the sitemap and the nav link all depend on
+  // how many there are, and a failure here should stop the build before it has
+  // written anything.
+  let posts = [];
+  try {
+    const result = await fetchPosts();
+    posts = result.posts;
+    if (result.skipped) {
+      console.warn(`\n[prerender] BLOG SKIPPED — ${result.skipped}`);
+      console.warn("[prerender] BLOG_OPTIONAL=1 is set, so the site ships without the blog.\n");
+    } else {
+      console.log(`\n[prerender] ${posts.length} published article(s) from ${result.endpoint}`);
+    }
+  } catch (error) {
+    fail(error.message);
+  }
+
+  const index = posts.map(listEntry);
+  const count = posts.length;
 
   // The untouched shell, kept for the SPA fallback. Signed-in routes
   // (/dashboard, /editor) are not prerendered, and falling back to the
   // prerendered HOMEPAGE would hand them the landing page's markup and
   // canonical - a flash of the wrong page, and a hydration mismatch React
   // has to throw away and re-render. They get an empty root instead, which
-  // is what they had before any of this.
-  await writeFile(path.join(DIST, "app-shell.html"), template, "utf8");
+  // is what they had before any of this. It still carries the article count,
+  // so a signed-in person sees the same navigation as everyone else.
+  await writeFile(
+    path.join(DIST, "app-shell.html"),
+    beforeBodyEnd(template, jsonScript("blog-data", "application/json", { count })),
+    "utf8"
+  );
 
   const seenTitles = new Map();
   const written = [];
 
-  for (const route of seo.PUBLIC_ROUTES) {
-    const meta = seo.seoFor(route);
-    if (!meta) fail(`${route} is in PUBLIC_ROUTES but seoFor() returned nothing.`);
+  const routes = [
+    ...PUBLIC_ROUTES.map((route) => ({ route, kind: "page" })),
+    ...posts.map((post) => ({ route: post.path, kind: "article", post })),
+  ];
+
+  for (const item of routes) {
+    const { route, kind, post } = item;
+    const meta = kind === "article" ? seoForPost(post) : seoFor(route);
+    if (!meta) fail(`${route} has no metadata — seoFor/seoForPost returned nothing.`);
+
+    // What this page was rendered from. The same object is written into the
+    // HTML below, which is what lets React hydrate the article the server
+    // rendered instead of replacing it with a loading state.
+    const pageData =
+      kind === "article"
+        ? { count, post }
+        : route === "/blog"
+          ? { count, index }
+          : { count };
+    globalThis.__BLOG__ = pageData;
 
     let markup;
     try {
@@ -134,6 +236,18 @@ async function main() {
     html = setMeta(html, "property", "og:description", meta.ogDescription);
     html = setMeta(html, "name", "twitter:title", meta.ogTitle);
     html = setMeta(html, "name", "twitter:description", meta.ogDescription);
+    if (kind === "article") {
+      html = setMeta(html, "property", "og:type", "article");
+      html = setMeta(html, "property", "og:image", meta.ogImage);
+      html = setMeta(html, "name", "twitter:image", meta.ogImage);
+      html = setMeta(html, "property", "article:published_time", meta.publishedAt || "");
+      html = setMeta(html, "property", "article:modified_time", meta.updatedAt || meta.publishedAt || "");
+      html = beforeHeadEnd(
+        html,
+        jsonScript("article-ld", "application/ld+json", articleLd(post, meta, SITE_URL))
+      );
+    }
+    html = beforeBodyEnd(html, jsonScript("blog-data", "application/json", pageData));
 
     // Prove the rewrite landed, rather than trusting the regexes.
     const wroteCanonical = (html.match(/<link[^>]*rel="canonical"[^>]*href="([^"]+)"/i) || [])[1];
@@ -145,7 +259,17 @@ async function main() {
       fail(`${route} kept the title ${JSON.stringify(wroteTitle)} — the rewrite missed.`);
     }
     if (seenTitles.has(wroteTitle)) {
-      fail(`${route} shares a title with ${seenTitles.get(wroteTitle)} — two pages competing for one result.`);
+      const other = seenTitles.get(wroteTitle);
+      // A duplicate title between two of OUR pages is a build bug and stops
+      // everything. Between two articles it is an editorial problem — the
+      // writer produced two headlines that will compete for one result — and
+      // blocking a deploy over the wording of a blog post is the wrong lever.
+      // It is said loudly instead, and blog-retitle in PyRunner is the fix.
+      if (kind === "article") {
+        console.warn(`[prerender] WARNING: ${route} shares a title with ${other} — they will compete.`);
+      } else {
+        fail(`${route} shares a title with ${other} — two pages competing for one result.`);
+      }
     }
     seenTitles.set(wroteTitle, route);
 
@@ -154,13 +278,37 @@ async function main() {
     await writeFile(out, html, "utf8");
     written.push({ route, file: path.relative(ROOT, out), bytes: html.length, words: countWords(markup) });
   }
+  globalThis.__BLOG__ = undefined;
+
+  // The article data as files, for a reader who arrives by clicking rather than
+  // by loading a URL. Never needed on a first paint — the page they land on
+  // already contains its own article.
+  if (posts.length) {
+    await mkdir(path.join(DIST, "blog", "posts"), { recursive: true });
+    await writeFile(path.join(DIST, "blog", "index.json"), JSON.stringify(index), "utf8");
+    for (const post of posts) {
+      await writeFile(
+        path.join(DIST, "blog", "posts", `${post.slug}.json`),
+        JSON.stringify(post),
+        "utf8"
+      );
+    }
+  }
+
+  const sitemap = buildSitemap(posts);
+  await writeFile(path.join(DIST, "sitemap.xml"), sitemap, "utf8");
+  const sitemapCount = (sitemap.match(/<loc>/g) || []).length;
 
   const width = Math.max(...written.map((w) => w.route.length));
   console.log("\n[prerender] every public page now ships its own HTML:\n");
   for (const w of written) {
     console.log(`  ${w.route.padEnd(width)}  ${String(w.words).padStart(5)} words  ${(w.bytes / 1024).toFixed(1).padStart(6)} KB  ${w.file}`);
   }
-  console.log(`\n[prerender] ${written.length} page(s), each with its own title and canonical, plus app-shell.html for the signed-in routes.\n`);
+  console.log(
+    `\n[prerender] ${written.length} page(s), each with its own title and canonical, ` +
+      `plus app-shell.html for the signed-in routes.`
+  );
+  console.log(`[prerender] sitemap.xml lists ${sitemapCount} URL(s).\n`);
 }
 
 function countWords(markup) {

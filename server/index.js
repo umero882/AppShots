@@ -14,7 +14,7 @@ import { fileURLToPath } from "url";
 import { route } from "./router.js";
 import { handleBlob } from "./blob.js";
 import { handleStripe } from "./stripe.js";
-import { contentTypeFor, cacheControlFor } from "./static.js";
+import { contentTypeFor, cacheControlFor, fallbackStatus } from "./static.js";
 import { captureException, sentryConfigured, installProcessHandlers } from "./sentry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -120,14 +120,18 @@ const server = http.createServer(async (req, res) => {
         isFile = true;
       }
     }
+    let status = 200;
     if (!isFile) {
       // The empty shell, not the prerendered homepage: a signed-in route must
       // not be handed the landing page's markup and canonical.
       const shell = path.join(DIST, "app-shell.html");
       filePath = existsSync(shell) ? shell : path.join(DIST, "index.html");
+      // Every article is prerendered, so a /blog/ path that reached here is not
+      // one. See fallbackStatus.
+      status = fallbackStatus(u.pathname);
     }
     const data = await readFile(filePath);
-    res.writeHead(200, {
+    res.writeHead(status, {
       "content-type": contentTypeFor(filePath),
       "cache-control": cacheControlFor(filePath, DIST),
     });

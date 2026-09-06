@@ -8,12 +8,20 @@ import { readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { buildSitemap } from "../../scripts/sitemap.mjs";
+
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (...p) => readFileSync(path.join(ROOT, ...p), "utf8");
 const ORIGIN = "https://appshots.nextechlabs.tech";
 
 const robots = read("public", "robots.txt");
-const sitemap = read("public", "sitemap.xml");
+// The sitemap stopped being a file in public/ when the blog arrived: articles
+// appear in the database between deploys, so the build has to produce it. The
+// generator is what ships, so the generator is what these rules check —
+// asserting against a checked-in copy would only prove the copy was tidy.
+// Here with no articles, which is the static surface these rules are about;
+// blog.test.js covers what happens once there are some.
+const sitemap = buildSitemap([]);
 const indexHtml = read("index.html");
 const appJsx = read("src", "App.jsx");
 

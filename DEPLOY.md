@@ -23,15 +23,45 @@ carried the **homepage's canonical** — which does not hint, it names the page 
 index instead. Five real pages were asking to be dropped.
 
 Each public route is listed once, in `src/lib/seo.js`, with its title,
-description and canonical. Adding a public page means adding it there **and** to
-`public/sitemap.xml`; a test holds the two lists together. The prerender fails
-the build if a page renders empty, if a canonical did not change, or if two
-pages share a title — a prerender that quietly emitted shells again would look
-exactly like a successful build.
+description and canonical. Adding a public page means adding it there — the
+sitemap is generated from the same list (`scripts/sitemap.mjs`), so the two can
+no longer disagree. The prerender fails the build if a page renders empty, if a
+canonical did not change, or if two pages share a title — a prerender that
+quietly emitted shells again would look exactly like a successful build.
 
 Signed-in routes (`/dashboard`, `/editor`) are deliberately NOT prerendered.
 They fall back to `dist/app-shell.html`, an empty root, so the dashboard is
 never handed the landing page's markup and canonical.
+
+## The blog
+
+Articles live in the AppShots blog Hasura (`deploy/hasura/`) and are written
+there by the PyRunner pipeline. Step 3 above fetches the **published** ones —
+anonymously, no credential — renders each one's markdown to HTML, and gives it
+its own page at `/blog/<slug>`, with its own title, canonical and `BlogPosting`
+structured data. The article data is also written into the page as JSON so
+React hydrates the article the server rendered rather than replacing it, and to
+`dist/blog/posts/<slug>.json` for readers who arrive by clicking rather than by
+loading a URL.
+
+**An article goes live on the next deploy, not the moment it is published.** The
+blog is static files: Hasura being down cannot take it offline, and no reader
+ever waits on a database. The cost is that publishing needs a rebuild — trigger
+Coolify's deploy webhook for this resource once an article is approved.
+
+Two behaviours worth knowing before they surprise you:
+
+- **A failed fetch stops the build.** The tempting alternative is to warn and
+  carry on, which is how the same blog silently vanished from a sibling
+  project: the fetch failed, the build passed, the deploy went out, and every
+  article 404'd until a person noticed. Set `BLOG_OPTIONAL=1` to ship without
+  the blog on purpose. Zero published articles is not a failure — it is where
+  the blog starts, and `/blog` stays out of the sitemap until there is
+  something on it.
+- **Raw HTML in an article body is dropped, not escaped or rendered.**
+  `scripts/blog/markdown.mjs` is the only thing standing between a compromised
+  publishing credential and stored XSS on our own origin, and article bodies
+  have no legitimate use for markup. Unsafe link and image URLs go the same way.
 
 ## One-time setup in Coolify
 

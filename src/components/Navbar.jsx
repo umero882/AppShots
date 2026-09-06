@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Menu, X, LogOut, LayoutGrid, Radar, Settings as SettingsIcon } from "lucide-react";
 import Logo from "./Logo";
 import { useAuth } from "../lib/auth";
+import { publishedCount } from "../lib/blog";
 
 /** First letters of up to two name words, for the avatar chip. */
 function navInitials(name = "") {
@@ -24,6 +25,11 @@ export default function Navbar() {
     { label: "How it works", href: "/#how" },
     { label: "Inspiration", href: "/inspiration" },
     { label: "Pricing", href: "/pricing" },
+    // Only once there is something to read. The link appears by itself with the
+    // first published article, and until then it does not send anyone to an
+    // empty page. The count is written into every prerendered page, so this
+    // renders the same on the server and in the browser.
+    ...(publishedCount() > 0 ? [{ label: "Blog", href: "/blog" }] : []),
   ];
 
   async function handleSignOut() {

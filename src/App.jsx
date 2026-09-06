@@ -6,6 +6,8 @@ import Signup from "./pages/Signup";
 import AuthAction from "./pages/AuthAction";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/BlogPost";
 import Dashboard from "./pages/Dashboard";
 import Inspiration from "./pages/Inspiration";
 import Tracker from "./pages/Tracker";
@@ -23,6 +25,8 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/inspiration" element={<Inspiration />} />
+        <Route path="/blog" element={<Blog />} />
+        <Route path="/blog/:slug" element={<BlogPost />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/auth/action" element={<AuthAction />} />

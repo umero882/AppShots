@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import Logo from "./Logo";
+import { publishedCount } from "../lib/blog";
 
 export default function Footer() {
   const cols = [
@@ -10,6 +11,8 @@ export default function Footer() {
         { label: "How it works", href: "/#how" },
         { label: "Pricing", to: "/pricing" },
         { label: "Inspiration", to: "/inspiration" },
+        // Appears with the first published article — see Navbar.
+        ...(publishedCount() > 0 ? [{ label: "Blog", to: "/blog" }] : []),
       ],
     },
     {

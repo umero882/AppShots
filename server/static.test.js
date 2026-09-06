@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import path from "path";
-import { contentTypeFor, cacheControlFor } from "./static.js";
+import { contentTypeFor, cacheControlFor, fallbackStatus } from "./static.js";
 
 const DIST = path.join("/app", "dist");
 const inDist = (...p) => path.join(DIST, ...p);
@@ -43,5 +43,25 @@ describe("cacheControlFor", () => {
 
   it("does not treat a name merely starting with 'assets' as hashed", () => {
     expect(cacheControlFor(inDist("assets-legacy.js"), DIST)).toBe("public, max-age=86400");
+  });
+});
+
+describe("fallbackStatus", () => {
+  it("keeps signed-in routes at 200 — they exist, they are just not prerendered", () => {
+    for (const p of ["/dashboard", "/editor/abc123", "/settings", "/tracker", "/auth/action"]) {
+      expect(fallbackStatus(p), p).toBe(200);
+    }
+  });
+
+  it("404s an article that is not there, instead of a soft 404", () => {
+    // Every published article is prerendered into its own directory, so a
+    // /blog/ path that fell through to the shell is not an article. Saying 200
+    // invites a crawler to index a renamed or mistyped slug as a real page.
+    expect(fallbackStatus("/blog/renamed-last-month")).toBe(404);
+    expect(fallbackStatus("/blog/posts/gone.json")).toBe(404);
+  });
+
+  it("does not catch a path that merely starts with the word", () => {
+    expect(fallbackStatus("/blogging-tips")).toBe(200);
   });
 });

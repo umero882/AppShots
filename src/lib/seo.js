@@ -59,6 +59,17 @@ export const PAGES = {
     description:
       "Sign up free and make your first set of App Store and Google Play screenshots today. No card required, and your projects save as you work.",
   },
+  // Kept out of the sitemap here and added back by the sitemap generator, but
+  // only once at least one article is published. An empty index is a thin page
+  // and there is no sense inviting a crawler to it before it has anything to
+  // say. Every article's own URL is added the same way — they do not exist
+  // until the build reads them, so they cannot live in a static map.
+  "/blog": {
+    title: "AppShots Blog — App Store Screenshot Guides",
+    description:
+      "Guides on designing App Store and Google Play screenshots that convert — sizes, layouts, copy, and the mistakes that quietly cost installs.",
+    sitemap: false,
+  },
   // Linked from every page, so Google crawls it whatever the sitemap says.
   // It is prerendered for that reason and kept OUT of the sitemap for
   // another: nobody searches for a login page, and advertising one only
@@ -118,4 +129,47 @@ export function seoFor(pathname) {
     ogImageAlt: DEFAULT_OG_ALT,
     siteName: SITE_NAME,
   };
+}
+
+/** The suffix that tells a searcher whose article this is. */
+const TITLE_SUFFIX = " — AppShots";
+
+/**
+ * The head for one article, in the same shape `seoFor` returns so the
+ * prerender and SeoSync can treat the two identically.
+ *
+ * The title is the article's own. The site name is appended only when the
+ * result still fits in the ~60 characters a result shows — a truncated brand
+ * name at the end of a cut-off headline helps nobody, and the headline is the
+ * part that has to survive.
+ */
+export function seoForPost(post) {
+  if (!post?.slug) return null;
+  const path = `/blog/${post.slug}`;
+  const withSuffix = `${post.title}${TITLE_SUFFIX}`;
+  return {
+    path,
+    title: withSuffix.length <= 60 ? withSuffix : post.title,
+    description: post.description || "",
+    canonical: `${SITE_URL}${path}`,
+    ogTitle: post.title,
+    ogDescription: post.description || "",
+    // An article's own cover if it has one — a card with the article's image
+    // is shared far more than a card with the same generic cover as every
+    // other page. Relative paths are made absolute: a relative og:image does
+    // not unfurl anywhere.
+    ogImage: absoluteImage(post.coverImageUrl) || OG_IMAGE,
+    ogImageAlt: post.title,
+    siteName: SITE_NAME,
+    type: "article",
+    publishedAt: post.publishedAt || null,
+    updatedAt: post.updatedAt || null,
+  };
+}
+
+function absoluteImage(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("/")) return `${SITE_URL}${url}`;
+  return null;
 }
