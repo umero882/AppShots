@@ -90,3 +90,14 @@ npm run build
 PORT=3000 node server/index.js
 # open http://localhost:3000
 ```
+
+## Push-to-deploy (how it's wired)
+
+The Coolify app pulls the repo with a **deploy key**, not a GitHub App, so GitHub has
+to notify Coolify itself. A repo webhook posts `push` events (JSON) to
+`https://coolify.nextechlabs.tech/webhooks/source/github/events/manual`, signed with
+the secret stored on the app under **Webhooks → GitHub** (`manual_webhook_secret_github`).
+With that in place `git push origin main` deploys automatically; the Coolify API
+(`GET /deploy?uuid=…&force=true`) or the dashboard's **Redeploy** button remain as
+manual fallbacks. If pushes stop deploying, check the webhook's recent deliveries on
+GitHub (Settings → Webhooks) — a non-200 response from Coolify is the usual tell.
