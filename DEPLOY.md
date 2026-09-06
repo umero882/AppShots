@@ -46,8 +46,18 @@ loading a URL.
 
 **An article goes live on the next deploy, not the moment it is published.** The
 blog is static files: Hasura being down cannot take it offline, and no reader
-ever waits on a database. The cost is that publishing needs a rebuild — trigger
-Coolify's deploy webhook for this resource once an article is approved.
+ever waits on a database. The cost is that publishing needs a rebuild, and
+PyRunner's `blog-deploy` script is what asks for it — every ten minutes it
+compares the published articles against `/blog/index.json`, which is this build
+saying what it shipped, and calls Coolify's deploy API when the two differ. So
+an approved article appears within about ten minutes, and a build that failed
+is noticed and retried rather than leaving the site quietly behind.
+
+That deploy URL **must** carry `force=true`. Nothing in the repository changed
+between one article and the next, so every layer of the image is a cache hit
+including the one that fetches the articles: the deploy would finish green
+having shipped the articles it already had. `blog-deploy` says so on every run
+if the URL is missing it.
 
 Two behaviours worth knowing before they surprise you:
 
