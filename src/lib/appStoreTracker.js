@@ -4,19 +4,18 @@
  * up a competitor app's own App Store listing (screenshots + metadata) for
  * research and inspiration.
  *
+ * Metered server-side, so the call carries the signed-in user's ID token.
+ *
  * @returns {Promise<{ results: Array<object>, country: string }>}
  */
+import { apiFetch } from "./apiClient";
+
 export async function searchApps({ q = "", id = "", country = "us" } = {}) {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (id) params.set("id", id);
   if (country) params.set("country", country);
-  const resp = await fetch(`/api/app-store?${params.toString()}`);
-  if (!resp.ok) {
-    const code = resp.status;
-    throw new Error(code === 400 ? "bad-query" : "unavailable");
-  }
-  return resp.json();
+  return apiFetch(`/api/app-store?${params.toString()}`);
 }
 
 // Common App Store storefronts for the country picker.

@@ -343,6 +343,7 @@ export function statusForError(code) {
   if (code === "github-bad-url" || code === "store-bad-query" || code === "invalid-email") return 400;
   if (code === "not-configured") return 501; // self-sent reset email not set up → client falls back to Firebase's
   if (code === "unauthorized") return 401;
-  if (code === "rate-limited") return 429;
+  if (code === "rate-limited" || code === "quota-exceeded") return 429;
+  if (code === "capacity-reached") return 503; // instance-wide daily ceiling, not the user's fault
   return 502; // upstream/other
 }

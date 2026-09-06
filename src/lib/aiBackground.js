@@ -8,6 +8,8 @@
  * Pure helpers (gradient CSS, model list, etc.) come from ./aiCore, shared with
  * the server.
  */
+import { apiFetch } from "./apiClient";
+
 export { aiGradientCss, AI_MODELS, parseGithubUrl } from "./aiCore";
 
 /** Cached capability flags from the server (booleans, never keys). */
@@ -22,14 +24,10 @@ export function getCapabilities() {
 }
 
 async function postJson(path, body) {
-  const resp = await fetch(path, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(data.error || "request-failed");
-  return data;
+  // apiFetch attaches the Firebase ID token: these endpoints are metered and
+  // reject anonymous callers. It throws ApiError, which carries the quota
+  // details describeApiError() turns into a message.
+  return apiFetch(path, { method: "POST", body });
 }
 
 /**

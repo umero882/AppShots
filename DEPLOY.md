@@ -161,3 +161,46 @@ checks the real PNG header against them.
 bundles get `immutable`; `.html/.txt/.xml/.json/.webmanifest` are `no-cache` and
 named images get a day. Anything with a stable URL whose contents change on deploy
 must stay out of the immutable branch.
+
+## Metered API endpoints
+
+`/api/ai/suggest`, `/api/ai/image`, `/api/ai/translate`, `/api/search` and
+`/api/app-store` all spend money — the first three call Anthropic/OpenAI/Stability
+with our keys, the last two proxy outbound requests from our IP. They are gated in
+`server/router.js`:
+
+1. **Authentication.** A valid Firebase ID token is required
+   (`Authorization: Bearer …`); the browser attaches it via `src/lib/apiClient.js`.
+   No token, expired token, forged token → `401 unauthorized`, and the upstream call
+   is never made. `/api/capabilities` stays open (it returns booleans only).
+2. **Quota.** One unit is charged against the caller's daily allowance *before* the
+   upstream request, using the plan from their server-owned Stripe entitlement —
+   never a plan claimed by the client. Defaults per day (`server/usage.js`):
+
+   | | suggest | image | translate | search | appStore |
+   |---|---|---|---|---|---|
+   | free | 20 | 5 | 30 | 100 | 100 |
+   | pro | 200 | 60 | 400 | 600 | 600 |
+   | team | 600 | 200 | 1200 | 2000 | 2000 |
+
+3. **Burst.** 20 metered requests per user per rolling minute → `429 rate-limited`.
+4. **Instance ceiling.** A whole-app daily cap per kind (images default 300) →
+   `503 capacity-reached`. This is the backstop a per-user quota cannot provide:
+   throwaway signups each get their own free allowance, but not their own ceiling.
+
+If the upstream call fails after being charged, the unit is refunded — our outage
+must not eat someone's allowance.
+
+Counters are JSON files under `USAGE_DIR` (default `<cwd>/data/usage` →
+`/app/data/usage` in the container, on the persistent volume, so they survive
+redeploys and land in the nightly backup). They are keyed by UTC day; a new day
+starts a new bucket, so there is nothing to reset or clean up. Tuning knobs are in
+`.env.example` under *Usage quotas*.
+
+Blocked calls surface in the UI through `describeApiError()`, which names what ran
+out, the limit, when it resets, and offers Pro to free users.
+
+**Local development:** the metered endpoints need a signed-in Firebase user. That is
+already true of the pages that call them (the editor and tracker are behind
+`ProtectedRoute`), but running with `VITE_FIREBASE_DISABLED=1` will make them 401 —
+by design; the gate fails closed.

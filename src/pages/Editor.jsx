@@ -15,6 +15,7 @@ import {
 } from "../lib/galleryTemplates";
 import { BG_PRESETS, BG_CATEGORIES } from "../lib/backgroundImages";
 import { searchImages } from "../lib/imageSearch";
+import { describeApiError } from "../lib/apiClient";
 import {
   getCapabilities, suggestBackgrounds, generateImage, aiGradientCss, AI_MODELS, translateTexts,
 } from "../lib/aiBackground";
@@ -515,7 +516,7 @@ export default function Editor() {
       setTranslateErr(
         e.message === "no-llm-key"
           ? "Set ANTHROPIC_API_KEY in .env.local and restart the dev server."
-          : "Translation failed — please try again."
+          : describeApiError(e, "Translation failed — please try again.")
       );
     } finally {
       setTranslating(false);
@@ -1377,8 +1378,8 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
       setResults(items);
       setProvider(prov);
       if (items.length === 0) setSearchErr(`No results for “${term}”. Try another search.`);
-    } catch {
-      setSearchErr("Search is unavailable right now — please try again.");
+    } catch (e) {
+      setSearchErr(describeApiError(e, "Search is unavailable right now — please try again."));
     } finally {
       setSearching(false);
     }
@@ -1812,7 +1813,7 @@ function AiBackgroundPanel({ state, update, bg, onScreen, caps }) {
       setError(
         e.message === "no-llm-key"
           ? "Set ANTHROPIC_API_KEY in .env.local and restart the dev server."
-          : "Couldn't reach the AI — please try again."
+          : describeApiError(e, "Couldn't reach the AI — please try again.")
       );
     } finally {
       setLoading(false);
@@ -1844,8 +1845,8 @@ function AiBackgroundPanel({ state, update, bg, onScreen, caps }) {
     try {
       const dataUrl = await generateImage({ concept: c, prompt: prompt.trim() });
       onScreen({ background: { ...bg, type: "image", image: dataUrl } });
-    } catch {
-      setImgErr("Image generation failed — try again.");
+    } catch (e) {
+      setImgErr(describeApiError(e, "Image generation failed — try again."));
     } finally {
       setGenId(null);
     }
@@ -2328,8 +2329,8 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
       setResults(items);
       setProvider(prov);
       if (!items.length) setPhotoErr(`No results for “${t}”.`);
-    } catch {
-      setPhotoErr("Search is unavailable right now.");
+    } catch (e) {
+      setPhotoErr(describeApiError(e, "Search is unavailable right now."));
     } finally {
       setSearching(false);
     }

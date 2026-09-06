@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Search, Loader2, Star, ExternalLink, Smartphone, Tablet, Radar } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { searchApps, STOREFRONTS } from "../lib/appStoreTracker";
+import { describeApiError } from "../lib/apiClient";
 
 /**
  * App Store tracker: research a competitor's live App Store listing — their real
@@ -27,7 +28,11 @@ export default function Tracker() {
       setResults(data.results);
       if (!data.results.length) setErr(`No App Store results for “${term}”.`);
     } catch (ex) {
-      setErr(ex.message === "bad-query" ? "Enter an app name or App Store link." : "The App Store lookup is unavailable right now — try again.");
+      setErr(
+        ex.code === "store-bad-query"
+          ? "Enter an app name or App Store link."
+          : describeApiError(ex, "The App Store lookup is unavailable right now — try again."),
+      );
       setResults([]);
     } finally {
       setLoading(false);
