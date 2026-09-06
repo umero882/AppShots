@@ -264,3 +264,58 @@ keeping them — `/privacy` → *How long we keep it* says so, and the confirm d
 repeats it. Removed data may also sit in the nightly backup for up to 30 days.
 
 The endpoint is never metered: nobody should be rate-limited out of leaving.
+
+## Error reporting and uptime
+
+Two different questions: *did something break for a user?* (Sentry) and *is the site
+answering at all?* (the uptime check). One cannot answer the other — a dead container
+sends no error reports.
+
+### Errors → Sentry
+
+`server/sentry.js` speaks Sentry's HTTP envelope API directly. There is no SDK because
+the runtime image ships **no node_modules** (see the Dockerfile), and the same reason
+rules out `@sentry/react` bloating the browser bundle — the client posts to our own
+`/api/client-error`, which forwards server-side with the signed-in user attached.
+
+Reporting is off until `SENTRY_DSN` is set, so dev and tests stay silent. What gets
+reported:
+
+| Source | Wired in |
+|---|---|
+| Any unhandled throw in the HTTP server | `server/index.js` outer catch |
+| API errors that map to 5xx (never 4xx — those are the caller's) | `server/router.js` |
+| `uncaughtException` / `unhandledRejection` | `installProcessHandlers()` |
+| React render crashes | `src/components/ErrorBoundary.jsx` |
+| `window.onerror`, unhandled promise rejections | `src/lib/errorReporter.js` |
+
+The rules it lives by: never throw, never block a response, never queue without bound
+(30 events/minute, then it drops and reports the count), and strip credentials —
+`authorization`, `cookie`, `stripe-signature` are redacted and query strings are cut
+off entirely, because that is where `oobCode` and emails live. Browser reports are
+deduped and capped at 5 per session; the server caps the endpoint at 60/minute.
+
+### Uptime
+
+`npm run uptime` (`scripts/ops/uptime-check.mjs`) — **run it somewhere other than the
+app's own server.** A monitor that dies with the thing it monitors reports nothing.
+
+It probes liveness (`/healthz`), readiness (`/readyz`), the app shell (`/`) and the API
+gate (`/api/ai/suggest` must answer 401 — an API that started serving anonymous AI
+calls is an outage of a different kind). It emails through the same Hostinger mailbox
+the app already uses, so no third-party monitoring account is needed, and it alerts on
+*transitions only*: one mail going down, one coming back. Alerts that arrive every five
+minutes get filtered, and then they are not alerts.
+
+Env: `ALERT_EMAIL_TO` plus the `SMTP_*` block. Exit code is 0 up / 1 down, so any
+scheduler can act on it. Two sensible homes: Windows Task Scheduler on the office PC
+(fine, but it only watches while that PC is on) or a cron on one of the other VPSes,
+which is the real answer.
+
+### `/healthz` vs `/readyz`
+
+`/healthz` is liveness: dependency-free, 200 whenever the process answers. Docker's
+HEALTHCHECK restarts the container on failure, so it must never go red for a reason a
+restart cannot fix. `/readyz` is readiness: it writes and deletes a probe file to prove
+the **persistent volume is actually mounted and writable**, which is the failure that
+otherwise looks perfectly healthy while silently losing uploads and entitlements.

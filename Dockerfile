@@ -25,6 +25,10 @@ ENV PORT=3000
 # See FIREBASE-SETUP.md / STRIPE-SETUP.md.
 ENV BLOB_DIR=/app/data/blobs
 ENV SUB_DIR=/app/data/subscriptions
+# Quota counters and analytics events — same volume, explicit so a future change
+# to WORKDIR cannot quietly move them off it.
+ENV USAGE_DIR=/app/data/usage
+ENV DATA_DIR=/app/data
 
 # Only what the runtime needs: built SPA, the proxy server, the shared pure
 # helpers it imports, and package.json (for "type": "module"). No node_modules.

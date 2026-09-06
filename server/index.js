@@ -8,16 +8,19 @@
  */
 import http from "http";
 import { readFile } from "fs/promises";
-import { existsSync, statSync } from "fs";
+import { existsSync, statSync, mkdirSync, writeFileSync, unlinkSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { route } from "./router.js";
 import { handleBlob } from "./blob.js";
 import { handleStripe } from "./stripe.js";
 import { contentTypeFor, cacheControlFor } from "./static.js";
+import { captureException, sentryConfigured, installProcessHandlers } from "./sentry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, "..", "dist");
+// Where the persistent volume is mounted; BLOB_DIR/SUB_DIR/USAGE_DIR all live here.
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const PORT = process.env.PORT || 3000;
 
 
@@ -45,9 +48,32 @@ const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, "http://localhost");
 
+    // Liveness: is the process answering? Deliberately cheap and dependency-free
+    // — the Docker HEALTHCHECK restarts the container when this fails, so it must
+    // not go red for a reason a restart cannot fix.
     if (u.pathname === "/healthz") {
       res.writeHead(200, { "content-type": "text/plain" });
       res.end("ok");
+      return;
+    }
+
+    // Readiness: can it actually serve? Checks the things whose absence makes the
+    // app useless but the process healthy — the persistent volume above all,
+    // because a missing mount loses uploads and entitlements silently.
+    if (u.pathname === "/readyz") {
+      const checks = { dataDir: false, blobDir: false, stripe: !!process.env.STRIPE_SECRET_KEY, sentry: sentryConfigured() };
+      try {
+        const probe = path.join(DATA_DIR, ".readyz");
+        mkdirSync(DATA_DIR, { recursive: true });
+        writeFileSync(probe, String(Date.now()));
+        unlinkSync(probe);
+        checks.dataDir = true;
+      } catch {
+        checks.dataDir = false;
+      }
+      checks.blobDir = existsSync(process.env.BLOB_DIR || path.join(DATA_DIR, "blobs"));
+      const ready = checks.dataDir;
+      sendJson(res, ready ? 200 : 503, { ready, checks });
       return;
     }
 
@@ -107,9 +133,18 @@ const server = http.createServer(async (req, res) => {
     });
     res.end(data);
   } catch (e) {
+    // Nothing below this point can report itself — this is the last catch before
+    // the socket, so it is the one that must tell us.
+    captureException(e, {
+      tags: { scope: "http" },
+      request: { url: req.url, method: req.method, headers: req.headers },
+    });
+    console.error("server error:", req.method, req.url, e);
     sendJson(res, 500, { error: "server-error", detail: String(e?.message || e) });
   }
 });
+
+installProcessHandlers();
 
 server.listen(PORT, () => {
   console.log(`AppShots server listening on :${PORT}`);

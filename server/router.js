@@ -13,6 +13,8 @@ import { verifyIdToken } from "./firebaseAuth.js";
 import { readRecord, publicEntitlement } from "./stripe.js";
 import { consume, refund } from "./usage.js";
 import { deleteAccount } from "./account.js";
+import { reportClientError } from "./clientErrors.js";
+import { captureException } from "./sentry.js";
 
 const ok = (body) => ({ status: 200, body });
 
@@ -74,13 +76,24 @@ export async function route({ method, path, query = {}, body = {}, headers = {} 
     // Authenticates itself (the caller's own token decides whose account it is)
     // and is never metered — nobody should be rate-limited out of leaving.
     if (key === "DELETE /api/account") return ok(await (deps.deleteAccount || deleteAccount)(headers, deps));
+    // Browser-side crashes. Unmetered and open (a crash can happen before sign-in)
+    // but rate-limited and size-capped inside the handler.
+    if (key === "POST /api/client-error") return ok(await (deps.reportClientError || reportClientError)(body, headers, deps));
     return { status: 404, body: { error: "not-found" } };
   } catch (e) {
     // The upstream failed (or was misconfigured) after we charged the caller —
     // an outage of ours must not eat someone's daily allowance.
     if (charged) (deps.refund || refund)(charged);
+    // 5xx means we broke, not the caller — those are the ones worth waking up for.
+    const status = statusForError(e.message);
+    if (status >= 500) {
+      (deps.captureException || captureException)(e, {
+        tags: { scope: "api", route: key },
+        extra: { code: e.message },
+      });
+    }
     // `.info` carries the quota details (limit, remaining, resetAt) so the UI can
     // say what ran out and when it comes back.
-    return { status: statusForError(e.message), body: { error: e.message, ...(e.info || {}) } };
+    return { status, body: { error: e.message, ...(e.info || {}) } };
   }
 }
