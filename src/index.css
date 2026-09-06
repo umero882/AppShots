@@ -72,3 +72,25 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .animate-blob { animation: none; }
 }
+
+/* Long-form legal documents (Privacy Policy, Terms) — see components/LegalPage.jsx */
+@layer components {
+  .legal h2 {
+    @apply mt-10 text-xl font-bold text-white;
+  }
+  .legal h3 {
+    @apply mt-6 text-base font-semibold text-white;
+  }
+  .legal p {
+    @apply mt-3 text-[15px] leading-relaxed text-slate-300;
+  }
+  .legal ul {
+    @apply mt-3 list-disc space-y-2 pl-5 text-[15px] leading-relaxed text-slate-300;
+  }
+  .legal a {
+    @apply text-brand-300 underline-offset-2 hover:text-brand-200 hover:underline;
+  }
+  .legal strong {
+    @apply font-semibold text-slate-100;
+  }
+}

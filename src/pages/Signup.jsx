@@ -82,6 +82,12 @@ export default function Signup() {
         <button className="btn-primary w-full" disabled={busy}>
           {busy ? "Creating account…" : "Create account"}
         </button>
+        <p className="text-center text-xs text-slate-500">
+          By creating an account you agree to the{" "}
+          <Link to="/terms" className="font-semibold text-slate-400 hover:text-white">Terms of Service</Link>{" "}
+          and{" "}
+          <Link to="/privacy" className="font-semibold text-slate-400 hover:text-white">Privacy Policy</Link>.
+        </p>
       </form>
     </AuthShell>
   );
