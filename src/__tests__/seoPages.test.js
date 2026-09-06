@@ -8,7 +8,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { PAGES, PUBLIC_ROUTES, SITE_URL, normalisePath, seoFor } from "../lib/seo";
+import { PAGES, PUBLIC_ROUTES, SITEMAP_ROUTES, SITE_URL, normalisePath, seoFor } from "../lib/seo";
 
 const sitemap = readFileSync(path.resolve(process.cwd(), "public/sitemap.xml"), "utf8");
 const sitemapPaths = Array.from(sitemap.matchAll(/<loc>([^<]+)<\/loc>/g))
@@ -20,7 +20,17 @@ describe("the page map and the sitemap", () => {
     // A page in one list and not the other is the failure that put the wrong
     // canonical on five pages: the sitemap invited Google in, and the page it
     // arrived at asked to be indexed as the homepage instead.
-    expect([...PUBLIC_ROUTES].sort()).toEqual([...sitemapPaths].sort());
+    expect([...SITEMAP_ROUTES].sort()).toEqual([...sitemapPaths].sort());
+  });
+});
+
+describe("prerendered but unlisted pages", () => {
+  it("still get their own canonical, so they never point at the homepage", () => {
+    const unlisted = PUBLIC_ROUTES.filter((r) => !SITEMAP_ROUTES.includes(r));
+    expect(unlisted).toContain("/login");
+    for (const route of unlisted) {
+      expect(seoFor(route).canonical).toBe(`${SITE_URL}${route}`);
+    }
   });
 });
 

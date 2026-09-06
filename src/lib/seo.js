@@ -59,6 +59,16 @@ export const PAGES = {
     description:
       "Sign up free and make your first set of App Store and Google Play screenshots today. No card required, and your projects save as you work.",
   },
+  // Linked from every page, so Google crawls it whatever the sitemap says.
+  // It is prerendered for that reason and kept OUT of the sitemap for
+  // another: nobody searches for a login page, and advertising one only
+  // invites it to compete with the pages that should rank.
+  "/login": {
+    title: "Sign in to AppShots",
+    description:
+      "Sign in to your AppShots account to open your saved projects and carry on making store screenshots.",
+    sitemap: false,
+  },
   "/privacy": {
     title: "Privacy Policy — AppShots",
     description:
@@ -70,8 +80,16 @@ export const PAGES = {
   },
 };
 
-/** Every public route, in sitemap order. */
+/** Every route the build prerenders — everything a crawler can reach. */
 export const PUBLIC_ROUTES = Object.keys(PAGES);
+
+/**
+ * The subset that belongs in sitemap.xml. A page can be worth rendering
+ * properly without being worth advertising: /login is reachable from every
+ * page, so it must not be a shell, but it has no business competing for a
+ * search result.
+ */
+export const SITEMAP_ROUTES = PUBLIC_ROUTES.filter((route) => PAGES[route].sitemap !== false);
 
 /** Trailing slashes and query strings are the same page; "" is the homepage. */
 export function normalisePath(pathname = "/") {
