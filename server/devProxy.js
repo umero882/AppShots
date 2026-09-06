@@ -42,7 +42,7 @@ export function apiProxyPlugin() {
           }
           const query = Object.fromEntries(u.searchParams);
           const body = req.method === "POST" ? await readJson(req) : {};
-          const result = await route({ method: req.method, path: u.pathname, query, body });
+          const result = await route({ method: req.method, path: u.pathname, query, body, headers: req.headers });
           res.statusCode = result.status;
           res.setHeader("content-type", "application/json");
           res.end(JSON.stringify(result.body));

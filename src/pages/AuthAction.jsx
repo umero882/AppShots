@@ -17,7 +17,7 @@ import { useAuth } from "../lib/auth";
 export default function AuthAction() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signIn, refreshUser } = useAuth();
   const mode = params.get("mode") || "";
   const code = params.get("oobCode") || "";
 
@@ -46,6 +46,9 @@ export default function AuthAction() {
           }
         } else if (mode === "verifyEmail" || mode === "recoverEmail") {
           await backend.applyActionCode({ code });
+          // If the user is signed in, pick up the new emailVerified flag now so
+          // the dashboard banner disappears without a re-login.
+          if (mode === "verifyEmail") await refreshUser().catch(() => {});
           if (!cancelled) setStatus("done");
         } else {
           throw new Error("Unknown link type.");
@@ -61,7 +64,7 @@ export default function AuthAction() {
     return () => {
       cancelled = true;
     };
-  }, [mode, code, supported]);
+  }, [mode, code, supported, refreshUser]);
 
   async function submit(e) {
     e.preventDefault();
@@ -129,10 +132,11 @@ export default function AuthAction() {
         : mode === "recoverEmail"
           ? { title: "Email change reverted", subtitle: "Your account is back on its previous email address. Consider changing your password if you didn't request this." }
           : { title: "Password updated", subtitle: "You can log in with your new password now." };
+    const next = mode === "verifyEmail" ? { to: "/dashboard", label: "Go to your dashboard" } : { to: "/login", label: "Go to log in" };
     return (
       <AuthShell title={copy.title} subtitle={copy.subtitle} footer={null}>
-        <Link to="/login" className="btn-primary block w-full text-center">
-          Go to log in
+        <Link to={next.to} className="btn-primary block w-full text-center">
+          {next.label}
         </Link>
       </AuthShell>
     );

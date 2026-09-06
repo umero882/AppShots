@@ -37,6 +37,24 @@ export function AuthProvider({ children }) {
   const signUp = useCallback(async (creds) => {
     const u = await backend.signUp(creds);
     setUser(u);
+    // New accounts get a verify-your-email link automatically; failures here must
+    // never block signup (the dashboard offers a resend).
+    if (backend.sendEmailVerification && u && u.emailVerified === false) {
+      backend.sendEmailVerification().catch(() => {});
+    }
+    return u;
+  }, []);
+
+  // Send (or resend) the verify-email link for the signed-in user.
+  const sendEmailVerification = useCallback(async () => {
+    if (!backend.sendEmailVerification) throw new Error("Email verification isn't available on this backend.");
+    return backend.sendEmailVerification();
+  }, []);
+
+  // Re-read the current user from the backend (e.g. after an email is verified).
+  const refreshUser = useCallback(async () => {
+    const u = await Promise.resolve(backend.getCurrentUser({ reload: true }));
+    setUser(u);
     return u;
   }, []);
 
@@ -105,6 +123,8 @@ export function AuthProvider({ children }) {
         signUp,
         signOut,
         requestPasswordReset,
+        sendEmailVerification,
+        refreshUser,
         upgrade,
         updateProfile,
         startCheckout,

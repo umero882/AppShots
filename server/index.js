@@ -86,7 +86,7 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname.startsWith("/api/")) {
       const query = Object.fromEntries(u.searchParams);
       const body = req.method === "POST" ? await readBody(req) : {};
-      const result = await route({ method: req.method, path: u.pathname, query, body });
+      const result = await route({ method: req.method, path: u.pathname, query, body, headers: req.headers });
       sendJson(res, result.status, result.body);
       return;
     }

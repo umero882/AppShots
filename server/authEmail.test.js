@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   requestPasswordReset,
+  sendVerificationEmail,
   renderResetEmail,
+  renderVerifyEmail,
   brandedResetLink,
+  brandedActionLink,
   checkRateLimit,
   passwordResetConfigured,
   _resetRateLimits,
@@ -73,6 +76,51 @@ describe("checkRateLimit", () => {
     expect(checkRateLimit("a@x.com", t0 + 3)).toBe(false);
     expect(checkRateLimit("b@x.com", t0 + 3)).toBe(true);
     expect(checkRateLimit("a@x.com", t0 + 16 * 60 * 1000)).toBe(true);
+  });
+});
+
+describe("sendVerificationEmail", () => {
+  const okToken = async () => "tok";
+  const VERIFY_LINK = FIREBASE_LINK.replace("mode=resetPassword", "mode=verifyEmail").replace("ABC123", "VER456");
+  const claimsFor = (c) => async (header) => {
+    if (!header) throw new Error("missing");
+    return c;
+  };
+
+  it("rejects requests without a valid Firebase ID token", async () => {
+    await expect(sendVerificationEmail({}, { verify: claimsFor({}) })).rejects.toThrow(/unauthorized/);
+  });
+
+  it("is a no-op for already-verified addresses", async () => {
+    const out = await sendVerificationEmail({ authorization: "Bearer t" }, { verify: claimsFor({ email: "a@x.com", email_verified: true }) });
+    expect(out).toEqual({ ok: true, alreadyVerified: true });
+  });
+
+  it("mints a VERIFY_EMAIL link for the token's email and sends the branded email", async () => {
+    const sent = [];
+    const fetchImpl = async (url, init) => {
+      const body = JSON.parse(init.body);
+      expect(body).toMatchObject({ requestType: "VERIFY_EMAIL", email: "new@x.com", returnOobLink: true });
+      return { ok: true, json: async () => ({ oobLink: VERIFY_LINK }) };
+    };
+    const out = await sendVerificationEmail(
+      { authorization: "Bearer t" },
+      { fetchImpl, sendMail: async (m) => sent.push(m), tokenFn: okToken, verify: claimsFor({ email: "New@X.com", email_verified: false }) }
+    );
+    expect(out).toEqual({ ok: true, alreadyVerified: false });
+    expect(sent[0].to).toBe("new@x.com");
+    expect(sent[0].subject).toBe("Verify your AppShots email");
+    expect(sent[0].html).toContain("https://appshots.nextechlabs.tech/auth/action?mode=verifyEmail&amp;oobCode=VER456");
+    expect(sent[0].html).toContain("continueUrl=https%3A%2F%2Fappshots.nextechlabs.tech%2Fdashboard");
+  });
+
+  it("brandedActionLink keeps the mode and routes verify links to the dashboard", () => {
+    const u = new URL(brandedActionLink(VERIFY_LINK, "https://a.test", "verifyEmail"));
+    expect(u.pathname).toBe("/auth/action");
+    expect(u.searchParams.get("mode")).toBe("verifyEmail");
+    expect(u.searchParams.get("oobCode")).toBe("VER456");
+    expect(u.searchParams.get("continueUrl")).toBe("https://a.test/dashboard");
+    expect(renderVerifyEmail({ link: "https://a.test/x", email: "a@x.com" }).text).toContain("https://a.test/x");
   });
 });
 

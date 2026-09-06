@@ -200,6 +200,7 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   sendPasswordResetEmail,
+  sendEmailVerification as fbSendEmailVerification,
   verifyPasswordResetCode,
   confirmPasswordReset,
   applyActionCode as fbApplyActionCode,
@@ -396,6 +397,7 @@ export function userFromFirebaseUser(u, profile) {
     name: p.name || u.displayName || (u.email ? u.email.split("@")[0] : "User"),
     plan: p.plan || "free",
     avatar: p.avatar || u.photoURL || null,
+    emailVerified: !!u.emailVerified,
   };
 }
 
@@ -739,12 +741,44 @@ function makeFirebaseBackend() {
       await fbSignOut(auth);
     },
 
-    async getCurrentUser() {
+    async getCurrentUser({ reload = false } = {}) {
       const { auth } = getFirebase();
       const u = auth.currentUser || (await authReady(auth));
       if (!u) return null;
+      // reload() refreshes emailVerified after the user clicks a verify link.
+      if (reload) await u.reload().catch(() => {});
       const profile = await loadProfile(u.uid);
-      return buildUser(u, profile);
+      return buildUser(auth.currentUser || u, profile);
+    },
+
+    /**
+     * Email a verify-your-address link to the signed-in user. Prefers our
+     * branded server email (/api/auth/send-verification); falls back to
+     * Firebase's own when the server isn't configured or unreachable.
+     * Resolves { alreadyVerified } so callers can skip the nudge.
+     */
+    async sendEmailVerification() {
+      const { auth } = getFirebase();
+      const u = auth.currentUser;
+      if (!u) throw new Error("Not signed in.");
+      if (u.emailVerified) return { alreadyVerified: true };
+      try {
+        const r = await fetch("/api/auth/send-verification", {
+          method: "POST",
+          headers: { authorization: `Bearer ${await u.getIdToken()}` },
+        });
+        if (r.ok) return await r.json();
+        if (r.status === 429) throw new Error("Too many attempts. Please wait a few minutes and try again.");
+      } catch (e) {
+        if (e instanceof Error && !/^(TypeError|AbortError)/.test(e.name) && !/fetch/i.test(e.message)) throw e;
+      }
+      try {
+        await fbSendEmailVerification(u, { url: `${window.location.origin}/dashboard` });
+      } catch (e) {
+        if (e?.code === "auth/unauthorized-continue-uri") await fbSendEmailVerification(u);
+        else throw new Error(fbAuthError(e));
+      }
+      return { alreadyVerified: false };
     },
 
     onAuthChange(cb) {

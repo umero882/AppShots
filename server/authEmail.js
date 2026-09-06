@@ -21,6 +21,7 @@
  */
 import { parseServiceAccount, serviceAccountToken } from "./googleToken.js";
 import { sendMail as smtpSend } from "./smtp.js";
+import { verifyIdTokenClaims } from "./firebaseAuth.js";
 
 const IDENTITY_TOOLKIT = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode";
 const SCOPE = "https://www.googleapis.com/auth/identitytoolkit https://www.googleapis.com/auth/cloud-platform";
@@ -117,7 +118,85 @@ export function brandedResetLink(oobLink, base) {
   return u.toString();
 }
 
-/* -------------------------------- handler -------------------------------- */
+export function renderVerifyEmail({ link, email, siteUrl = "https://appshots.nextechlabs.tech" }) {
+  const subject = "Verify your AppShots email";
+  const text = [
+    "Verify your AppShots email",
+    "",
+    `Thanks for signing up. Please confirm that ${email} is yours by opening this link:`,
+    link,
+    "",
+    "The link expires in about an hour. If you didn't create an AppShots account, you can ignore this email.",
+    "",
+    `AppShots · by Next Tech Labs · ${siteUrl}`,
+  ].join("\n");
+  const html = `<!doctype html>
+<html><body style="margin:0;background:#f4f5fb;padding:32px 16px;font-family:-apple-system,'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:32px;color:#111827;">
+    <p style="font-size:20px;font-weight:700;color:#111827;margin:0 0 24px;">App<span style="color:#6366f1;">Shots</span></p>
+    <p style="font-size:22px;font-weight:700;line-height:1.3;margin:0 0 12px;color:#111827;">Confirm your email</p>
+    <p style="margin:0 0 20px;line-height:1.6;color:#374151;">Thanks for signing up! Please confirm that <strong>${esc(email)}</strong> is yours so we can keep your account safe and reach you about your exports.</p>
+    <p style="margin:0 0 24px;"><a href="${esc(link)}" style="display:inline-block;background:#6366f1;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:12px;">Verify email address</a></p>
+    <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#6b7280;">This link expires in about an hour. If the button doesn't work, paste this into your browser:</p>
+    <p style="margin:0 0 24px;font-size:12px;word-break:break-all;"><a href="${esc(link)}" style="color:#4f46e5;">${esc(link)}</a></p>
+    <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">Didn't create an AppShots account? You can safely ignore this email.</p>
+    <hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0;">
+    <p style="margin:0;font-size:12px;color:#9ca3af;">AppShots &middot; by Next Tech Labs &middot; <a href="${esc(siteUrl)}" style="color:#6366f1;text-decoration:none;">${esc(siteUrl.replace(/^https?:\/\//, ""))}</a></p>
+  </div>
+</body></html>`;
+  return { subject, text, html };
+}
+
+/** Turn any Firebase action link into a link to our branded /auth/action. */
+export function brandedActionLink(oobLink, base, mode) {
+  const code = new URL(oobLink).searchParams.get("oobCode");
+  if (!code) throw new Error("action-link-failed");
+  const u = new URL(`${base}/auth/action`);
+  u.searchParams.set("mode", mode);
+  u.searchParams.set("oobCode", code);
+  u.searchParams.set("continueUrl", `${base}/${mode === "verifyEmail" ? "dashboard" : "login"}`);
+  return u.toString();
+}
+
+/* -------------------------------- handlers ------------------------------- */
+/**
+ * POST /api/auth/send-verification — for the SIGNED-IN user (Firebase ID token in
+ * the Authorization header). Mints a verify-email link and sends our branded
+ * email. Returns { ok, alreadyVerified } — no-op when the address is verified.
+ */
+export async function sendVerificationEmail(
+  headers = {},
+  { fetchImpl = fetch, sendMail = smtpSend, tokenFn = serviceAccountToken, verify = verifyIdTokenClaims, now = Date.now } = {}
+) {
+  let claims;
+  try {
+    claims = await verify(headers.authorization || headers.Authorization);
+  } catch {
+    throw new Error("unauthorized");
+  }
+  const addr = String(claims.email || "").trim().toLowerCase();
+  if (!EMAIL_RE.test(addr)) throw new Error("invalid-email");
+  if (claims.email_verified) return { ok: true, alreadyVerified: true };
+  if (!passwordResetConfigured()) throw new Error("not-configured");
+  if (!checkRateLimit(`verify:${addr}`, now())) throw new Error("rate-limited");
+
+  const sa = parseServiceAccount(env("FIREBASE_SERVICE_ACCOUNT"));
+  const token = await tokenFn(sa, SCOPE, { fetchImpl });
+  const base = appUrl();
+  const res = await fetchImpl(IDENTITY_TOOLKIT, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ requestType: "VERIFY_EMAIL", email: addr, returnOobLink: true, continueUrl: `${base}/dashboard` }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`action-link-failed: ${json?.error?.message || res.status}`);
+
+  const link = brandedActionLink(json.oobLink, base, "verifyEmail");
+  const { subject, text, html } = renderVerifyEmail({ link, email: addr, siteUrl: base });
+  await sendMail({ ...smtpConfig(), to: addr, subject, text, html });
+  return { ok: true, alreadyVerified: false };
+}
+
 export async function requestPasswordReset(
   { email } = {},
   { fetchImpl = fetch, sendMail = smtpSend, tokenFn = serviceAccountToken, now = Date.now } = {}

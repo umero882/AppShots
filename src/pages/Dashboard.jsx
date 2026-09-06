@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Trash2, Image as ImageIcon, Crown, Copy, Shuffle, CheckCircle2 } from "lucide-react";
 import Navbar from "../components/Navbar";
+import VerifyEmailBanner from "../components/VerifyEmailBanner";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
@@ -111,6 +112,7 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+        <VerifyEmailBanner />
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white">

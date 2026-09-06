@@ -4,11 +4,11 @@
  * Node/serverless wrapper later — no host-specific types leak in here.
  */
 import { capabilities, suggest, image, search, translate, appStore, statusForError } from "./handlers.js";
-import { requestPasswordReset } from "./authEmail.js";
+import { requestPasswordReset, sendVerificationEmail } from "./authEmail.js";
 
 const ok = (body) => ({ status: 200, body });
 
-export async function route({ method, path, query = {}, body = {} }) {
+export async function route({ method, path, query = {}, body = {}, headers = {} }) {
   try {
     if (method === "GET" && path === "/api/capabilities") return ok(capabilities());
     if (method === "POST" && path === "/api/ai/suggest") return ok(await suggest(body));
@@ -17,6 +17,7 @@ export async function route({ method, path, query = {}, body = {} }) {
     if (method === "GET" && path === "/api/search") return ok(await search(query.q || ""));
     if (method === "GET" && path === "/api/app-store") return ok(await appStore(query));
     if (method === "POST" && path === "/api/auth/password-reset") return ok(await requestPasswordReset(body));
+    if (method === "POST" && path === "/api/auth/send-verification") return ok(await sendVerificationEmail(headers));
     return { status: 404, body: { error: "not-found" } };
   } catch (e) {
     return { status: statusForError(e.message), body: { error: e.message } };
