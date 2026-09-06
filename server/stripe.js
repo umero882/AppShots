@@ -45,6 +45,11 @@ const isMissing = (e) => e?.stripeCode === "resource_missing";
 // Stable price lookup_keys created by scripts/stripe/setup.mjs. Referencing prices
 // by lookup_key (not hard-coded price ids) keeps this env-agnostic: the same code
 // works in test and live once setup.mjs has run in each.
+/** Plans that exist in the catalog but must not be sold right now. */
+export const UNAVAILABLE_PLANS = new Set(
+  (process.env.UNAVAILABLE_PLANS ?? "team").split(",").map((p) => p.trim().toLowerCase()).filter(Boolean),
+);
+
 export const PLAN_LOOKUP_KEYS = {
   pro: { month: "pro_monthly", year: "pro_yearly" },
   team: { month: "team_monthly", year: "team_yearly" },
@@ -418,6 +423,13 @@ async function createCheckoutSession(req, res, uid, email) {
   }
   const plan = String(body.plan || "").toLowerCase();
   const interval = body.interval === "year" ? "year" : "month";
+  // Team is advertised as a waitlist, not a product: none of what it promises
+  // (seats, shared templates, roles) is built. Hiding the button is not the
+  // enforcement — this is. Existing Team subscriptions, if any, are untouched;
+  // this only refuses to sell a new one.
+  if (UNAVAILABLE_PLANS.has(plan)) {
+    return sendJson(res, 400, { error: "plan-unavailable", plan });
+  }
   const lookupKey = PLAN_LOOKUP_KEYS[plan]?.[interval];
   if (!lookupKey) return sendJson(res, 400, { error: "unknown-plan" });
 

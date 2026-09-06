@@ -385,3 +385,23 @@ eating analytics is the normal case, not an error.
 exploration with `sign_up → project_created → begin_checkout → purchase`. New event
 names take up to 24 hours to appear in the standard reports; DebugView shows them
 immediately.
+
+## The Team plan is a waitlist, not a product
+
+Team was on the pricing page — and purchasable at $29/month — while none of what it
+promised existed: `grep` for seats, invites, roles or shared templates finds them only
+in the sales copy. It now says **Coming soon** and collects intent instead of money.
+
+- `server/waitlist.js` — `POST /api/waitlist` appends to `<DATA_DIR>/waitlist/team.jsonl`
+  (on the volume, so it lands in the nightly backup) and emails `ALERT_EMAIL_TO`.
+  Open by design: the whole point is hearing from people who have not signed up.
+  Idempotent per address — signing up twice is a normal thing to do and must not look
+  like an error — rate-limited to 20/min, and it never takes a uid from the body.
+- `UNAVAILABLE_PLANS` (default `team`) in `server/stripe.js` refuses to create a
+  Checkout session for it. **Hiding the button is not the enforcement, this is** — the
+  same lesson as the localization paywall. Existing Team subscriptions, if any, are
+  untouched; only new sales are refused.
+- GA4 gets `waitlist_joined`, so demand is measured before anything is built.
+
+**When Team is built:** drop `team` from `UNAVAILABLE_PLANS`, remove `comingSoon` from
+the card in `src/pages/Pricing.jsx`, and mail the list.

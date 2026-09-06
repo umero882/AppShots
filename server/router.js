@@ -14,6 +14,7 @@ import { readRecord, publicEntitlement } from "./stripe.js";
 import { consume, refund } from "./usage.js";
 import { deleteAccount } from "./account.js";
 import { reportClientError } from "./clientErrors.js";
+import { joinWaitlist } from "./waitlist.js";
 import { captureException } from "./sentry.js";
 
 const ok = (body) => ({ status: 200, body });
@@ -83,6 +84,8 @@ export async function route({ method, path, query = {}, body = {}, headers = {} 
     // Browser-side crashes. Unmetered and open (a crash can happen before sign-in)
     // but rate-limited and size-capped inside the handler.
     if (key === "POST /api/client-error") return ok(await (deps.reportClientError || reportClientError)(body, headers, deps));
+    // Open: the whole point is to hear from people who have not signed up.
+    if (key === "POST /api/waitlist") return ok(await (deps.joinWaitlist || joinWaitlist)(body, headers, deps));
     return { status: 404, body: { error: "not-found" } };
   } catch (e) {
     // The upstream failed (or was misconfigured) after we charged the caller —

@@ -341,6 +341,7 @@ export function statusForError(code) {
   if (code === "no-llm-key" || code === "no-image-key") return 503;
   if (String(code).startsWith("reset-link-failed") || String(code).startsWith("action-link-failed") || String(code).startsWith("smtp-") || String(code).startsWith("google-token-failed")) return 502;
   if (code === "github-bad-url" || code === "store-bad-query" || code === "invalid-email") return 400;
+  if (code === "unknown-waitlist" || code === "plan-unavailable") return 400;
   if (code === "not-configured") return 501; // self-sent reset email not set up → client falls back to Firebase's
   if (code === "unauthorized") return 401;
   if (code === "rate-limited" || code === "quota-exceeded") return 429;

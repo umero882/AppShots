@@ -73,3 +73,7 @@ export const trackProjectCreated = ({ source = "blank" } = {}) => track("project
 /** Screenshots were exported — the moment the product delivered its value. */
 export const trackExport = ({ format, screens, sizes = 1 }) =>
   track("export_completed", { format, screens, sizes });
+
+/** Someone asked for a plan that does not exist yet — demand, before building. */
+export const trackWaitlistJoined = ({ plan, already = false }) =>
+  track("waitlist_joined", { plan, already });
