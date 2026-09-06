@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { clearConsent } from "../lib/consent";
 import Logo from "./Logo";
 import { publishedCount } from "../lib/blog";
 
@@ -31,6 +32,8 @@ export default function Footer() {
         { label: "Contact", href: "mailto:nextechlabs.dev@gmail.com" },
         { label: "Privacy Policy", to: "/privacy" },
         { label: "Terms of Service", to: "/terms" },
+        // Consent has to be as easy to withdraw as it was to give.
+        { label: "Cookie preferences", action: "cookies" },
       ],
     },
   ];
@@ -54,7 +57,11 @@ export default function Footer() {
               <ul className="mt-4 space-y-2.5">
                 {c.links.map((l) => (
                   <li key={l.label}>
-                    {l.to ? (
+                    {l.action === "cookies" ? (
+                      <button type="button" onClick={clearConsent} className={linkClass}>
+                        {l.label}
+                      </button>
+                    ) : l.to ? (
                       <Link to={l.to} className={linkClass}>
                         {l.label}
                       </Link>

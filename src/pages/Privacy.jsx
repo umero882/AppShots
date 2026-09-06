@@ -40,7 +40,8 @@ const sections = [
           </li>
           <li>
             <strong>Usage and device data</strong> — pages visited, features used, browser and device type, approximate
-            location derived from your IP address, and analytics identifiers, collected through Google Analytics for
+            location derived from your IP address, and analytics identifiers, collected — only with your consent —
+            through Google Analytics for
             Firebase.
           </li>
           <li>
@@ -136,14 +137,20 @@ const sections = [
           </li>
           <li>
             <strong>Analytics</strong> — Google Analytics for Firebase sets cookies and identifiers to measure usage.
-            You can block these with your browser settings, a content blocker, or Google's{" "}
+            <b> These only load if you accept them.</b> We ask on your first visit, Decline is as easy as Accept, and
+            nothing analytics-related runs until you choose. Change your mind at any time with{" "}
+            <b>Cookie preferences</b> at the bottom of any page, or block them with your browser, a content blocker,
+            or Google's{" "}
             <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noreferrer">
               opt-out add-on
             </a>
-            ; AppShots keeps working without them.
+            . AppShots works exactly the same either way.
           </li>
         </ul>
-        <p>We do not use advertising or cross-site tracking cookies.</p>
+        <p>
+          We do not use advertising or cross-site tracking cookies, and we do not show a consent banner that buries
+          the "no".
+        </p>
       </>
     ),
   },

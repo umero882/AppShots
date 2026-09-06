@@ -14,11 +14,19 @@
  * page, and an ad-blocker eating it is the normal case, not an error.
  */
 import { hasFirebase, getFirebase, firebaseConfig } from "./firebase";
+import { hasAnalyticsConsent } from "./consent";
 
 let analyticsPromise = null;
 
-function analytics() {
+/**
+ * Load GA4 — but only with consent. Nothing here runs until someone has said
+ * yes, which is why initialisation lives in this module rather than in
+ * firebase.js: the analytics SDK sets its cookies the moment it loads, so
+ * "load it and decide later" is not a thing.
+ */
+export function initAnalytics() {
   if (analyticsPromise) return analyticsPromise;
+  if (!hasAnalyticsConsent()) return Promise.resolve(null); // ask again on the next call
   if (!hasFirebase || !firebaseConfig.measurementId) return (analyticsPromise = Promise.resolve(null));
   analyticsPromise = (async () => {
     try {
@@ -33,6 +41,10 @@ function analytics() {
   return analyticsPromise;
 }
 
+function analytics() {
+  return initAnalytics();
+}
+
 /**
  * Record one product event.
  * @param {string} name GA4 event name (snake_case)
@@ -40,6 +52,7 @@ function analytics() {
  */
 export async function track(name, params = {}) {
   try {
+    if (!hasAnalyticsConsent()) return false;
     const instance = await analytics();
     if (!instance) return false;
     const { logEvent } = await import("firebase/analytics");
@@ -77,3 +90,8 @@ export const trackExport = ({ format, screens, sizes = 1 }) =>
 /** Someone asked for a plan that does not exist yet — demand, before building. */
 export const trackWaitlistJoined = ({ plan, already = false }) =>
   track("waitlist_joined", { plan, already });
+
+/** Test hook: forget the memoised instance so consent is re-read. */
+export function _resetAnalytics() {
+  analyticsPromise = null;
+}

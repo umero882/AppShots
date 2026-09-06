@@ -55,17 +55,10 @@ export function getFirebase() {
   if (!app) {
     app = initializeApp(firebaseConfig);
     authInstance = getAuth(app);
-    // Analytics is optional + browser-only; load it guarded so it never throws
-    // (e.g. blocked by an ad-blocker, or unsupported environment).
-    if (firebaseConfig.measurementId) {
-      import("firebase/analytics")
-        .then(({ getAnalytics, isSupported }) =>
-          isSupported().then((ok) => {
-            if (ok) getAnalytics(app);
-          })
-        )
-        .catch(() => {});
-    }
+    // Analytics deliberately does NOT start here. The SDK sets its cookies the
+    // moment it loads, so it cannot be initialised before the visitor has
+    // answered the consent banner — see lib/analytics.js initAnalytics(),
+    // called on mount when consent already exists and on Accept when it does not.
   }
   return { app, auth: authInstance };
 }

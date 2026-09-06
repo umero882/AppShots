@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const logEvent = vi.fn();
 let supported = true;
+let consented = true;
+
+vi.mock("../consent", () => ({
+  hasAnalyticsConsent: () => consented,
+}));
 
 vi.mock("../firebase", () => ({
   hasFirebase: true,
@@ -15,12 +20,16 @@ vi.mock("firebase/analytics", () => ({
   logEvent,
 }));
 
-const { track, trackSignUp, trackBeginCheckout, trackPurchase, trackProjectCreated, trackExport } =
-  await import("../analytics");
+const {
+  track, trackSignUp, trackBeginCheckout, trackPurchase, trackProjectCreated, trackExport,
+  initAnalytics, _resetAnalytics,
+} = await import("../analytics");
 
 beforeEach(() => {
-  logEvent.mockClear();
+  vi.clearAllMocks(); // getAnalytics too — one test asserts it is never called
   supported = true;
+  consented = true;
+  _resetAnalytics();
 });
 
 const paramsOf = (call) => call[2];
@@ -34,9 +43,41 @@ describe("track", () => {
   it("resolves false instead of throwing when analytics is blocked", async () => {
     const { isSupported } = await import("firebase/analytics");
     isSupported.mockRejectedValueOnce(new Error("blocked by client"));
-    // The module memoises its instance, so this asserts the contract rather than
-    // the first call: track never rejects and never throws.
-    await expect(track("x")).resolves.toBeDefined();
+    await expect(track("x")).resolves.toBe(false);
+    expect(logEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("consent gates everything", () => {
+  it("sends nothing at all before the visitor has agreed", async () => {
+    consented = false;
+    await track("custom_thing", { a: 1 });
+    await trackSignUp("password");
+    await trackPurchase({ plan: "pro", transactionId: "cs_1" });
+    expect(logEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not even load the SDK without consent — it sets cookies on load", async () => {
+    consented = false;
+    await expect(initAnalytics()).resolves.toBeNull();
+    const { getAnalytics } = await import("firebase/analytics");
+    expect(getAnalytics).not.toHaveBeenCalled();
+  });
+
+  it("starts working the moment consent is given, with no reload", async () => {
+    consented = false;
+    await track("too_early");
+    expect(logEvent).not.toHaveBeenCalled();
+
+    consented = true;
+    await track("now_allowed");
+    expect(logEvent).toHaveBeenCalledTimes(1);
+    expect(logEvent.mock.calls[0][1]).toBe("now_allowed");
+  });
+
+  it("reports false rather than throwing when it is not allowed to send", async () => {
+    consented = false;
+    await expect(track("x")).resolves.toBe(false);
   });
 });
 

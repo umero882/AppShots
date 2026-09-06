@@ -435,3 +435,30 @@ in the sales copy. It now says **Coming soon** and collects intent instead of mo
 
 **When Team is built:** drop `team` from `UNAVAILABLE_PLANS`, remove `comingSoon` from
 the card in `src/pages/Pricing.jsx`, and mail the list.
+
+## Analytics consent
+
+GA4 sets cookies, `/privacy` said consent was obtained "where required", and nothing
+ever asked. That gap is closed with **opt-in for everyone**, not opt-in for visitors we
+guess are in the EEA: browser-side geolocation is a guess (timezone, language, a VPN),
+and a wrong guess means tracking someone who never agreed. Asking everyone costs some
+analytics volume and is defensible in every jurisdiction.
+
+- `src/lib/consent.js` — the stored answer (`granted` / `denied` / unanswered) plus a
+  subscription so the change takes effect without a reload. Every failure path answers
+  **no**: unreadable storage, a value we did not write, no storage at all (the Node
+  prerender). Consent is never inferred.
+- `src/components/CookieBanner.jsx` — Accept and Decline identical in size and weight.
+  A "reject" that is harder to find than "accept" is not consent, and regulators treat
+  it as a dark pattern. There is no "manage vendors" screen because there is one
+  vendor and no ad tech. It renders only after mount, so no banner is baked into the
+  prerendered HTML and none flashes at someone who already chose.
+- **`initAnalytics()` in `src/lib/analytics.js` is the only place GA4 starts**, and it
+  checks consent first. It used to start inside `getFirebase()`, which is exactly wrong:
+  the SDK sets its cookies the moment it loads, so "load now, decide later" is not a
+  thing. `track()` also re-checks, so nothing can slip out through a stale instance.
+- Footer → **Cookie preferences** clears the answer and brings the banner back.
+  Consent has to be as easy to withdraw as it was to give.
+
+Essential storage — the sign-in session, editor preferences — is out of scope and not
+optional: the product does not function without it, and it is disclosed as such.
