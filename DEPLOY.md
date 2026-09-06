@@ -101,3 +101,30 @@ With that in place `git push origin main` deploys automatically; the Coolify API
 (`GET /deploy?uuid=…&force=true`) or the dashboard's **Redeploy** button remain as
 manual fallbacks. If pushes stop deploying, check the webhook's recent deliveries on
 GitHub (Settings → Webhooks) — a non-200 response from Coolify is the usual tell.
+
+## Backups
+
+Everything stateful lives on the `/app/data` volume: the blob store (`blobs/`) and the
+Stripe entitlement records (`subscriptions/`). Firestore and Stripe hold their own
+copies of auth/projects and billing, but losing this volume would show every paying
+customer as Free until they re-sync and would 404 uploaded assets.
+
+`server/backup-cli.js` (zero-dep: pure-Node tar+gzip and a SigV4 S3 client) snapshots
+the volume to S3-compatible object storage — **Hostinger Object Storage** in
+production:
+
+| Command | What it does |
+|---|---|
+| `npm run backup` | tar+gzip `/app/data` → `s3://<bucket>/appshots/appshots-<UTC>.tar.gz`, then delete snapshots older than `BACKUP_RETENTION_DAYS` (never the newest) |
+| `npm run backup:list` | list snapshots |
+| `npm run backup:check` | verify env + bucket access without writing |
+| `npm run backup:restore -- <key> [--into <dir>]` | download and extract (default target: the data dir) |
+
+**Schedule:** Coolify → application → *Scheduled Tasks* → add
+`nightly-backup`, command `node server/backup-cli.js backup`, frequency `0 3 * * *`
+(03:00 UTC daily). It runs inside the app container, so it sees the volume and the
+`BACKUP_*` env vars.
+
+**Restore drill:** `npm run backup:list`, pick a key, then
+`npm run backup:restore -- appshots/appshots-….tar.gz --into /tmp/restore` to inspect,
+or without `--into` to overwrite the live data dir (stop writes first: Coolify → Stop).
