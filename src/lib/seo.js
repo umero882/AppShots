@@ -42,7 +42,7 @@ export const PAGES = {
   "/": {
     title: "AppShots — App Store & Google Play Screenshot Generator",
     description:
-      "Create store-ready App Store and Google Play screenshots in minutes — device frames, templates, gradients and pixel-exact PNG exports, straight from the browser.",
+      "Create store-ready App Store and Google Play screenshots in minutes — device frames, templates, gradients and pixel-exact PNG exports, in your browser.",
   },
   "/pricing": {
     title: "Pricing — AppShots Screenshot Generator",
@@ -50,7 +50,7 @@ export const PAGES = {
       "Free, Pro and Team plans for the AppShots screenshot generator. Start free with no card, and pay only when you need every store size and larger exports.",
   },
   "/inspiration": {
-    title: "App Store Screenshot Examples & Design Inspiration — AppShots",
+    title: "App Store Screenshot Examples — AppShots",
     description:
       "Browse finished app store screenshot designs across eight styles, then open any one as the starting point for your own — no blank canvas to fill.",
   },

@@ -35,9 +35,13 @@ describe("seoFor", () => {
       expect(seo, route).toBeTruthy();
       expect(seo.canonical, route).toBe(route === "/" ? `${SITE_URL}/` : `${SITE_URL}${route}`);
       expect(seo.title.length, route).toBeGreaterThan(10);
-      // Google truncates a description past roughly 160 characters; a longer
-      // one is not wrong, but it is not the sentence that gets read.
-      expect(seo.description.length, route).toBeLessThanOrEqual(200);
+      // The lengths the site audit checks, and the reason it checks them: a
+      // title past ~60 characters is cut off in the result, and a description
+      // outside 50-160 is either truncated or too thin to be the sentence
+      // someone reads before deciding whether to click.
+      expect(seo.title.length, `${route} title is cut off in results`).toBeLessThanOrEqual(60);
+      expect(seo.description.length, `${route} description too short`).toBeGreaterThanOrEqual(50);
+      expect(seo.description.length, `${route} description is truncated`).toBeLessThanOrEqual(160);
       canonicals.add(seo.canonical);
       titles.add(seo.title);
       descriptions.add(seo.description);
