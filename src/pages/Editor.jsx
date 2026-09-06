@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
   BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
-  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film, Music, Play, Pause, Layers,
+  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film, Music, Play, Pause, Layers, Lock,
 } from "lucide-react";
 import { SHORTCUTS } from "../lib/shortcuts";
 import Logo from "../components/Logo";
@@ -1157,6 +1157,7 @@ export default function Editor() {
                   onTranslate: translateAll,
                   translating,
                   error: translateErr,
+                  isPaid: !!user?.plan && user.plan !== "free",
                 }}
               />
             )}
@@ -1984,22 +1985,32 @@ function AiBackgroundPanel({ state, update, bg, onScreen, caps }) {
 }
 
 function LanguagesSection({ i18n }) {
-  const { locales, locale, setLocale, onAdd, onRemove, onTranslate, translating, error } = i18n;
+  const { locales, locale, setLocale, onAdd, onRemove, onTranslate, translating, error, isPaid } = i18n;
   const available = LOCALES.filter((l) => !locales.includes(l.code));
   return (
     <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
       <div className="flex items-center justify-between">
         <p className="label mb-0 flex items-center gap-1.5"><Languages size={13} /> Languages</p>
-        {locales.length > 1 && (
-          <button
-            onClick={onTranslate}
-            disabled={translating}
-            className="flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
-          >
-            {translating ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-            AI translate
-          </button>
-        )}
+        {locales.length > 1 &&
+          (isPaid ? (
+            <button
+              onClick={onTranslate}
+              disabled={translating}
+              className="flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
+            >
+              {translating ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+              AI translate
+            </button>
+          ) : (
+            <Link
+              to="/pricing"
+              title="Localization sets are part of Pro"
+              className="flex items-center gap-1 rounded-md border border-brand-400/30 bg-brand-500/10 px-2 py-1 text-[11px] font-semibold text-brand-200 transition hover:bg-brand-500/20"
+            >
+              <Lock size={11} />
+              AI translate · Pro
+            </Link>
+          ))}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {locales.map((c) => (
@@ -2031,7 +2042,8 @@ function LanguagesSection({ i18n }) {
       {error && <p className="text-[11px] text-red-400">{error}</p>}
       {locale !== BASE_LOCALE && (
         <p className="text-[11px] text-amber-300/90">
-          Editing <b>{localeName(locale)}</b> — headline edits below apply to this language. AI translate fills every language from English.
+          Editing <b>{localeName(locale)}</b> — headline edits below apply to this language.{" "}
+          {isPaid ? "AI translate fills every language from English." : "Pro fills every language from English automatically."}
         </p>
       )}
     </div>

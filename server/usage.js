@@ -23,7 +23,7 @@ const USAGE_DIR = process.env.USAGE_DIR || path.join(process.cwd(), "data", "usa
  * generous enough that a real user will not notice the ceiling.
  */
 export const QUOTAS = {
-  free: { suggest: 20, image: 5, translate: 30, search: 100, appStore: 100 },
+  free: { suggest: 20, image: 5, translate: 0, search: 100, appStore: 100 },
   pro: { suggest: 200, image: 60, translate: 400, search: 600, appStore: 600 },
   team: { suggest: 600, image: 200, translate: 1200, search: 2000, appStore: 2000 },
 };
@@ -46,6 +46,16 @@ const BURST_WINDOW_MS = 60_000;
 const BURST_MAX = num(process.env.USAGE_BURST_PER_MIN, 20);
 
 export const KINDS = ["suggest", "image", "translate", "search", "appStore"];
+
+/**
+ * Features sold as paid on the pricing page. Gating them in the UI is not
+ * enforcement — the API is where the feature is actually spent, so the check
+ * lives here. Free callers get `plan-required` (403), which is a different
+ * answer from "you ran out": it never resets, and upgrading fixes it.
+ */
+export const PAID_ONLY = {
+  translate: { feature: "Localization sets", requiredPlan: "pro" },
+};
 
 function num(v, dflt) {
   const n = Number(v);
@@ -128,6 +138,9 @@ function burstExceeded(uid, now) {
 export function consume({ uid, plan = "free", kind, now = Date.now() }) {
   if (!KINDS.includes(kind)) throw new Error("unknown-usage-kind");
   if (!validUid(uid)) throw fail("unauthorized", {});
+
+  const paid = PAID_ONLY[kind];
+  if (paid && plan === "free") throw fail("plan-required", { kind, plan, ...paid });
 
   const limit = limitFor(plan, kind);
   const day = utcDay(now);

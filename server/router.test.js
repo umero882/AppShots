@@ -113,6 +113,18 @@ describe("metered endpoints charge the caller", () => {
     expect(handlers.image).not.toHaveBeenCalled();
   });
 
+  it("answers 403 when the plan does not include the feature", async () => {
+    const err = new Error("plan-required");
+    err.info = { kind: "translate", feature: "Localization sets", requiredPlan: "pro" };
+    deps.consume = vi.fn(() => {
+      throw err;
+    });
+    const res = await route({ method: "POST", path: "/api/ai/translate", headers: TOKEN, body: {} }, deps);
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "plan-required", ...err.info });
+    expect(handlers.translate).not.toHaveBeenCalled();
+  });
+
   it("maps a burst block to 429 and an instance ceiling to 503", async () => {
     deps.consume = vi.fn(() => {
       const e = new Error("rate-limited");

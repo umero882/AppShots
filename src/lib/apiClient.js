@@ -81,6 +81,8 @@ export function describeApiError(err, fallback = "Something went wrong — pleas
       const upgrade = info.plan === "free" ? " Upgrade to Pro for a much higher limit." : "";
       return `You've used today's ${what} (${info.limit}). Your allowance resets ${when}.${upgrade}`;
     }
+    case "plan-required":
+      return `${info.feature || "This feature"} is part of Pro. Upgrade to unlock it.`;
     case "rate-limited":
       return "You're going a bit fast — wait a minute and try again.";
     case "capacity-reached":

@@ -123,6 +123,12 @@ describe("describeApiError", () => {
     expect(describeApiError(quota({ plan: "pro" }))).not.toContain("Upgrade");
   });
 
+  it("names the paid feature and points at the upgrade", () => {
+    const msg = describeApiError(new ApiError("plan-required", { feature: "Localization sets", requiredPlan: "pro" }));
+    expect(msg).toContain("Localization sets");
+    expect(msg).toContain("Pro");
+  });
+
   it("explains the other blocks in the user's terms", () => {
     expect(describeApiError(new ApiError("unauthorized"))).toMatch(/sign in/i);
     expect(describeApiError(new ApiError("rate-limited"))).toMatch(/fast/i);

@@ -104,6 +104,36 @@ describe("consume", () => {
   });
 });
 
+describe("paid-only features", () => {
+  it("refuses translation on the free plan — it is sold as Pro", () => {
+    const err = grab(() => consume({ uid: "p1", plan: "free", kind: "translate", now: T0 }));
+    expect(err.message).toBe("plan-required");
+    expect(err.info).toMatchObject({ kind: "translate", feature: "Localization sets", requiredPlan: "pro" });
+  });
+
+  it("says plan-required, not quota-exceeded — waiting will never fix it", () => {
+    const err = grab(() => consume({ uid: "p2", plan: "free", kind: "translate", now: T0 }));
+    expect(err.message).not.toBe("quota-exceeded");
+    expect(err.info.resetAt).toBeUndefined();
+  });
+
+  it("allows it on the plans that pay for it", () => {
+    expect(consume({ uid: "p3", plan: "pro", kind: "translate", now: T0 }).remaining).toBe(QUOTAS.pro.translate - 1);
+    expect(() => consume({ uid: "p4", plan: "team", kind: "translate", now: T0 })).not.toThrow();
+  });
+
+  it("charges nothing when the plan is refused", () => {
+    grab(() => consume({ uid: "p5", plan: "free", kind: "translate", now: T0 }));
+    expect(usageSummary("p5", "free", T0).kinds.translate.used).toBe(0);
+  });
+
+  it("leaves the free features free", () => {
+    for (const kind of ["suggest", "image", "search", "appStore"]) {
+      expect(() => consume({ uid: `f-${kind}`, plan: "free", kind, now: T0 })).not.toThrow();
+    }
+  });
+});
+
 describe("burst limiting", () => {
   it("stops a flood inside one minute, then lets it resume", () => {
     // 'search' has a large daily allowance, so only the burst window can bite.

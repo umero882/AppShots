@@ -179,12 +179,19 @@ with our keys, the last two proxy outbound requests from our IP. They are gated 
 
    | | suggest | image | translate | search | appStore |
    |---|---|---|---|---|---|
-   | free | 20 | 5 | 30 | 100 | 100 |
+   | free | 20 | 5 | — | 100 | 100 |
    | pro | 200 | 60 | 400 | 600 | 600 |
    | team | 600 | 200 | 1200 | 2000 | 2000 |
 
-3. **Burst.** 20 metered requests per user per rolling minute → `429 rate-limited`.
-4. **Instance ceiling.** A whole-app daily cap per kind (images default 300) →
+3. **Paid-only features.** The pricing page sells "Localization sets" under Pro, so
+   `/api/ai/translate` answers `403 plan-required` on the free plan — a different
+   answer from "you ran out", because waiting will never fix it. `PAID_ONLY` in
+   `server/usage.js` is the list; keep it in step with `src/pages/Pricing.jsx`. The
+   editor shows the control locked with an upgrade link rather than hiding it, and
+   locale sets already saved in a free user's project keep working — only new
+   translation requests are gated.
+4. **Burst.** 20 metered requests per user per rolling minute → `429 rate-limited`.
+5. **Instance ceiling.** A whole-app daily cap per kind (images default 300) →
    `503 capacity-reached`. This is the backstop a per-user quota cannot provide:
    throwaway signups each get their own free allowance, but not their own ceiling.
 
