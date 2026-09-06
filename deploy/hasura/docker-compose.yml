@@ -1,0 +1,95 @@
+# AppShots blog backend — Hasura + its own Postgres.
+#
+# ISOLATED BY DESIGN. This stack exists because AppShots had no SQL database at
+# all (the app itself runs on Firebase), and the PyRunner blog chain speaks
+# Hasura. It shares nothing with First Bite's Hasura, the Ethiopian Maids
+# Hasura, or any Supabase stack: its own container, its own Postgres, its own
+# admin secret, its own volume.
+#
+# The passwords are Coolify SERVICE_PASSWORD_* variables, which Coolify
+# generates and stores; nobody types them and they appear nowhere else.
+#
+# The schema service applies the tables and the whole Hasura metadata on every
+# deploy. It is declarative and idempotent — replace_metadata states what the
+# permissions should be rather than adding to them — so a redeploy is also the
+# way to put the permissions back if someone changes them by hand.
+services:
+  postgres:
+    image: 'postgres:16-alpine'
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: appshots_blog
+      POSTGRES_USER: appshots
+      POSTGRES_PASSWORD: '${SERVICE_PASSWORD_APPSHOTSBLOGPG}'
+    volumes:
+      - 'appshots-blog-pgdata:/var/lib/postgresql/data'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U appshots -d appshots_blog'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hasura:
+    image: 'hasura/graphql-engine:v2.49.0'
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVICE_FQDN_HASURA_8080: /
+      HASURA_GRAPHQL_DATABASE_URL: 'postgres://appshots:${SERVICE_PASSWORD_APPSHOTSBLOGPG}@postgres:5432/appshots_blog'
+      HASURA_GRAPHQL_METADATA_DATABASE_URL: 'postgres://appshots:${SERVICE_PASSWORD_APPSHOTSBLOGPG}@postgres:5432/appshots_blog'
+      HASURA_GRAPHQL_ADMIN_SECRET: '${SERVICE_PASSWORD_64_APPSHOTSBLOGADMIN}'
+      # Unauthenticated requests are the anonymous role, which can read
+      # published articles and nothing else. That is what lets the AppShots
+      # build fetch posts without holding a secret.
+      HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous
+      # The console is how a person publishes a draft. It is behind the admin
+      # secret; dev mode stays off so errors do not leak internals.
+      HASURA_GRAPHQL_ENABLE_CONSOLE: 'true'
+      HASURA_GRAPHQL_DEV_MODE: 'false'
+      HASURA_GRAPHQL_ENABLE_TELEMETRY: 'false'
+      HASURA_GRAPHQL_LOG_LEVEL: warn
+      HASURA_GRAPHQL_ENABLED_LOG_TYPES: 'startup,http-log,webhook-log,websocket-log'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'curl -fsS http://127.0.0.1:8080/healthz || exit 1'
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  schema:
+    image: 'curlimages/curl:8.11.1'
+    restart: 'no'
+    exclude_from_hc: true
+    depends_on:
+      hasura:
+        condition: service_healthy
+    environment:
+      ADMIN_SECRET: '${SERVICE_PASSWORD_64_APPSHOTSBLOGADMIN}'
+    entrypoint:
+      - /bin/sh
+      - '-c'
+    command:
+      - |
+        set -e
+        cat > /tmp/ddl.json <<'PAYLOAD'
+        {"type":"run_sql","args":{"source":"default","cascade":false,"read_only":false,"sql":"CREATE TABLE IF NOT EXISTS public.blog_posts (\n    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n    slug text NOT NULL UNIQUE CHECK (slug ~ '\\A[a-z0-9]+(-[a-z0-9]+)*\\Z'),\n    title text NOT NULL,\n    description text NOT NULL,\n    body_md text NOT NULL,\n    cover_image_url text,\n    category text NOT NULL DEFAULT 'general' CHECK (category ~ '\\A[a-z0-9]+(-[a-z0-9]+)*\\Z'),\n    tags text[] NOT NULL DEFAULT '{}',\n    audience text NOT NULL DEFAULT 'general' CHECK (audience IN ('sponsor','maid','agency','general')),\n    status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','pending_review','published','archived')),\n    cta_override jsonb,\n    ai_generated boolean NOT NULL DEFAULT false,\n    ai_model text,\n    ai_review_notes text,\n    external_id text UNIQUE,\n    target_keyword text,\n    published_url text,\n    published_at timestamptz,\n    created_at timestamptz NOT NULL DEFAULT now(),\n    updated_at timestamptz NOT NULL DEFAULT now()\n  );\nCOMMENT ON TABLE public.blog_posts IS 'AppShots marketing blog articles. Anonymous reads published rows only. content_bot (the PyRunner publisher) files drafts and cannot publish. site_admin has full access.';\nCREATE INDEX IF NOT EXISTS blog_posts_published_idx ON public.blog_posts (status, published_at DESC);\nCREATE INDEX IF NOT EXISTS blog_posts_category_idx ON public.blog_posts (category) WHERE status = 'published';\nCREATE TABLE IF NOT EXISTS public.blog_settings (\n    id boolean PRIMARY KEY DEFAULT true CHECK (id),\n    cta_end_enabled boolean NOT NULL DEFAULT true,\n    cta_mid_enabled boolean NOT NULL DEFAULT true,\n    cta_sticky_enabled boolean NOT NULL DEFAULT false,\n    ai_personalization boolean NOT NULL DEFAULT true,\n    analytics_enabled boolean NOT NULL DEFAULT true,\n    ios_url text,\n    android_url text,\n    updated_at timestamptz NOT NULL DEFAULT now()\n  );\nCOMMENT ON TABLE public.blog_settings IS 'Global blog configuration, one row (id = true). ios_url and android_url stay NULL: AppShots is a web app with no store listing, and the CTA points at signup.';\nINSERT INTO public.blog_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING;\nCREATE OR REPLACE FUNCTION public.blog_posts_set_timestamps() RETURNS trigger AS 'BEGIN NEW.updated_at := now(); IF NEW.status = ''published'' AND NEW.published_at IS NULL THEN NEW.published_at := now(); END IF; RETURN NEW; END;' LANGUAGE plpgsql;\nDROP TRIGGER IF EXISTS blog_posts_timestamps ON public.blog_posts;\nCREATE TRIGGER blog_posts_timestamps BEFORE INSERT OR UPDATE ON public.blog_posts FOR EACH ROW EXECUTE FUNCTION public.blog_posts_set_timestamps();\nCREATE OR REPLACE FUNCTION public.blog_settings_set_updated_at() RETURNS trigger AS 'BEGIN NEW.updated_at := now(); RETURN NEW; END;' LANGUAGE plpgsql;\nDROP TRIGGER IF EXISTS blog_settings_updated_at ON public.blog_settings;\nCREATE TRIGGER blog_settings_updated_at BEFORE UPDATE ON public.blog_settings FOR EACH ROW EXECUTE FUNCTION public.blog_settings_set_updated_at();"}}
+        PAYLOAD
+        cat > /tmp/metadata.json <<'PAYLOAD'
+        {"type":"replace_metadata","args":{"allow_inconsistent_metadata":false,"metadata":{"version":3,"sources":[{"name":"default","kind":"postgres","configuration":{"connection_info":{"database_url":{"from_env":"HASURA_GRAPHQL_DATABASE_URL"},"isolation_level":"read-committed","use_prepared_statements":true}},"tables":[{"table":{"schema":"public","name":"blog_posts"},"select_permissions":[{"role":"anonymous","permission":{"columns":["id","slug","title","description","body_md","cover_image_url","category","tags","audience","cta_override","status","published_at","updated_at"],"filter":{"status":{"_eq":"published"}},"allow_aggregations":false}},{"role":"content_bot","permission":{"columns":["id","slug","external_id","status","published_at","updated_at"],"filter":{}}},{"role":"site_admin","permission":{"columns":["id","slug","title","description","body_md","cover_image_url","category","tags","audience","status","cta_override","ai_generated","ai_model","ai_review_notes","external_id","target_keyword","published_url","published_at","created_at","updated_at"],"filter":{},"allow_aggregations":true}}],"insert_permissions":[{"role":"content_bot","permission":{"check":{"status":{"_in":["draft","pending_review"]}},"columns":["external_id","title","slug","description","body_md","cover_image_url","category","tags","audience","status","target_keyword","ai_generated","ai_model"]}},{"role":"site_admin","permission":{"check":{},"columns":["external_id","slug","title","description","body_md","cover_image_url","category","tags","audience","status","cta_override","target_keyword","published_url","ai_generated","ai_model"]}}],"update_permissions":[{"role":"content_bot","permission":{"columns":["external_id","title","slug","description","body_md","cover_image_url","category","tags","audience","status","target_keyword","ai_generated","ai_model"],"filter":{},"check":{"status":{"_in":["draft","pending_review"]}}}},{"role":"site_admin","permission":{"columns":["external_id","slug","title","description","body_md","cover_image_url","category","tags","audience","status","cta_override","target_keyword","published_url","ai_generated","ai_model"],"filter":{},"check":{}}}],"delete_permissions":[{"role":"site_admin","permission":{"filter":{}}}]},{"table":{"schema":"public","name":"blog_settings"},"select_permissions":[{"role":"anonymous","permission":{"columns":["cta_end_enabled","cta_mid_enabled","cta_sticky_enabled","analytics_enabled","ios_url","android_url"],"filter":{}}},{"role":"site_admin","permission":{"columns":["cta_end_enabled","cta_mid_enabled","cta_sticky_enabled","analytics_enabled","ios_url","android_url","ai_personalization","updated_at"],"filter":{}}}],"update_permissions":[{"role":"site_admin","permission":{"columns":["cta_end_enabled","cta_mid_enabled","cta_sticky_enabled","analytics_enabled","ios_url","android_url","ai_personalization"],"filter":{},"check":{}}}]}]}]}}}
+        PAYLOAD
+        echo "applying schema"
+        curl -sS -f -X POST http://hasura:8080/v2/query \
+          -H "x-hasura-admin-secret: $$ADMIN_SECRET" \
+          -H 'Content-Type: application/json' --data-binary @/tmp/ddl.json
+        echo
+        echo "applying metadata"
+        curl -sS -f -X POST http://hasura:8080/v1/metadata \
+          -H "x-hasura-admin-secret: $$ADMIN_SECRET" \
+          -H 'Content-Type: application/json' --data-binary @/tmp/metadata.json
+        echo
+        echo "schema and permissions are in place"
