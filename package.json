@@ -3,10 +3,10 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "AppShots — create App Store & Google Play screenshots in minutes",
+  "description": "AppShots \u2014 create App Store & Google Play screenshots in minutes",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && vite build --ssr src/entry-server.jsx --outDir dist-ssr && node scripts/prerender.mjs",
     "preview": "vite preview",
     "start": "node server/index.js",
     "serve": "npm run build && node server/index.js",

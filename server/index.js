@@ -82,9 +82,23 @@ const server = http.createServer(async (req, res) => {
       res.end();
       return;
     }
-    const isFile = existsSync(filePath) && statSync(filePath).isFile();
+    let isFile = existsSync(filePath) && statSync(filePath).isFile();
+    // A prerendered page lives at dist/<route>/index.html. Without this the
+    // directory misses and every public route falls back to the empty shell —
+    // which is the exact bug prerendering exists to fix, so it would fail
+    // silently and look like the prerender never ran.
     if (!isFile) {
-      filePath = path.join(DIST, "index.html"); // SPA fallback
+      const indexed = path.join(filePath, "index.html");
+      if (existsSync(indexed) && statSync(indexed).isFile()) {
+        filePath = indexed;
+        isFile = true;
+      }
+    }
+    if (!isFile) {
+      // The empty shell, not the prerendered homepage: a signed-in route must
+      // not be handed the landing page's markup and canonical.
+      const shell = path.join(DIST, "app-shell.html");
+      filePath = existsSync(shell) ? shell : path.join(DIST, "index.html");
     }
     const data = await readFile(filePath);
     res.writeHead(200, {

@@ -6,3 +6,4 @@ dist
 *.log
 .firecrawl
 data
+dist-ssr
