@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { User, Mail, Crown, Check, LogOut, Sparkles, Upload, Trash2 } from "lucide-react";
+import { User, Mail, Crown, Check, LogOut, Sparkles, Upload, Trash2, AlertTriangle, Loader2 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../lib/auth";
@@ -49,7 +49,7 @@ export function formatDate(unixSeconds) {
 }
 
 export default function Settings() {
-  const { user, updateProfile, signOut, openBillingPortal } = useAuth();
+  const { user, updateProfile, signOut, openBillingPortal, deleteAccount } = useAuth();
   const navigate = useNavigate();
   const fileRef = useRef(null);
 
@@ -61,6 +61,11 @@ export default function Settings() {
   const [error, setError] = useState("");
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalError, setPortalError] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [password, setPassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const trimmed = name.trim();
   const nameChanged = !!trimmed && trimmed !== user?.name;
@@ -69,6 +74,25 @@ export default function Settings() {
   const isPaid = !!user?.plan && user.plan !== "free";
   const sub = user?.subscription || null;
   const pastDue = sub?.status === "past_due";
+
+  // Typing the word is the confirmation: a single click is far too cheap for
+  // something that cancels a subscription and erases every project.
+  const canDelete = confirmText.trim().toUpperCase() === "DELETE" && !deleting;
+
+  async function confirmDelete() {
+    if (!canDelete) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteAccount({ password });
+      navigate("/", { replace: true });
+    } catch (e) {
+      setDeleteError(e?.message || "Couldn't delete your account. Please try again.");
+    } finally {
+      setDeleting(false);
+      setPassword("");
+    }
+  }
 
   async function openPortal() {
     if (portalBusy) return;
@@ -283,6 +307,90 @@ export default function Settings() {
               <LogOut size={16} /> Sign out
             </button>
           </div>
+        </section>
+
+        {/* Delete account */}
+        <section className="card mt-6 border-red-500/20 p-6 sm:p-7">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-red-300">
+            <AlertTriangle size={15} /> Delete account
+          </h2>
+          {!deleteOpen ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+              <p className="text-sm text-slate-400">
+                Permanently delete your account, your projects and your uploads. This can't be undone.
+              </p>
+              <button onClick={() => setDeleteOpen(true)} className="btn-ghost text-red-300 hover:text-red-200">
+                <Trash2 size={16} /> Delete account
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-lg border border-red-500/30 bg-red-500/[0.07] px-4 py-3 text-sm text-slate-300">
+                <p className="font-semibold text-red-200">This deletes, permanently:</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-400">
+                  <li>every project and screenshot you've saved</li>
+                  <li>your uploaded images and logo</li>
+                  <li>your sign-in — the email becomes free to register again</li>
+                  {isPaid && <li>your {user.plan} subscription, cancelled immediately with no refund for the rest of the period</li>}
+                </ul>
+                <p className="mt-3 text-xs text-slate-500">
+                  We keep your paid invoices, without your card details, because tax law requires it. See our{" "}
+                  <Link to="/privacy" className="underline hover:text-slate-300">Privacy Policy</Link>.
+                </p>
+              </div>
+
+              <label className="block">
+                <span className="label">Type DELETE to confirm</span>
+                <input
+                  className="input"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  autoComplete="off"
+                />
+              </label>
+
+              <label className="block">
+                <span className="label">Confirm your password</span>
+                <input
+                  type="password"
+                  className="input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Your password"
+                  autoComplete="current-password"
+                />
+                <span className="mt-1 block text-xs text-slate-500">
+                  Leave blank if you signed up with Google — we'll ask Google to confirm instead.
+                </span>
+              </label>
+
+              {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={confirmDelete}
+                  disabled={!canDelete}
+                  className="btn bg-red-600 text-white transition hover:bg-red-500 disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  {deleting ? "Deleting…" : "Delete my account"}
+                </button>
+                <button
+                  onClick={() => {
+                    setDeleteOpen(false);
+                    setConfirmText("");
+                    setPassword("");
+                    setDeleteError("");
+                  }}
+                  disabled={deleting}
+                  className="btn-ghost"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       </main>
       <Footer />

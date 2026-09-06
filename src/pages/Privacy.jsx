@@ -153,7 +153,10 @@ const sections = [
     body: (
       <>
         <ul>
-          <li>Account and content data: for as long as your account exists. Delete your account and we delete it.</li>
+          <li>
+            Account and content data: for as long as your account exists. Deleting your account removes your
+            projects, uploads and sign-in immediately, and cancels any subscription on the spot.
+          </li>
           <li>Backups: removed data may persist in backups for up to 30 days.</li>
           <li>Billing records: as long as tax and accounting law requires, typically several years.</li>
           <li>Server logs: up to 30 days.</li>
@@ -185,7 +188,10 @@ const sections = [
         <ul>
           <li>access the personal data we hold about you and receive a copy;</li>
           <li>correct inaccurate data (most of it can be edited in Settings);</li>
-          <li>delete your account and data;</li>
+          <li>
+            delete your account and data — you can do this yourself at any time in{" "}
+            <b>Settings → Delete account</b>, without asking us;
+          </li>
           <li>receive your data in a portable format (your projects can be exported from the app);</li>
           <li>object to or restrict certain processing, and withdraw consent where processing is based on consent;</li>
           <li>complain to a data-protection authority, for example your local authority in the EEA or the UK.</li>

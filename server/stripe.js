@@ -18,7 +18,7 @@
  * in Coolify or entitlements vanish on redeploy.
  */
 import { createHmac, timingSafeEqual } from "crypto";
-import { mkdirSync, existsSync, writeFileSync, readFileSync } from "fs";
+import { mkdirSync, existsSync, writeFileSync, readFileSync, unlinkSync } from "fs";
 import path from "path";
 import { verifyIdTokenClaims } from "./firebaseAuth.js";
 
@@ -265,6 +265,58 @@ export async function reconcile(uid) {
   writeRecord(uid, next);
   linkCustomer(customerId, uid);
   return publicEntitlement(next);
+}
+
+/**
+ * Account deletion: stop the billing relationship for `uid` and forget it.
+ *
+ * Cancels every live subscription first — the worst possible outcome of a failed
+ * deletion is an account that is gone but still charging — then deletes the
+ * Stripe customer, which strips their name/email/card while Stripe keeps the
+ * invoices and charges we are legally required to retain. Idempotent: a retry
+ * after a partial failure finishes the job.
+ */
+export async function purgeStripeForUid(uid) {
+  if (!validUid(uid)) throw new Error("unauthorized");
+  // Read the file directly: readRecord() hides a customer id belonging to the
+  // other Stripe mode, and deletion has to clean those up too.
+  let raw = null;
+  try {
+    raw = JSON.parse(readFileSync(recPath(uid), "utf8"));
+  } catch {
+    /* no record */
+  }
+  const sameMode = !raw?.mode || raw.mode === keyMode();
+  const customerId = (sameMode && raw?.stripeCustomerId) || (await findCustomerByUid(uid));
+
+  let cancelled = 0;
+  let customerDeleted = false;
+  if (customerId) {
+    try {
+      const q = encodeForm({ customer: customerId, status: "all", limit: 100 }).join("&");
+      const subs = (await stripeRequest("GET", "/subscriptions?" + q, null)).data || [];
+      for (const sub of subs) {
+        if (["canceled", "incomplete_expired"].includes(sub.status)) continue;
+        await stripeRequest("DELETE", `/subscriptions/${encodeURIComponent(sub.id)}`, null);
+        cancelled++;
+      }
+      await stripeRequest("DELETE", `/customers/${encodeURIComponent(customerId)}`, null);
+      customerDeleted = true;
+    } catch (e) {
+      // Already gone in this mode: nothing left to cancel, so deletion continues.
+      if (!isMissing(e)) throw e;
+    }
+  }
+
+  for (const file of [recPath(uid), raw?.stripeCustomerId ? custPath(raw.stripeCustomerId) : null, customerId ? custPath(customerId) : null]) {
+    if (!file) continue;
+    try {
+      unlinkSync(file);
+    } catch {
+      /* not there */
+    }
+  }
+  return { stripeCustomerId: customerId || null, subscriptionsCancelled: cancelled, customerDeleted };
 }
 
 /* ------------------------------- customers -------------------------------------- */

@@ -63,6 +63,15 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // Irreversible: cancels billing, erases the account and signs out. The backend
+  // does the cascade; this only clears the session once it succeeded.
+  const deleteAccount = useCallback(async (confirm) => {
+    if (!backend.deleteAccount) throw new Error("Account deletion isn't available on this backend.");
+    const result = await backend.deleteAccount(confirm);
+    setUser(null);
+    return result;
+  }, []);
+
   // Email a password-reset link. Resolves even for unknown addresses (no account
   // enumeration); throws only for invalid input, rate limits, or network errors.
   const requestPasswordReset = useCallback(async (email) => {
@@ -122,6 +131,7 @@ export function AuthProvider({ children }) {
         signIn,
         signUp,
         signOut,
+        deleteAccount,
         requestPasswordReset,
         sendEmailVerification,
         refreshUser,

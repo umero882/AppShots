@@ -175,6 +175,33 @@ describe("unmetered routes", () => {
     expect(deps.consume).not.toHaveBeenCalled();
   });
 
+  it("routes account deletion without metering it", async () => {
+    deps.deleteAccount = vi.fn(async () => ({ ok: true, blobsDeleted: 3 }));
+    const res = await route({ method: "DELETE", path: "/api/account", headers: TOKEN }, deps);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, blobsDeleted: 3 });
+    // Nobody should be rate-limited or quota-blocked out of leaving.
+    expect(deps.consume).not.toHaveBeenCalled();
+  });
+
+  it("passes an unauthorized deletion through as 401", async () => {
+    deps.deleteAccount = vi.fn(async () => {
+      throw new Error("unauthorized");
+    });
+    expect((await route({ method: "DELETE", path: "/api/account", headers: {} }, deps)).status).toBe(401);
+  });
+
+  it("answers 502 when deletion aborted at the billing step", async () => {
+    const err = new Error("billing-cleanup-failed");
+    err.info = { detail: "stripe timeout" };
+    deps.deleteAccount = vi.fn(async () => {
+      throw err;
+    });
+    const res = await route({ method: "DELETE", path: "/api/account", headers: TOKEN }, deps);
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({ error: "billing-cleanup-failed", detail: "stripe timeout" });
+  });
+
   it("404s an unknown path", async () => {
     const res = await route({ method: "GET", path: "/api/nope", headers: TOKEN }, deps);
     expect(res.status).toBe(404);

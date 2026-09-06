@@ -12,7 +12,7 @@
  * there (default /app/data/blobs) or projects vanish on redeploy.
  */
 import { randomBytes } from "crypto";
-import { mkdirSync, existsSync, writeFileSync, readFileSync, unlinkSync } from "fs";
+import { mkdirSync, existsSync, writeFileSync, readFileSync, unlinkSync, readdirSync } from "fs";
 import path from "path";
 import { verifyIdToken } from "./firebaseAuth.js";
 
@@ -48,6 +48,34 @@ function readRaw(req, maxBytes) {
     req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
+}
+
+/**
+ * Delete every blob owned by `uid`. Used by account deletion — a project doc can
+ * be removed without its blob, and an orphaned blob is still the user's data.
+ * Returns how many were removed; safe to call twice.
+ */
+export function deleteBlobsForUid(uid) {
+  if (!uid || !existsSync(BLOB_DIR)) return 0;
+  let removed = 0;
+  for (const name of readdirSync(BLOB_DIR)) {
+    if (!name.endsWith(".meta")) continue;
+    const id = validId(name.slice(0, -".meta".length));
+    if (!id) continue;
+    try {
+      if (JSON.parse(readFileSync(path.join(BLOB_DIR, name), "utf8")).uid !== uid) continue;
+    } catch {
+      continue; // unreadable meta: leave it rather than delete someone else's blob
+    }
+    try {
+      if (existsSync(blobPath(id))) unlinkSync(blobPath(id));
+      unlinkSync(metaPath(id));
+      removed++;
+    } catch {
+      /* already gone */
+    }
+  }
+  return removed;
 }
 
 /** Handle any /api/blob* request. `pathname` is the URL path (no query). */

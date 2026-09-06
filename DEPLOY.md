@@ -235,3 +235,32 @@ out, the limit, when it resets, and offers Pro to free users.
 already true of the pages that call them (the editor and tracker are behind
 `ProtectedRoute`), but running with `VITE_FIREBASE_DISABLED=1` will make them 401 —
 by design; the gate fails closed.
+
+## Account deletion
+
+`/privacy` promises "delete your account and we delete it", so `DELETE /api/account`
+is real and self-service (Settings → Delete account). The work is split by who holds
+the credentials:
+
+| Step | Who | What |
+|---|---|---|
+| 1 | client | Re-authenticate (password, or a Google popup) |
+| 2 | server | Cancel every live Stripe subscription, then delete the customer |
+| 3 | server | Delete the user's blobs, entitlement record and usage counters |
+| 4 | client | Delete the user's Firestore projects + `users/{uid}` doc |
+| 5 | client | Delete the Firebase Auth user |
+
+The order is the design. Identity is confirmed **before** anything is deleted, because
+Firebase refuses to delete a stale session and finding that out afterwards would leave
+a working login for an emptied account. **Billing is cancelled before any storage** —
+an account that is gone but still charging is the worst possible half-failure — and if
+that step fails the call aborts with `502 billing-cleanup-failed` having deleted
+nothing. The auth record goes last: it is what signs every other call. Each step is
+idempotent, so a retry after a partial failure finishes the job.
+
+**Retained on purpose:** Stripe invoices and charges. Deleting the customer strips the
+name, email and card while the transaction records stay, because tax law requires
+keeping them — `/privacy` → *How long we keep it* says so, and the confirm dialog
+repeats it. Removed data may also sit in the nightly backup for up to 30 days.
+
+The endpoint is never metered: nobody should be rate-limited out of leaving.

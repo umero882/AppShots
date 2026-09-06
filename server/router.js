@@ -12,6 +12,7 @@ import { requestPasswordReset, sendVerificationEmail } from "./authEmail.js";
 import { verifyIdToken } from "./firebaseAuth.js";
 import { readRecord, publicEntitlement } from "./stripe.js";
 import { consume, refund } from "./usage.js";
+import { deleteAccount } from "./account.js";
 
 const ok = (body) => ({ status: 200, body });
 
@@ -70,6 +71,9 @@ export async function route({ method, path, query = {}, body = {}, headers = {} 
     if (key === "GET /api/app-store") return ok(await appStore(query));
     if (key === "POST /api/auth/password-reset") return ok(await requestPasswordReset(body));
     if (key === "POST /api/auth/send-verification") return ok(await sendVerificationEmail(headers));
+    // Authenticates itself (the caller's own token decides whose account it is)
+    // and is never metered — nobody should be rate-limited out of leaving.
+    if (key === "DELETE /api/account") return ok(await (deps.deleteAccount || deleteAccount)(headers, deps));
     return { status: 404, body: { error: "not-found" } };
   } catch (e) {
     // The upstream failed (or was misconfigured) after we charged the caller —

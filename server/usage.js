@@ -198,6 +198,18 @@ export function usageSummary(uid, plan = "free", now = Date.now()) {
   return { plan, resetAt: resetAt(now), kinds };
 }
 
+/** Forget a user's counters entirely — part of account deletion. */
+export function deleteUsage(uid) {
+  if (!validUid(uid)) return false;
+  hits.delete(uid);
+  try {
+    unlinkSync(filePath(uid));
+    return true;
+  } catch {
+    return false; // nothing recorded today
+  }
+}
+
 /** Test hook: forget in-memory burst state and delete the on-disk buckets. */
 export function _resetUsage() {
   hits.clear();

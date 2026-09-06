@@ -178,6 +178,11 @@ const localBackend = {
     return projects[idx];
   },
 
+  async deleteAccount() {
+    for (const key of Object.values(LS)) localStorage.removeItem(key);
+    return { ok: true };
+  },
+
   async deleteProject(id) {
     await delay(120);
     write(
@@ -206,6 +211,11 @@ import {
   applyActionCode as fbApplyActionCode,
   onAuthStateChanged,
   updateProfile as fbUpdateProfile,
+  deleteUser,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  EmailAuthProvider,
+  GoogleAuthProvider,
 } from "firebase/auth";
 import { getFirebase, hasFirebase, firebaseConfig } from "./firebase";
 
@@ -366,6 +376,13 @@ function makeSupabaseBackend() {
       return rowToProject(data);
     },
 
+    async deleteAccount() {
+      // Supabase can only delete an auth user through the admin API, which must
+      // never ship to a browser. Saying so beats deleting the data and leaving
+      // the login working.
+      throw new Error("Account deletion isn't available on this backend — please contact support.");
+    },
+
     async deleteProject(id) {
       const { error } = await supabase.from("projects").delete().eq("id", id);
       if (error) throw new Error(error.message);
@@ -483,11 +500,16 @@ function fbAuthError(e, fallback) {
   if (code === "auth/expired-action-code") return "This link has expired. Request a new one and try again.";
   if (code === "auth/invalid-action-code") return "This link is invalid or has already been used. Request a new one.";
   if (code === "auth/user-disabled") return "This account has been disabled.";
+  if (code === "auth/requires-recent-login")
+    return "For your security, please sign out and back in, then try again.";
+  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request")
+    return "Confirmation was cancelled — nothing was deleted.";
   if (code === "auth/network-request-failed") return "Network error. Check your connection and try again.";
   return fallback || e?.message || "Something went wrong.";
 }
 
-function makeFirebaseBackend() {
+/** Exported for tests — the app uses the `backend` singleton chosen below. */
+export function makeFirebaseBackend() {
   // Firebase restores a persisted session asynchronously — currentUser is null
   // until the first auth-state emission, so resolve on that for getCurrentUser.
   function authReady(auth) {
@@ -909,6 +931,81 @@ function makeFirebaseBackend() {
       if (patch.state !== undefined) Object.assign(upd, await stateFields(patch.state));
       const d = await patchDoc(`/projects/${id}`, upd);
       return d ? hydrate(restDocToProject(d.name, d.fields)) : null;
+    },
+
+    /**
+     * Delete the account for real, in the order that fails safely.
+     *
+     * Identity is re-verified FIRST: Firebase refuses to delete a user whose
+     * login is not recent, and discovering that after the data is gone would
+     * leave a working sign-in for an empty account. Then the server clears what
+     * only it can reach (Stripe, blobs, entitlement, usage), then this user's
+     * own documents, then the auth record last — it is what signs these calls.
+     *
+     * @param {{password?: string}} confirm password for password accounts
+     */
+    async deleteAccount({ password } = {}) {
+      const { auth } = getFirebase();
+      const u = auth.currentUser;
+      if (!u) throw new Error("Not signed in.");
+      const uid = u.uid;
+      const providers = (u.providerData || []).map((p) => p.providerId);
+
+      try {
+        if (providers.includes("password")) {
+          if (!password) {
+            const e = new Error("Enter your password to confirm.");
+            e.code = "password-required";
+            throw e;
+          }
+          await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, password));
+        } else if (providers.includes("google.com")) {
+          await reauthenticateWithPopup(u, new GoogleAuthProvider());
+        }
+      } catch (e) {
+        if (e.code === "password-required") throw e;
+        throw new Error(fbAuthError(e));
+      }
+
+      // 1. Server-owned. Billing stops here; if this fails nothing is deleted.
+      const res = await fetch("/api/account", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${await token()}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          json.error === "billing-cleanup-failed"
+            ? "Couldn't cancel your subscription, so nothing was deleted. Please try again."
+            : "Couldn't delete your account. Please try again.",
+        );
+      }
+
+      // 2. This user's own documents, with this user's own credentials.
+      const rows = await fs(":runQuery", {
+        method: "POST",
+        body: {
+          structuredQuery: {
+            from: [{ collectionId: "projects" }],
+            where: {
+              fieldFilter: { field: { fieldPath: "userId" }, op: "EQUAL", value: { stringValue: uid } },
+            },
+          },
+        },
+      });
+      for (const row of rows || []) {
+        const name = row.document?.name;
+        if (name) await fs(`/projects/${name.split("/").pop()}`, { method: "DELETE" }).catch(() => {});
+      }
+      await fs(`/users/${uid}`, { method: "DELETE" }).catch(() => {});
+
+      // 3. The auth record last — after this the ID token above is worthless.
+      try {
+        await deleteUser(u);
+      } catch (e) {
+        throw new Error(fbAuthError(e));
+      }
+      return { ok: true, ...json };
     },
 
     async deleteProject(id) {
