@@ -110,8 +110,9 @@ copies of auth/projects and billing, but losing this volume would show every pay
 customer as Free until they re-sync and would 404 uploaded assets.
 
 `server/backup-cli.js` (zero-dep: pure-Node tar+gzip and a SigV4 S3 client) snapshots
-the volume to S3-compatible object storage — **Hostinger Object Storage** in
-production:
+the volume to S3-compatible object storage — **Cloudflare R2** in production
+(bucket `appshots-backups`, endpoint `https://<account-id>.r2.cloudflarestorage.com`,
+`BACKUP_S3_REGION=auto`):
 
 | Command | What it does |
 |---|---|
@@ -128,3 +129,35 @@ production:
 **Restore drill:** `npm run backup:list`, pick a key, then
 `npm run backup:restore -- appshots/appshots-….tar.gz --into /tmp/restore` to inspect,
 or without `--into` to overwrite the live data dir (stop writes first: Coolify → Stop).
+
+## SEO and social cards
+
+Everything a crawler or link unfurler needs is a static file in `public/`, so it
+ships with the normal build — no runtime work.
+
+| File | Purpose |
+|---|---|
+| `public/robots.txt` | Marketing + legal pages crawlable; `/api/`, `/auth/action` and every signed-in route disallowed. Advertises the sitemap. |
+| `public/sitemap.xml` | The six public URLs, absolute, on `https://appshots.nextechlabs.tech`. |
+| `public/og-cover.png` | 1200×630 OpenGraph / Twitter card. |
+| `public/googleeb75106204844a1b.html` | Google Search Console ownership token. |
+
+**Do not delete `googleeb75106204844a1b.html`.** Google re-checks it periodically;
+removing the file silently un-verifies the property and Search Console stops
+reporting. Its body must stay byte-exact (no trailing newline, no wrapper).
+
+**Adding a page:** put public routes in `public/sitemap.xml`; put signed-in routes
+behind a `Disallow` in `public/robots.txt`. `src/__tests__/seo.test.js` reads the
+`<ProtectedRoute>` list straight out of `src/App.jsx` and fails if a new protected
+route is not disallowed, or if the sitemap ever advertises one.
+
+**Regenerating the card:** `npm run og:image` (needs Chrome; `CHROME_PATH` overrides
+the lookup). It renders `scripts/og/make-og-image.mjs` headless at exactly 1200×630
+with Inter and the logo inlined, and overwrites `public/og-cover.png` — commit the
+result. Keep the dimensions in step with the `og:image:width/height` tags; the test
+checks the real PNG header against them.
+
+**Cache policy** lives in `server/static.js`. Only Vite's content-hashed `/assets`
+bundles get `immutable`; `.html/.txt/.xml/.json/.webmanifest` are `no-cache` and
+named images get a day. Anything with a stable URL whose contents change on deploy
+must stay out of the immutable branch.
