@@ -9,6 +9,30 @@ AppShots is a static SPA served by a tiny Node server that also hosts the
 - **Health check:** `GET /healthz` → `200 ok` (also wired into the Docker
   `HEALTHCHECK`).
 
+## How the pages are built
+
+`npm run build` is three steps, not one:
+
+1. `vite build` — the client bundle and the `dist/index.html` shell.
+2. `vite build --ssr src/entry-server.jsx` — the same app, built to run in Node.
+3. `node scripts/prerender.mjs` — renders every public route to its own file.
+
+Step 3 is why `/pricing` is a real page. Before it existed the server returned
+one shell for every path, so a crawler saw nine readable words and every page
+carried the **homepage's canonical** — which does not hint, it names the page to
+index instead. Five real pages were asking to be dropped.
+
+Each public route is listed once, in `src/lib/seo.js`, with its title,
+description and canonical. Adding a public page means adding it there **and** to
+`public/sitemap.xml`; a test holds the two lists together. The prerender fails
+the build if a page renders empty, if a canonical did not change, or if two
+pages share a title — a prerender that quietly emitted shells again would look
+exactly like a successful build.
+
+Signed-in routes (`/dashboard`, `/editor`) are deliberately NOT prerendered.
+They fall back to `dist/app-shell.html`, an empty root, so the dashboard is
+never handed the landing page's markup and canonical.
+
 ## One-time setup in Coolify
 
 1. **Connect the source.** Coolify → your project → **+ New** → **Application**.
