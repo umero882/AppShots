@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { backend } from "./backend";
+import { trackSignUp, trackBeginCheckout } from "./analytics";
 
 const AuthContext = createContext(null);
 
@@ -37,6 +38,7 @@ export function AuthProvider({ children }) {
   const signUp = useCallback(async (creds) => {
     const u = await backend.signUp(creds);
     setUser(u);
+    trackSignUp(creds?.provider || "password");
     // New accounts get a verify-your-email link automatically; failures here must
     // never block signup (the dashboard offers a resend).
     if (backend.sendEmailVerification && u && u.emailVerified === false) {
@@ -88,7 +90,10 @@ export function AuthProvider({ children }) {
   // Redirect to Stripe hosted Checkout for a paid plan. Returns a URL to redirect
   // to (real billing), or null when the active backend has no hosted Checkout
   // (offline demo) — the caller then just navigates on.
-  const startCheckout = useCallback(async ({ plan, interval }) => {
+  const startCheckout = useCallback(async ({ plan, interval, price }) => {
+    // Fired before the redirect: this measures intent, which is the number the
+    // purchase event is compared against.
+    trackBeginCheckout({ plan, interval, value: price });
     return backend.startCheckout({ plan, interval });
   }, []);
 

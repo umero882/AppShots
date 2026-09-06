@@ -571,6 +571,27 @@ export function makeFirebaseBackend() {
   }
 
   // --- same-origin blob store (for project state too big for a Firestore doc) ---
+  /**
+   * Turn a blob-store failure into something actionable. "Couldn't save the
+   * project" is the worst possible message for a storage-quota block: the user
+   * can fix that one, but only if we tell them what it is.
+   */
+  async function blobError(res, fallback) {
+    const j = await res.json().catch(() => ({}));
+    const mb = (n) => Math.round((Number(n) || 0) / 1048576);
+    if (j.error === "storage-quota-exceeded") {
+      return new Error(
+        `You've used all ${mb(j.limit)} MB of storage on the ${j.plan} plan. ` +
+          (j.plan === "free"
+            ? "Delete a project you no longer need, or upgrade to Pro for far more room."
+            : "Delete a project you no longer need to free up space."),
+      );
+    }
+    if (j.error === "payload-too-large") return new Error("That file is too large — 25 MB is the limit.");
+    if (j.error === "unauthorized") return new Error("Please sign in again — your session expired.");
+    return new Error(fallback);
+  }
+
   async function putStateBlob(state) {
     const t = await token();
     const res = await fetch("/api/blob", {
@@ -578,7 +599,7 @@ export function makeFirebaseBackend() {
       headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
       body: JSON.stringify(state),
     });
-    if (!res.ok) throw new Error("Couldn't save the project (blob store).");
+    if (!res.ok) throw await blobError(res, "Couldn't save the project (blob store).");
     return (await res.json()).url; // "/api/blob/{id}"
   }
   async function getStateBlob(url) {
@@ -599,7 +620,7 @@ export function makeFirebaseBackend() {
       headers: { Authorization: `Bearer ${t}`, "Content-Type": mime },
       body: bytes,
     });
-    if (!res.ok) throw new Error("Couldn't upload the logo.");
+    if (!res.ok) throw await blobError(res, "Couldn't upload the logo.");
     return (await res.json()).url;
   }
   async function deleteStateBlob(url) {

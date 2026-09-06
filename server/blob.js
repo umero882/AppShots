@@ -15,9 +15,96 @@ import { randomBytes } from "crypto";
 import { mkdirSync, existsSync, writeFileSync, readFileSync, unlinkSync, readdirSync } from "fs";
 import path from "path";
 import { verifyIdToken } from "./firebaseAuth.js";
+import { readRecord, publicEntitlement } from "./stripe.js";
 
 const BLOB_DIR = process.env.BLOB_DIR || path.join(process.cwd(), "data", "blobs");
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB ceiling per blob
+
+/**
+ * Total stored bytes allowed per plan. The 25 MB per-file cap said nothing about
+ * how many files, so a free account could fill the volume one 25 MB upload at a
+ * time — and every byte of it is copied to R2 every night.
+ */
+export const STORAGE_QUOTAS = {
+  free: Number(process.env.STORAGE_QUOTA_FREE) || 100 * 1024 * 1024, // 100 MB
+  pro: Number(process.env.STORAGE_QUOTA_PRO) || 5 * 1024 * 1024 * 1024, // 5 GB
+  team: Number(process.env.STORAGE_QUOTA_TEAM) || 20 * 1024 * 1024 * 1024, // 20 GB
+};
+
+export const storageQuotaFor = (plan) => STORAGE_QUOTAS[plan] || STORAGE_QUOTAS.free;
+
+const QUOTA_DIR = path.join(BLOB_DIR, ".quota");
+const validUid = (uid) => (typeof uid === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(uid) ? uid : null);
+const quotaPath = (uid) => path.join(QUOTA_DIR, `${uid}.json`);
+
+/**
+ * Bytes this user is currently storing. The counter is a cache: if it is missing
+ * (first upload after this shipped, or a restore from backup) it is rebuilt by
+ * scanning the metadata, so the number is never guessed.
+ */
+export function usedBytes(uid) {
+  if (!validUid(uid)) return 0;
+  try {
+    const rec = JSON.parse(readFileSync(quotaPath(uid), "utf8"));
+    if (Number.isFinite(rec.bytes)) return Math.max(0, rec.bytes);
+  } catch {
+    /* fall through to a rebuild */
+  }
+  return rebuildUsage(uid).bytes;
+}
+
+/** Recount from the metadata on disk — the source of truth. */
+export function rebuildUsage(uid) {
+  let bytes = 0;
+  let count = 0;
+  if (validUid(uid) && existsSync(BLOB_DIR)) {
+    for (const name of readdirSync(BLOB_DIR)) {
+      if (!name.endsWith(".meta")) continue;
+      try {
+        const meta = JSON.parse(readFileSync(path.join(BLOB_DIR, name), "utf8"));
+        if (meta.uid !== uid) continue;
+        bytes += Number(meta.size) || 0;
+        count++;
+      } catch {
+        /* skip unreadable */
+      }
+    }
+  }
+  writeUsage(uid, { bytes, count });
+  return { bytes, count };
+}
+
+function writeUsage(uid, rec) {
+  if (!validUid(uid)) return;
+  try {
+    if (!existsSync(QUOTA_DIR)) mkdirSync(QUOTA_DIR, { recursive: true });
+    writeFileSync(quotaPath(uid), JSON.stringify({ bytes: Math.max(0, rec.bytes), count: Math.max(0, rec.count) }));
+  } catch {
+    /* a lost counter costs a rebuild, not correctness */
+  }
+}
+
+/** Apply a delta after an upload (+) or a delete (−). */
+export function addUsage(uid, deltaBytes, deltaCount = deltaBytes > 0 ? 1 : -1) {
+  if (!validUid(uid)) return;
+  let cur;
+  try {
+    cur = JSON.parse(readFileSync(quotaPath(uid), "utf8"));
+  } catch {
+    cur = rebuildUsage(uid);
+    if (deltaBytes > 0) return; // the rebuild already counted this upload
+  }
+  writeUsage(uid, { bytes: (cur.bytes || 0) + deltaBytes, count: (cur.count || 0) + deltaCount });
+}
+
+/** The caller's plan, straight from the server-owned entitlement record. */
+function planFor(uid) {
+  try {
+    return publicEntitlement(readRecord(uid)).plan || "free";
+  } catch {
+    return "free";
+  }
+}
 
 function ensureDir() {
   if (!existsSync(BLOB_DIR)) mkdirSync(BLOB_DIR, { recursive: true });
@@ -59,7 +146,7 @@ export function deleteBlobsForUid(uid) {
   if (!uid || !existsSync(BLOB_DIR)) return 0;
   let removed = 0;
   for (const name of readdirSync(BLOB_DIR)) {
-    if (!name.endsWith(".meta")) continue;
+    if (!name.endsWith(".meta")) continue; // also skips the .quota directory
     const id = validId(name.slice(0, -".meta".length));
     if (!id) continue;
     try {
@@ -74,6 +161,11 @@ export function deleteBlobsForUid(uid) {
     } catch {
       /* already gone */
     }
+  }
+  try {
+    unlinkSync(quotaPath(uid));
+  } catch {
+    /* no counter yet */
   }
   return removed;
 }
@@ -99,6 +191,20 @@ export async function handleBlob(req, res, pathname) {
       } catch {
         return sendJson(res, 413, { error: "payload-too-large" });
       }
+      // Checked after the body is read, not before: the browser sends no reliable
+      // length up front, and refusing on a guess would reject valid uploads.
+      const plan = planFor(uid);
+      const limit = storageQuotaFor(plan);
+      const used = usedBytes(uid);
+      if (used + buf.length > limit) {
+        return sendJson(res, 413, {
+          error: "storage-quota-exceeded",
+          plan,
+          limit,
+          used,
+          needed: buf.length,
+        });
+      }
       const id = randomBytes(16).toString("hex");
       writeFileSync(blobPath(id), buf);
       writeFileSync(
@@ -110,7 +216,8 @@ export async function handleBlob(req, res, pathname) {
           createdAt: Date.now(),
         })
       );
-      return sendJson(res, 200, { id, url: `/api/blob/${id}` });
+      addUsage(uid, buf.length, 1);
+      return sendJson(res, 200, { id, url: `/api/blob/${id}`, storage: { used: used + buf.length, limit, plan } });
     }
 
     // Download (public — ids are unguessable random).
@@ -149,8 +256,10 @@ export async function handleBlob(req, res, pathname) {
         meta = JSON.parse(readFileSync(metaPath(id), "utf8"));
       } catch {}
       if (meta.uid && meta.uid !== uid) return sendJson(res, 403, { error: "forbidden" });
+      const freed = Number(meta.size) || 0;
       try { unlinkSync(blobPath(id)); } catch {}
       try { unlinkSync(metaPath(id)); } catch {}
+      if (freed) addUsage(uid, -freed, -1);
       return sendJson(res, 200, { ok: true });
     }
 

@@ -16,6 +16,7 @@ import {
 import { BG_PRESETS, BG_CATEGORIES } from "../lib/backgroundImages";
 import { searchImages } from "../lib/imageSearch";
 import { describeApiError } from "../lib/apiClient";
+import { trackExport } from "../lib/analytics";
 import {
   getCapabilities, suggestBackgrounds, generateImage, aiGradientCss, AI_MODELS, translateTexts,
 } from "../lib/aiBackground";
@@ -681,6 +682,7 @@ export default function Editor() {
         format,
         targetHeight: oc.h,
       });
+      trackExport({ format, screens: 1, sizes: 1 });
     } finally {
       setExporting(false);
     }
@@ -733,6 +735,7 @@ export default function Editor() {
         const url = URL.createObjectURL(createZip(files));
         triggerDownload(url, `${slug(name)}.zip`);
         setTimeout(() => URL.revokeObjectURL(url), 5000);
+        trackExport({ format: "zip", screens: state.screens.length, sizes: locales.length });
       }
     } finally {
       setLocale(origLocale);
@@ -786,6 +789,7 @@ export default function Editor() {
         const url = URL.createObjectURL(createZip(files));
         triggerDownload(url, `${slug(name)}-all-store-sizes.zip`);
         setTimeout(() => URL.revokeObjectURL(url), 5000);
+        trackExport({ format: "all-sizes", screens: state.screens.length, sizes: STORE_SIZE_EXPORT.length });
         if (failed) {
           tailMsg = `Exported ${files.length}/${total} — ${failed} failed`;
         }

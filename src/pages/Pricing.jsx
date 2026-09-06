@@ -71,7 +71,11 @@ export default function Pricing() {
     setBusy(plan.id);
     setError(null);
     try {
-      const url = await startCheckout({ plan: plan.id, interval: yearly ? "year" : "month" });
+      const url = await startCheckout({
+        plan: plan.id,
+        interval: yearly ? "year" : "month",
+        price: yearly ? plan.price.yr : plan.price.mo,
+      });
       if (url) {
         window.location.href = url; // redirect to Stripe hosted Checkout
         return;

@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import VerifyEmailBanner from "../components/VerifyEmailBanner";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { useAuth } from "../lib/auth";
+import { trackPurchase, trackProjectCreated } from "../lib/analytics";
 import { backend } from "../lib/backend";
 import { defaultProjectState } from "../lib/templates";
 import TemplatePicker from "../components/TemplatePicker";
@@ -39,7 +40,16 @@ export default function Dashboard() {
     if (searchParams.get("checkout") !== "success") return;
     const sessionId = searchParams.get("session_id") || undefined;
     setCheckoutOk(true);
-    refreshEntitlement({ sessionId }).catch(() => {});
+    // Only count the purchase once the SERVER confirms the plan. The redirect
+    // happens whether or not the payment settled, so trusting it would inflate
+    // conversions with abandoned and failed payments.
+    refreshEntitlement({ sessionId })
+      .then((ent) => {
+        if (ent?.plan && ent.plan !== "free") {
+          trackPurchase({ plan: ent.plan, transactionId: sessionId, value: undefined });
+        }
+      })
+      .catch(() => {});
     const next = new URLSearchParams(searchParams);
     next.delete("checkout");
     next.delete("session_id");
@@ -55,6 +65,7 @@ export default function Dashboard() {
         name: template ? template.name : "Untitled project",
         state: template ? templateToProjectState(template) : defaultProjectState(),
       });
+      trackProjectCreated({ source: template ? "template" : "blank" });
       navigate(`/editor/${project.id}`);
     } finally {
       setCreating(false);

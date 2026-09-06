@@ -83,6 +83,10 @@ export function describeApiError(err, fallback = "Something went wrong — pleas
     }
     case "plan-required":
       return `${info.feature || "This feature"} is part of Pro. Upgrade to unlock it.`;
+    case "storage-quota-exceeded": {
+      const mb = Math.round((Number(info.limit) || 0) / 1048576);
+      return `You've used all ${mb} MB of storage on the ${info.plan || "free"} plan. Delete something, or upgrade for more room.`;
+    }
     case "rate-limited":
       return "You're going a bit fast — wait a minute and try again.";
     case "capacity-reached":

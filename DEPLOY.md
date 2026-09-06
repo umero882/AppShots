@@ -319,3 +319,48 @@ HEALTHCHECK restarts the container on failure, so it must never go red for a rea
 restart cannot fix. `/readyz` is readiness: it writes and deletes a probe file to prove
 the **persistent volume is actually mounted and writable**, which is the failure that
 otherwise looks perfectly healthy while silently losing uploads and entitlements.
+
+## Storage quotas
+
+The 25 MB per-file cap said nothing about how many files, so any signed-in account
+could fill the volume one upload at a time — and every byte is copied to R2 nightly.
+`server/blob.js` now enforces a total per plan: **100 MB free, 5 GB Pro, 20 GB Team**
+(`STORAGE_QUOTA_FREE` / `_PRO` / `_TEAM` to change). Over the limit answers `413
+storage-quota-exceeded` with `plan`, `limit`, `used` — the client turns that into a
+sentence naming the limit and what to do about it, because "Couldn't save the project"
+is the worst possible message for the one failure a user can actually fix.
+
+The running total lives in `blobs/.quota/<uid>.json` and is a **cache, not the truth**:
+if it is missing (first upload after this shipped, or a restore from backup) it is
+rebuilt by scanning the blob metadata. Deleting a blob returns its bytes; deleting an
+account removes the counter with the blobs. The quota is checked after the body is
+read, not before — browsers do not send a reliable length up front, and refusing on a
+guess would reject valid uploads.
+
+## Product analytics
+
+Google Analytics for Firebase (`G-1M5WMT27SC`) was already initialised and already
+collected page views. What was missing was the funnel — traffic without drop-off tells
+you nothing about a paid product — so `src/lib/analytics.js` adds the events GA4 cannot
+infer, using GA4's **recommended names** so the built-in reports work without custom
+exploration:
+
+| Event | Fired when | Where |
+|---|---|---|
+| `sign_up` | an account is created | `src/lib/auth.jsx` |
+| `project_created` | first real act of use (blank vs template) | `src/pages/Dashboard.jsx` |
+| `export_completed` | screenshots delivered (single / zip / all sizes) | `src/pages/Editor.jsx` |
+| `begin_checkout` | hosted Checkout opened, with the price shown | `src/lib/auth.jsx` |
+| `purchase` | **the server confirms the plan** after returning from Checkout | `src/pages/Dashboard.jsx` |
+
+`purchase` deliberately does not fire on the Stripe redirect: that happens whether or
+not the payment settled, so trusting it would inflate conversion with abandoned and
+failed payments. It waits for the entitlement reconcile.
+
+Events carry no personal data — no email, name or uid — and never throw; an ad-blocker
+eating analytics is the normal case, not an error.
+
+**Reading the funnel:** GA4 → Reports → Engagement → Events, or Explore → Funnel
+exploration with `sign_up → project_created → begin_checkout → purchase`. New event
+names take up to 24 hours to appear in the standard reports; DebugView shows them
+immediately.
