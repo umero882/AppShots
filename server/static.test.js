@@ -64,4 +64,22 @@ describe("fallbackStatus", () => {
   it("does not catch a path that merely starts with the word", () => {
     expect(fallbackStatus("/blogging-tips")).toBe(200);
   });
+
+  it("404s a missing asset instead of handing an <img> the SPA shell", () => {
+    // Every route this app has is extensionless, so a path naming a type we
+    // serve reached the fallback because the file is not on disk. 200 there is
+    // a soft 404 that reads as "the file exists" to anything that probes.
+    expect(fallbackStatus("/blog-covers/ai-app-screenshot-maker.webp")).toBe(404);
+    expect(fallbackStatus("/assets/index-deleted.js")).toBe(404);
+    expect(fallbackStatus("/og-cover.png")).toBe(404);
+    expect(fallbackStatus("/sitemap.xml")).toBe(404);
+  });
+
+  it("leaves real routes alone, extension-like segments included", () => {
+    for (const p of ["/", "/pricing", "/inspiration", "/editor/abc123", "/settings"]) {
+      expect(fallbackStatus(p), p).toBe(200);
+    }
+    // Not a type we serve, so it is a route and not a missing file.
+    expect(fallbackStatus("/archive.tar.gz")).toBe(200);
+  });
 });

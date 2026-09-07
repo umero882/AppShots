@@ -65,7 +65,20 @@ export function cacheControlFor(filePath, distDir) {
  *
  * The body stays the shell either way, so the reader still gets the app and its
  * "that article isn't here" message. Only the status changes.
+ *
+ * A missing ASSET is the same mistake in a different place. Every route this app
+ * has is extensionless, so a path ending in a type we serve — .webp, .png, .js —
+ * that reached the fallback is a file that is not there, not a page. Answering
+ * 200 with HTML makes an <img> hold a document, hides the real error from the
+ * browser, and tells anything that probes for the file that it exists: the
+ * PyRunner Briefs screen asks the blog whether a cover has been drawn before it
+ * shows one, got 200 for a cover no job has ever drawn, and rendered a broken
+ * image on the card.
  */
+const ASSET_EXT = new Set(Object.keys(MIME));
+
 export function fallbackStatus(pathname) {
-  return pathname === "/blog" || pathname.startsWith("/blog/") ? 404 : 200;
+  if (pathname === "/blog" || pathname.startsWith("/blog/")) return 404;
+  const ext = path.extname(pathname).toLowerCase();
+  return ext && ASSET_EXT.has(ext) ? 404 : 200;
 }
