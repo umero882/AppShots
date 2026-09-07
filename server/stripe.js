@@ -557,7 +557,18 @@ async function getSubscription(req, res, uid, query) {
       return sendJson(res, 200, { ...publicEntitlement(readRecord(uid)), syncError: e.message });
     }
   }
-  return sendJson(res, 200, publicEntitlement(readRecord(uid)));
+  // Records written before the interval was stored have a plan but no period,
+  // which would leave every existing subscriber on the old pricing-page bug
+  // until something else happened to refresh them. Heal once, from Stripe.
+  const rec = readRecord(uid);
+  if (rec?.plan && rec.plan !== "free" && !rec.interval) {
+    try {
+      return sendJson(res, 200, await reconcile(uid));
+    } catch {
+      // Stripe unreachable: serve what we have rather than fail the page.
+    }
+  }
+  return sendJson(res, 200, publicEntitlement(rec));
 }
 
 /** Resolve the AppShots uid a Stripe event object belongs to. */
