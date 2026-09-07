@@ -120,17 +120,31 @@ export function isoDate(iso) {
 }
 
 /**
- * A cover for an article that has none.
+ * The two hues an article's cover is built from, derived from its slug so a
+ * given article always looks the same and a list of them reads as composed
+ * rather than random.
  *
- * Nothing draws cover images for AppShots yet, and a grey box on every card
- * would look like a bug. This picks two brand hues from the slug, so a given
- * article always gets the same cover and a list of them looks composed rather
- * than random.
+ * Shared on purpose: scripts/blog/cover.mjs paints the real cover image from
+ * these same numbers, so the gradient below — which is what a reader sees while
+ * the image is still arriving — is the same two colours the image opens on.
+ * Change the maths here and both move together.
  */
-export function coverGradient(slug) {
+const HUE_START = 205; // deep cyan-blue
+const HUE_SPAN = 95; // ...through the brand indigo (#6366f1, ~239°) to violet
+
+export function coverHues(slug) {
   let hash = 0;
   for (const ch of String(slug)) hash = (hash * 31 + ch.codePointAt(0)) % 360;
-  const from = hash;
-  const to = (hash + 55) % 360;
+  // Confined to a band around the brand hue rather than the whole wheel. The
+  // whole wheel is what it used to be, and it put articles on olive and brown —
+  // colours that read as a muddy photograph rather than as this product, and
+  // that a hash lands on roughly a third of the time.
+  const base = hash % HUE_SPAN;
+  return { from: HUE_START + base, to: HUE_START + ((base + 38) % HUE_SPAN) };
+}
+
+/** The CSS behind a cover image while it loads, and for anything without one. */
+export function coverGradient(slug) {
+  const { from, to } = coverHues(slug);
   return `linear-gradient(135deg, hsl(${from} 70% 24%), hsl(${to} 65% 14%))`;
 }

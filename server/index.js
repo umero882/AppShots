@@ -14,7 +14,7 @@ import { fileURLToPath } from "url";
 import { route } from "./router.js";
 import { handleBlob } from "./blob.js";
 import { handleStripe } from "./stripe.js";
-import { contentTypeFor, cacheControlFor, fallbackStatus } from "./static.js";
+import { contentTypeFor, cacheControlFor, coverAlias, fallbackStatus } from "./static.js";
 import { captureException, sentryConfigured, installProcessHandlers } from "./sentry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -96,6 +96,14 @@ const server = http.createServer(async (req, res) => {
       const body = req.method === "POST" ? await readBody(req) : {};
       const result = await route({ method: req.method, path: u.pathname, query, body, headers: req.headers });
       sendJson(res, result.status, result.body);
+      return;
+    }
+
+    // A cover asked for by the name the ASO dashboard builds. See coverAlias.
+    const alias = coverAlias(u.pathname);
+    if (alias && existsSync(path.join(DIST, alias))) {
+      res.writeHead(302, { location: alias, "cache-control": "no-cache" });
+      res.end();
       return;
     }
 

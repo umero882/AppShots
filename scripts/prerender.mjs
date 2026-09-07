@@ -37,6 +37,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { fetchPosts } from "./blog/posts.mjs";
+import { coverPath, makeCover } from "./blog/cover.mjs";
 import { buildSitemap } from "./sitemap.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -176,6 +177,29 @@ async function main() {
   } catch (error) {
     fail(error.message);
   }
+
+  // Covers, before anything reads coverImageUrl. An article whose row names a
+  // real image keeps it — the database wins over a generated one — but nothing
+  // sets that column today, so in practice every article gets one drawn. This
+  // has to happen here rather than in posts.mjs: it writes files, and posts.mjs
+  // is also what the tests call.
+  const drawn = [];
+  await mkdir(path.join(DIST, "blog-covers"), { recursive: true });
+  for (const post of posts) {
+    if (post.coverImageUrl) continue;
+    try {
+      await writeFile(path.join(DIST, "blog-covers", `${post.slug}.png`), makeCover(post.slug));
+    } catch (error) {
+      // A cover is decoration; an article is not. Losing the picture must not
+      // cost the page, so this degrades to the CSS gradient the blog already
+      // draws for an article without one.
+      console.warn(`[prerender] cover for ${post.slug} failed — ${error.message}`);
+      continue;
+    }
+    post.coverImageUrl = coverPath(post.slug);
+    drawn.push(post.slug);
+  }
+  if (drawn.length) console.log(`[prerender] drew ${drawn.length} cover(s)`);
 
   const index = posts.map(listEntry);
   const count = posts.length;
