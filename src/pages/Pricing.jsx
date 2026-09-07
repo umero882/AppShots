@@ -56,9 +56,54 @@ const plans = [
   },
 ];
 
+/**
+ * What one pricing card should say for this visitor.
+ *
+ * "Current plan" has to mean this plan AND this billing period. Ignoring the
+ * period told a monthly subscriber that the yearly card was already theirs, and
+ * disabled the very button that would have sold them the upgrade.
+ *
+ * Pure and exported so every combination can be tested without driving the
+ * billing-period toggle through the DOM.
+ *
+ * @param {{id:string,name:string,cta:string,comingSoon?:boolean}} plan
+ * @param {{plan?:string, subscription?:{interval?:string|null}}|null} user
+ * @param {boolean} yearly which period the toggle is showing
+ * @returns {{isCurrent:boolean, cta:string, action:"waitlist"|"signup"|"checkout"|"portal"|"none"}}
+ */
+export function planCardState(plan, user, yearly) {
+  const wanted = yearly ? "year" : "month";
+  const subscribed = !!user?.plan && user.plan !== "free";
+  const current = user?.subscription?.interval || null;
+
+  if (plan.comingSoon) return { isCurrent: false, cta: plan.cta, action: "waitlist" };
+
+  // An unknown interval means an entitlement record written before we stored it.
+  // Fall back to plan-only — the previous behaviour — rather than guess wrong.
+  const samePlan = !!user?.plan && plan.id === user.plan;
+  const samePeriod = !current || current === wanted;
+
+  if (plan.id === "free") {
+    const isCurrent = user?.plan === "free";
+    return { isCurrent, cta: isCurrent ? "Current plan" : plan.cta, action: isCurrent ? "none" : "signup" };
+  }
+
+  if (samePlan && samePeriod) return { isCurrent: true, cta: "Current plan", action: "none" };
+
+  if (samePlan) {
+    // Same plan, other period: a real, sellable change — through the portal,
+    // because a second Checkout would mean a second subscription.
+    return { isCurrent: false, cta: yearly ? "Switch to yearly" : "Switch to monthly", action: "portal" };
+  }
+
+  if (subscribed) return { isCurrent: false, cta: `Switch to ${plan.name}`, action: "portal" };
+
+  return { isCurrent: false, cta: plan.cta, action: user ? "checkout" : "signup" };
+}
+
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
-  const { user, startCheckout } = useAuth();
+  const { user, startCheckout, openBillingPortal } = useAuth();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
@@ -70,6 +115,8 @@ export default function Pricing() {
   useEffect(() => {
     if (user?.email) setWaitlistEmail(user.email);
   }, [user?.email]);
+
+  const subscribed = !!user?.plan && user.plan !== "free";
 
   async function joinWaitlist(e) {
     e.preventDefault();
@@ -99,6 +146,24 @@ export default function Pricing() {
     }
     if (!user) {
       navigate("/signup");
+      return;
+    }
+    // Already paying? Every change — plan or billing period — goes through the
+    // portal, which prorates it. A second Checkout would mean a second
+    // subscription and a second charge.
+    if (subscribed) {
+      setBusy(plan.id);
+      setError(null);
+      try {
+        const url = await openBillingPortal();
+        if (url) {
+          window.location.href = url;
+          return;
+        }
+      } catch (e) {
+        setError(e.message || "Couldn't open the billing portal. Please try again.");
+      }
+      setBusy(null);
       return;
     }
     setBusy(plan.id);
@@ -160,7 +225,8 @@ export default function Pricing() {
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
           {plans.map((p) => {
             const price = yearly ? Math.round(p.price.yr / 12) : p.price.mo;
-            const isCurrent = user?.plan === p.id;
+            const card = planCardState(p, user, yearly);
+            const isCurrent = card.isCurrent;
             return (
               <div
                 key={p.id}
@@ -224,7 +290,7 @@ export default function Pricing() {
                     disabled={busy === p.id || isCurrent}
                     className={`mt-7 ${p.highlight ? "btn-primary" : "btn-ghost"}`}
                   >
-                    {isCurrent ? "Current plan" : busy === p.id ? "Processing…" : p.cta}
+                    {busy === p.id ? "Processing…" : card.cta}
                   </button>
                 )}
               </div>

@@ -113,6 +113,7 @@ export function AuthProvider({ children }) {
             plan: ent.plan || prev.plan,
             subscription: {
               status: ent.status,
+              interval: ent.interval || null,
               currentPeriodEnd: ent.currentPeriodEnd,
               cancelAtPeriodEnd: ent.cancelAtPeriodEnd,
             },

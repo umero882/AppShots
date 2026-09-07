@@ -71,6 +71,22 @@ describe("entitlementFromSubscription", () => {
     ...extra,
   });
 
+  it("keeps the billing period, from the price or the lookup key", () => {
+    // It used to be parsed off the lookup_key and dropped, which is what let the
+    // pricing page call the yearly card "Current plan" for a monthly subscriber.
+    expect(
+      entitlementFromSubscription(sub("active", { id: "p", lookup_key: "pro_monthly", recurring: { interval: "month" } })).interval,
+    ).toBe("month");
+    expect(entitlementFromSubscription(sub("active", { id: "p", lookup_key: "pro_yearly" })).interval).toBe("year");
+    expect(entitlementFromSubscription(sub("active", { id: "p", lookup_key: "pro_monthly" })).interval).toBe("month");
+  });
+
+  it("reports no period for a subscription that grants nothing", () => {
+    const e = entitlementFromSubscription(sub("canceled", { id: "p", lookup_key: "pro_yearly" }));
+    expect(e.plan).toBe("free");
+    expect(e.interval).toBeNull();
+  });
+
   it("grants the plan from price metadata when active", () => {
     const e = entitlementFromSubscription(sub("active", { id: "price_1", metadata: { plan: "pro" } }));
     expect(e).toMatchObject({ plan: "pro", status: "active", stripeCustomerId: "cus_1", priceId: "price_1" });
@@ -117,6 +133,13 @@ describe("publicEntitlement", () => {
     expect(publicEntitlement(null)).toEqual({ plan: "free", status: "none" });
   });
 
+  it("passes the billing period through, so the client can tell monthly from yearly", () => {
+    // Without this the pricing page cannot tell the two Pro cards apart and
+    // calls the yearly one "Current plan" for a monthly subscriber.
+    expect(publicEntitlement({ plan: "pro", interval: "year", status: "active" }).interval).toBe("year");
+    expect(publicEntitlement({ plan: "pro", status: "active" }).interval).toBeNull();
+  });
+
   it("projects only the client-facing fields", () => {
     const rec = {
       plan: "pro",
@@ -128,6 +151,7 @@ describe("publicEntitlement", () => {
     };
     expect(publicEntitlement(rec)).toEqual({
       plan: "pro",
+      interval: null,
       status: "active",
       currentPeriodEnd: 123,
       cancelAtPeriodEnd: false,

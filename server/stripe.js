@@ -184,6 +184,7 @@ export function publicEntitlement(rec) {
   if (!rec || !rec.plan) return { ...FREE };
   return {
     plan: rec.plan,
+    interval: rec.interval || null,
     status: rec.status || "none",
     currentPeriodEnd: rec.currentPeriodEnd || null,
     cancelAtPeriodEnd: !!rec.cancelAtPeriodEnd,
@@ -209,13 +210,17 @@ export function entitlementFromSubscription(sub) {
   if (!sub) return { ...FREE };
   const item = sub.items?.data?.[0];
   const price = item?.price || {};
-  const plan =
-    price.metadata?.plan ||
-    (price.lookup_key ? String(price.lookup_key).split("_")[0] : null) ||
-    "pro";
+  const lookup = price.lookup_key ? String(price.lookup_key) : "";
+  const plan = price.metadata?.plan || (lookup ? lookup.split("_")[0] : null) || "pro";
+  // The billing period was being parsed out of "pro_monthly" and thrown away, so
+  // the client could not tell monthly from yearly — which made the pricing page
+  // call the yearly card "Current plan" for a monthly subscriber.
+  const interval =
+    price.recurring?.interval || (lookup.endsWith("_yearly") ? "year" : lookup.endsWith("_monthly") ? "month" : null);
   const entitled = ENTITLED_STATUSES.has(sub.status);
   return {
     plan: entitled ? plan : "free",
+    interval: entitled ? interval : null,
     status: sub.status,
     stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,
     stripeSubscriptionId: sub.id,
@@ -438,6 +443,23 @@ async function createCheckoutSession(req, res, uid, email) {
     priceId = await priceIdForLookup(lookupKey);
   } catch (e) {
     return sendJson(res, 500, { error: "price-unavailable", detail: e.message });
+  }
+
+  // Checkout always creates a NEW subscription. Letting an existing subscriber
+  // through here bills them twice for the same thing — the entitlement record
+  // would then point at whichever one happened to be picked. Plan and interval
+  // changes belong in the billing portal, where Stripe prorates them.
+  try {
+    const current = await reconcile(uid);
+    if (current.plan !== "free" && ENTITLED_STATUSES.has(current.status)) {
+      return sendJson(res, 409, {
+        error: "already-subscribed",
+        plan: current.plan,
+        interval: current.interval || null,
+      });
+    }
+  } catch {
+    // A Stripe hiccup here must not block a genuine first purchase.
   }
 
   const customer = await getOrCreateCustomer(uid, email);

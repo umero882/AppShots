@@ -675,6 +675,7 @@ export function makeFirebaseBackend() {
       base.plan = ent.plan;
       base.subscription = {
         status: ent.status,
+        interval: ent.interval || null,
         currentPeriodEnd: ent.currentPeriodEnd,
         cancelAtPeriodEnd: ent.cancelAtPeriodEnd,
       };
