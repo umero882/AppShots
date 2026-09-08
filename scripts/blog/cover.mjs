@@ -411,18 +411,32 @@ export function renderCover(
 }
 
 /**
- * Both encodings of one article's cover.
+ * One article's cover: the PNG, and the WebP only when the WebP is smaller.
  *
- * Two formats on purpose. WebP is about 8% smaller and every browser worth
- * serving reads it, so it is what the page asks for first. PNG is what goes in
- * og:image: a social card is scraped by whatever the sharer's platform runs, and
- * a preview that silently fails to render is worse than a slightly larger file.
- * The picture is identical either way — verified pixel for pixel against a real
- * decoder, see cover.test.js.
+ * PNG is always written, and is what og:image points at — a social card is
+ * scraped by whatever the sharer's platform runs, and a preview that silently
+ * fails to render costs more than a few KB. WebP is offered beside it for the
+ * page itself.
+ *
+ * "Only when smaller" is not caution, it is a measurement. WebP won by 8% on the
+ * first cover and LOST by 6% on the second: this encoder has no colour cache and
+ * one Huffman group, so which format wins depends on the picture, and the two
+ * covers differ in hue and stagger. Serving <picture> without checking would
+ * hand browsers the bigger file whenever the coin lands the other way — the
+ * exact opposite of the point.
  */
 export function makeCover(post) {
   const rgb = renderCover(post);
-  return { png: encodePng(rgb, WIDTH, HEIGHT), webp: encodeWebp(rgb, WIDTH, HEIGHT) };
+  const png = encodePng(rgb, WIDTH, HEIGHT);
+  let webp = null;
+  try {
+    const encoded = encodeWebp(rgb, WIDTH, HEIGHT);
+    if (encoded.length < png.length) webp = encoded;
+  } catch (error) {
+    // A hand-written encoder that throws must not cost the article its cover.
+    console.warn(`[cover] webp skipped — ${error.message}`);
+  }
+  return { png, webp };
 }
 
 /** Where the cover for a slug is served from, per format. */

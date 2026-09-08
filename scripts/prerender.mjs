@@ -185,12 +185,16 @@ async function main() {
   // is also what the tests call.
   const drawn = [];
   await mkdir(path.join(DIST, "blog-covers"), { recursive: true });
+  let webpCount = 0;
   for (const post of posts) {
     if (post.coverImageUrl) continue;
+    let cover = { webp: false };
     try {
       const { png, webp } = makeCover(post);
       await writeFile(path.join(DIST, "blog-covers", `${post.slug}.png`), png);
-      await writeFile(path.join(DIST, "blog-covers", `${post.slug}.webp`), webp);
+      // Only when it is actually smaller — see makeCover.
+      if (webp) await writeFile(path.join(DIST, "blog-covers", `${post.slug}.webp`), webp);
+      cover = { webp: !!webp };
     } catch (error) {
       // A cover is decoration; an article is not. Losing the picture must not
       // cost the page, so this degrades to the CSS gradient the blog already
@@ -199,12 +203,18 @@ async function main() {
       continue;
     }
     // The PNG is the canonical one: og:image, structured data, and the <img>
-    // any browser without WebP falls back to. The WebP is offered beside it.
+    // any browser without WebP falls back to. The WebP is offered beside it
+    // only when it won on size, so <picture> can never pick the bigger file.
     post.coverImageUrl = coverPath(post.slug, "png");
-    post.coverWebpUrl = coverPath(post.slug, "webp");
+    if (cover.webp) {
+      post.coverWebpUrl = coverPath(post.slug, "webp");
+      webpCount += 1;
+    }
     drawn.push(post.slug);
   }
-  if (drawn.length) console.log(`[prerender] drew ${drawn.length} cover(s), PNG + WebP`);
+  if (drawn.length) {
+    console.log(`[prerender] drew ${drawn.length} cover(s); ${webpCount} smaller as WebP`);
+  }
 
   const index = posts.map(listEntry);
   const count = posts.length;

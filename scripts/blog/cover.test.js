@@ -232,6 +232,14 @@ describe("coverPath", () => {
  * cheap, and the parts a refactor is most likely to break.
  */
 describe("cover WebP", () => {
+  // A cover whose WebP is smaller, so makeCover actually returns one.
+  const webpFixture = () =>
+    makeCover({
+      slug: "ai-app-screenshot-maker",
+      title: "AI App Screenshot Maker: What the AI Actually Does",
+      category: "screenshots",
+    });
+
   const bits = (buf, at, n) => {
     let value = 0;
     for (let i = 0; i < n; i += 1) {
@@ -242,7 +250,7 @@ describe("cover WebP", () => {
   };
 
   it("is a RIFF/WEBP/VP8L file whose sizes agree with its length", () => {
-    const { webp } = makeCover({ slug: "ai-app-screenshot-maker", title: "A Cover" });
+    const { webp } = webpFixture();
     expect(webp.toString("ascii", 0, 4)).toBe("RIFF");
     expect(webp.toString("ascii", 8, 12)).toBe("WEBP");
     expect(webp.toString("ascii", 12, 16)).toBe("VP8L");
@@ -255,7 +263,7 @@ describe("cover WebP", () => {
   });
 
   it("carries the real dimensions in its header bits", () => {
-    const { webp } = makeCover({ slug: "ai-app-screenshot-maker", title: "A Cover" });
+    const { webp } = webpFixture();
     const stream = webp.subarray(21); // past the signature
     expect(bits(stream, 0, 14) + 1).toBe(WIDTH);
     expect(bits(stream, 14, 14) + 1).toBe(HEIGHT);
@@ -263,13 +271,23 @@ describe("cover WebP", () => {
     expect(bits(stream, 29, 3)).toBe(0); // version must be 0
   });
 
-  it("beats the PNG, which is the only reason to carry two of them", () => {
-    const { png, webp } = makeCover({
+  it("is offered only when it is smaller than the PNG", () => {
+    // Two real covers that land on opposite sides of this, which is why the
+    // check exists: WebP wins the first by 8% and loses the second by 6%.
+    const first = makeCover({
       slug: "ai-app-screenshot-maker",
       title: "AI App Screenshot Maker: What the AI Actually Does",
       category: "screenshots",
     });
-    expect(webp.length).toBeLessThan(png.length);
+    expect(first.webp).not.toBeNull();
+    expect(first.webp.length).toBeLessThan(first.png.length);
+
+    const second = makeCover({
+      slug: "android-screenshot-generator",
+      title: "Android Screenshot Generator: Sizes, Rules & Templates",
+      category: "screenshots",
+    });
+    expect(second.webp).toBeNull();
   });
 
   it("refuses a buffer that is not the size it was told", () => {
