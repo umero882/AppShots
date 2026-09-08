@@ -6,6 +6,7 @@ import Signup from "./pages/Signup";
 import AuthAction from "./pages/AuthAction";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import DataDeletion from "./pages/DataDeletion";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import Dashboard from "./pages/Dashboard";
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/auth/action" element={<AuthAction />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/data-deletion" element={<DataDeletion />} />
         <Route
           path="/dashboard"
           element={

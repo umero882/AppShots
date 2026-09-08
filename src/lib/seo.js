@@ -89,6 +89,14 @@ export const PAGES = {
     title: "Terms of Service — AppShots",
     description: "The terms you agree to when you use AppShots, in plain language.",
   },
+  // The address given to Meta, Google Play and Apple as the data deletion
+  // instructions URL. It has to resolve for anyone, signed in or not, and it
+  // has to keep resolving — a review fails on a 404 here.
+  "/data-deletion": {
+    title: "Data Deletion Instructions — AppShots",
+    description:
+      "Delete your AppShots account and data yourself in Settings, or request it by email if you cannot sign in. What is removed, what is kept, and how long it takes.",
+  },
 };
 
 /** Every route the build prerenders — everything a crawler can reach. */

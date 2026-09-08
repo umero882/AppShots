@@ -32,6 +32,7 @@ export default function Footer() {
         { label: "Contact", href: "mailto:nextechlabs.dev@gmail.com" },
         { label: "Privacy Policy", to: "/privacy" },
         { label: "Terms of Service", to: "/terms" },
+        { label: "Data deletion", to: "/data-deletion" },
         // Consent has to be as easy to withdraw as it was to give.
         { label: "Cookie preferences", action: "cookies" },
       ],
