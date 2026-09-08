@@ -82,12 +82,15 @@ export default function BlogPost() {
           style={post.coverImageUrl ? undefined : { backgroundImage: coverGradient(post.slug) }}
         >
           {post.coverImageUrl && (
-            <img
-              src={post.coverImageUrl}
-              alt=""
-              decoding="async"
-              className="h-full w-full object-cover"
-            />
+            <picture>
+              {post.coverWebpUrl && <source srcSet={post.coverWebpUrl} type="image/webp" />}
+              <img
+                src={post.coverImageUrl}
+                alt=""
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            </picture>
           )}
         </div>
 

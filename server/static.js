@@ -82,25 +82,3 @@ export function fallbackStatus(pathname) {
   const ext = path.extname(pathname).toLowerCase();
   return ext && ASSET_EXT.has(ext) ? 404 : 200;
 }
-
-// A slug, as the database CHECK defines it — kebab-case, nothing that could
-// become a second path segment.
-const COVER_ALIAS = /^\/blog-covers\/([a-z0-9]+(?:-[a-z0-9]+)*)\.webp$/;
-
-/**
- * The .png a request for a cover's .webp means, or null.
- *
- * The covers this build draws are PNG — encoding WebP by hand is a Huffman
- * coder, and the point of this server is that it ships without dependencies.
- * The ASO dashboard that watches the publishing queue derives a cover's address
- * from the article's, and hardcodes `.webp`, so it probes a URL nothing here
- * serves and shows "no cover yet" beside a post that has one.
- *
- * A redirect, rather than serving PNG bytes under a .webp name: the alias costs
- * one hop and stays honest about what the file is, where the alternative tells
- * every client the content type is image/webp and hands them a PNG.
- */
-export function coverAlias(pathname) {
-  const match = COVER_ALIAS.exec(pathname);
-  return match ? `/blog-covers/${match[1]}.png` : null;
-}

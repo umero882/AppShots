@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import path from "path";
-import { contentTypeFor, cacheControlFor, coverAlias, fallbackStatus } from "./static.js";
+import { contentTypeFor, cacheControlFor, fallbackStatus } from "./static.js";
 
 const DIST = path.join("/app", "dist");
 const inDist = (...p) => path.join(DIST, ...p);
@@ -84,32 +84,3 @@ describe("fallbackStatus", () => {
   });
 });
 
-describe("coverAlias", () => {
-  it("points a cover's .webp at the .png that exists", () => {
-    expect(coverAlias("/blog-covers/ai-app-screenshot-maker.webp")).toBe(
-      "/blog-covers/ai-app-screenshot-maker.png",
-    );
-  });
-
-  it("ignores everything that is not a cover", () => {
-    for (const p of [
-      "/blog-covers/x.png",
-      "/og-cover.webp",
-      "/blog/ai-app-screenshot-maker",
-      "/blog-covers/.webp",
-    ]) {
-      expect(coverAlias(p), p).toBeNull();
-    }
-  });
-
-  it("will not let a slug climb out of the covers directory", () => {
-    // The redirect target is built from the capture, so this is the gate.
-    for (const p of [
-      "/blog-covers/../../etc/passwd.webp",
-      "/blog-covers/a/b.webp",
-      "/blog-covers/Upper.webp",
-    ]) {
-      expect(coverAlias(p), p).toBeNull();
-    }
-  });
-});

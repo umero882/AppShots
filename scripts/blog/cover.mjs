@@ -29,9 +29,13 @@
  * Colour type 2 (truecolour, 8-bit), adaptive None/Up row filters.
  */
 
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { deflateSync } from "node:zlib";
 
 import { coverHues } from "../../src/lib/blog.js";
+import { drawLine, fitText, parseFont } from "./font.mjs";
+import { encodeWebp } from "./webp.mjs";
 
 /** Facebook, X and LinkedIn all read 1.91:1. This is that, at the size they cache. */
 export const WIDTH = 1200;
@@ -177,6 +181,100 @@ function roundRect(buf, { x, y, w, h, radius, color, alpha, width = WIDTH, heigh
 const WHITE = [255, 255, 255];
 const BLACK = [0, 0, 0];
 
+// ---------------------------------------------------------------------------
+// The headline
+// ---------------------------------------------------------------------------
+
+/**
+ * Inter, the typeface the site already sets everything in and already ships as
+ * a dependency so exports can embed it. Read once and kept.
+ *
+ * A failure here is deliberately not fatal. The font is a build-time file and
+ * the cover is decoration: if it ever moves, the covers lose their titles and
+ * the blog keeps working, rather than the deploy stopping over a picture. It
+ * says so once, loudly, so it cannot go unnoticed for long.
+ */
+let fontCache;
+function inter() {
+  if (fontCache !== undefined) return fontCache;
+  try {
+    const require = createRequire(import.meta.url);
+    const file = require.resolve("@fontsource/inter/files/inter-latin-700-normal.woff");
+    fontCache = parseFont(readFileSync(file));
+  } catch (error) {
+    console.warn(`[cover] no headline font — ${error.message}`);
+    fontCache = null;
+  }
+  return fontCache;
+}
+
+function drawHeadline(buf, { width, height, title, category, hue }) {
+  const font = inter();
+  if (!font || !String(title).trim()) return;
+
+  const fitted = fitText(font, title, {
+    maxWidth: TITLE_WIDTH,
+    maxLines: TITLE_MAX_LINES,
+    sizes: TITLE_SIZES,
+  });
+  // A title no size will wrap into three lines is a title long enough that
+  // shrinking it further would be unreadable on a card anyway.
+  if (!fitted) return;
+
+  const { size, lines } = fitted;
+  const leading = size * 1.16;
+  const eyebrow = String(category || "").trim().toUpperCase();
+  const eyebrowSize = 23;
+  const eyebrowGap = eyebrow ? eyebrowSize * 1.9 : 0;
+
+  // Centred in the safe band rather than on the canvas, so the crop the site
+  // applies takes equal amounts off a block that is already where it will be
+  // seen.
+  const blockHeight = eyebrowGap + (lines.length - 1) * leading + size;
+  let baseline = (SAFE_TOP + SAFE_BOTTOM) / 2 - blockHeight / 2 + size * 0.82;
+
+  if (eyebrow) {
+    drawLine(font, eyebrow, {
+      buf,
+      width,
+      height,
+      x: TITLE_LEFT,
+      baseline: baseline - eyebrowGap + eyebrowSize * 0.1,
+      size: eyebrowSize,
+      // Light enough to read as a label rather than a second headline, tinted
+      // toward the cover's own second hue so it belongs to the picture.
+      color: hslToRgb(hue, 0.75, 0.76),
+      alpha: 0.95,
+      tracking: 0.12,
+      blend,
+    });
+  }
+
+  for (const line of lines) {
+    // A soft drop shadow: the panels behind the headline are lighter than the
+    // field, and white on white is where a cover stops being legible.
+    drawLine(font, line, {
+      buf, width, height,
+      x: TITLE_LEFT + 2,
+      baseline: baseline + 3,
+      size,
+      color: BLACK,
+      alpha: 0.32,
+      blend,
+    });
+    drawLine(font, line, {
+      buf, width, height,
+      x: TITLE_LEFT,
+      baseline,
+      size,
+      color: WHITE,
+      alpha: 0.97,
+      blend,
+    });
+    baseline += leading;
+  }
+}
+
 /**
  * One screenshot panel: the frame, a lighter band where a screenshot's headline
  * sits, and two content bars. Deliberately faint — this reads as texture at card
@@ -214,12 +312,31 @@ function panel(buf, { x, y, w, h, alpha }) {
 }
 
 /**
+ * The safe band. Both places the cover appears crop it: the blog index to a
+ * 144px strip and the article header to ~192px, both with object-cover, which
+ * takes the crop out of the top and bottom. A headline outside roughly y 175 to
+ * y 455 is a headline nobody on the site ever reads — only the social card,
+ * which is the one place it is shown whole.
+ */
+const SAFE_TOP = 175;
+const SAFE_BOTTOM = 455;
+
+/** Tried largest first; the first that fits three lines wins. */
+const TITLE_SIZES = [72, 64, 58, 52, 46, 40];
+const TITLE_LEFT = 78;
+const TITLE_WIDTH = 560;
+const TITLE_MAX_LINES = 3;
+
+/**
  * The cover for one article as raw RGB.
  *
  * Split from the encoder so the composition can be asserted pixel by pixel in a
  * test without decoding a PNG.
  */
-export function renderCover(slug, { width = WIDTH, height = HEIGHT } = {}) {
+export function renderCover(
+  { slug, title = "", category = "" },
+  { width = WIDTH, height = HEIGHT } = {},
+) {
   const { from, to } = coverHues(slug);
   const start = hslToRgb(from, 0.7, 0.24);
   const end = hslToRgb(to, 0.65, 0.14);
@@ -251,23 +368,35 @@ export function renderCover(slug, { width = WIDTH, height = HEIGHT } = {}) {
     }
   }
 
-  // Four panels, staggered. The stagger comes off the slug too, so two articles
-  // that happen to land on close hues still do not look like the same picture.
+  // The screenshot set, on the right, with the last panel running off the edge —
+  // a set continues past the frame, and a row of three centred boxes reads as a
+  // diagram. The headline gets the left.
   const seed = from;
-  const panelW = width * 0.175;
-  const panelH = height * 0.7;
-  const step = width * 0.216;
-  const left = width * 0.115;
+  const panelW = width * 0.13;
+  const panelH = height * 0.68;
+  const step = width * 0.152;
+  const left = width * 0.585;
   for (let n = 0; n < 4; n += 1) {
     const lift = ((seed + n * 97) % 5) / 4; // 0..1, stable per slug
     panel(buf, {
       x: left + n * step,
-      y: height * 0.16 + lift * height * 0.14 - (n % 2 ? height * 0.06 : 0),
+      y: height * 0.17 + lift * height * 0.13 - (n % 2 ? height * 0.07 : 0),
       w: panelW,
       h: panelH,
       alpha: 0.07 + (n % 3) * 0.022,
     });
   }
+
+  // A scrim under the headline. The gradient is dark, but the panels are not,
+  // and a title must not depend on which hue the slug happened to land on.
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width * 0.62; x += 1) {
+      const t = 1 - x / (width * 0.62);
+      blend(buf, (y * width + x) * 3, BLACK, 0.3 * t ** 1.5);
+    }
+  }
+
+  drawHeadline(buf, { width, height, title, category, hue: to });
 
   // Grounds the composition and keeps the bottom edge from glowing when the
   // blog index crops the middle out.
@@ -281,12 +410,22 @@ export function renderCover(slug, { width = WIDTH, height = HEIGHT } = {}) {
   return buf;
 }
 
-/** The finished PNG for one article. */
-export function makeCover(slug) {
-  return encodePng(renderCover(slug), WIDTH, HEIGHT);
+/**
+ * Both encodings of one article's cover.
+ *
+ * Two formats on purpose. WebP is about 8% smaller and every browser worth
+ * serving reads it, so it is what the page asks for first. PNG is what goes in
+ * og:image: a social card is scraped by whatever the sharer's platform runs, and
+ * a preview that silently fails to render is worse than a slightly larger file.
+ * The picture is identical either way — verified pixel for pixel against a real
+ * decoder, see cover.test.js.
+ */
+export function makeCover(post) {
+  const rgb = renderCover(post);
+  return { png: encodePng(rgb, WIDTH, HEIGHT), webp: encodeWebp(rgb, WIDTH, HEIGHT) };
 }
 
-/** Where the cover for a slug is served from. */
-export function coverPath(slug) {
-  return `/blog-covers/${slug}.png`;
+/** Where the cover for a slug is served from, per format. */
+export function coverPath(slug, format = "png") {
+  return `/blog-covers/${slug}.${format}`;
 }

@@ -188,7 +188,9 @@ async function main() {
   for (const post of posts) {
     if (post.coverImageUrl) continue;
     try {
-      await writeFile(path.join(DIST, "blog-covers", `${post.slug}.png`), makeCover(post.slug));
+      const { png, webp } = makeCover(post);
+      await writeFile(path.join(DIST, "blog-covers", `${post.slug}.png`), png);
+      await writeFile(path.join(DIST, "blog-covers", `${post.slug}.webp`), webp);
     } catch (error) {
       // A cover is decoration; an article is not. Losing the picture must not
       // cost the page, so this degrades to the CSS gradient the blog already
@@ -196,10 +198,13 @@ async function main() {
       console.warn(`[prerender] cover for ${post.slug} failed — ${error.message}`);
       continue;
     }
-    post.coverImageUrl = coverPath(post.slug);
+    // The PNG is the canonical one: og:image, structured data, and the <img>
+    // any browser without WebP falls back to. The WebP is offered beside it.
+    post.coverImageUrl = coverPath(post.slug, "png");
+    post.coverWebpUrl = coverPath(post.slug, "webp");
     drawn.push(post.slug);
   }
-  if (drawn.length) console.log(`[prerender] drew ${drawn.length} cover(s)`);
+  if (drawn.length) console.log(`[prerender] drew ${drawn.length} cover(s), PNG + WebP`);
 
   const index = posts.map(listEntry);
   const count = posts.length;
