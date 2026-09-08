@@ -6,7 +6,7 @@
  * for a user. The client owns the two things it can delete with its own
  * credentials (its Firestore documents and its Firebase Auth user); this endpoint
  * owns what the client cannot touch — Stripe, the blob store, the entitlement
- * record and the usage counters.
+ * record, the usage counters and any Team workspace the user is part of.
  *
  * Ordering is deliberate: **billing first**. The worst outcome of a half-finished
  * deletion is an account the user can no longer reach that is still being
@@ -21,6 +21,7 @@ import { verifyIdToken } from "./firebaseAuth.js";
 import { purgeStripeForUid } from "./stripe.js";
 import { deleteBlobsForUid } from "./blob.js";
 import { deleteUsage } from "./usage.js";
+import { purgeTeamsForUid } from "./teams.js";
 
 /**
  * Delete the server-side footprint of the caller's account.
@@ -33,6 +34,7 @@ export async function deleteAccount(headers = {}, deps = {}) {
   const purgeStripe = deps.purgeStripeForUid || purgeStripeForUid;
   const purgeBlobs = deps.deleteBlobsForUid || deleteBlobsForUid;
   const purgeUsage = deps.deleteUsage || deleteUsage;
+  const purgeTeams = deps.purgeTeamsForUid || purgeTeamsForUid;
 
   let uid;
   try {
@@ -52,6 +54,18 @@ export async function deleteAccount(headers = {}, deps = {}) {
     throw err;
   }
 
+  // Teams next, and still before storage: the subscription that paid for the
+  // seats is now cancelled, so leaving the workspace standing would keep handing
+  // its members a plan nobody is paying for. Failures here are not fatal — the
+  // seat cannot outlive the entitlement check either way, which reads the
+  // owner's (now cancelled) subscription.
+  let team = { disbanded: false, left: false };
+  try {
+    team = await purgeTeams(uid, deps);
+  } catch {
+    team = { disbanded: false, left: false, failed: true };
+  }
+
   const blobsDeleted = purgeBlobs(uid);
   const usageCleared = purgeUsage(uid);
 
@@ -59,6 +73,8 @@ export async function deleteAccount(headers = {}, deps = {}) {
     ok: true,
     blobsDeleted,
     usageCleared,
+    teamDisbanded: !!team.disbanded,
+    teamLeft: !!team.left,
     subscriptionsCancelled: stripe.subscriptionsCancelled,
     stripeCustomerDeleted: stripe.customerDeleted,
   };

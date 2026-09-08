@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthShell from "../components/AuthShell";
 import { useAuth } from "../lib/auth";
 
 export default function Signup() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Someone who arrived from a team invite must come back to it after signing
+  // up; dropping them on the dashboard silently loses the invite they clicked.
+  const from = location.state?.from || "/dashboard";
 
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
@@ -21,7 +25,7 @@ export default function Signup() {
     setBusy(true);
     try {
       await signUp(form);
-      navigate("/dashboard", { replace: true });
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

@@ -10,6 +10,8 @@ import {
 import { SHORTCUTS } from "../lib/shortcuts";
 import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
+import TeamStylePanel from "../components/TeamStylePanel";
+import BrandSwatches from "../components/BrandSwatches";
 import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
@@ -1108,7 +1110,7 @@ export default function Editor() {
           </div>
 
           <div className="scroll-thin flex-1 overflow-y-auto p-4">
-            {tab === "templates" && <TemplatesPanel update={update} />}
+            {tab === "templates" && <TemplatesPanel update={update} state={state} projectName={name} />}
             {tab === "device" && (
               <DevicePanel
                 state={state}
@@ -1303,7 +1305,7 @@ export default function Editor() {
 
 /* ----------------------------- panels ----------------------------- */
 
-function TemplatesPanel({ update }) {
+function TemplatesPanel({ update, state, projectName }) {
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-400">
@@ -1314,6 +1316,7 @@ function TemplatesPanel({ update }) {
         thumbWidth={120}
         onSelect={(t) => update((prev) => applyTemplateStyle(prev, t))}
       />
+      <TeamStylePanel state={state} projectName={projectName} update={update} />
     </div>
   );
 }
@@ -1548,6 +1551,7 @@ function BackgroundPanel({ state, update, screen, onScreen }) {
               className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
             />
           </div>
+          <BrandSwatches value={bg.solid} onPick={(c) => onScreen({ background: { ...bg, solid: c } })} />
         </div>
       )}
 
@@ -2163,6 +2167,7 @@ function TextPanel({ state, update, screen, onScreen, locale = BASE_LOCALE, onTe
           onChange={(e) => update({ text: { ...t, color: e.target.value } })}
           className="h-10 w-full cursor-pointer rounded-lg bg-transparent"
         />
+        <BrandSwatches value={t.color} onPick={(c) => update({ text: { ...t, color: c } })} />
       </div>
 
       <div>

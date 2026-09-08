@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import { AuthProvider } from "./lib/auth.jsx";
+import { TeamProvider } from "./lib/teamContext.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { installErrorReporting } from "./lib/errorReporter.js";
 import CookieBanner from "./components/CookieBanner.jsx";
@@ -29,8 +30,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <App />
-          <CookieBanner />
+          <TeamProvider>
+            <App />
+            <CookieBanner />
+          </TeamProvider>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>

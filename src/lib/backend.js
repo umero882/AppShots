@@ -191,6 +191,28 @@ const localBackend = {
     );
     return true;
   },
+
+  /* --- team --- */
+  async uploadImage(dataUrl) {
+    return dataUrl || null; // offline demo keeps the data-URL as-is
+  },
+  // The offline demo has no workspace. These answer empty instead of throwing so
+  // a Team-aware screen degrades to "no team" rather than to an error boundary.
+  async listTeamProjects() {
+    return [];
+  },
+  async setProjectTeam(id) {
+    return read(LS.projects, []).find((p) => p.id === id) || null;
+  },
+  async listTeamTemplates() {
+    return [];
+  },
+  async saveTeamTemplate() {
+    throw new Error("Shared templates need the Firebase backend.");
+  },
+  async deleteTeamTemplate() {
+    return true;
+  },
 };
 
 /* ------------------------------- Supabase backend ------------------------------- *
@@ -463,6 +485,7 @@ export function restDocToProject(docPath, fields) {
   return {
     id: (docPath || "").split("/").pop(),
     userId: r.userId,
+    teamId: r.teamId || null,
     name: r.name,
     state: r.state,
     stateBlob: r.stateBlob || null,
@@ -679,6 +702,11 @@ export function makeFirebaseBackend() {
         currentPeriodEnd: ent.currentPeriodEnd,
         cancelAtPeriodEnd: ent.cancelAtPeriodEnd,
       };
+      // How they got the plan, not just which one. A seat holder must not be
+      // shown a renewal date or a cancel button for a card that isn't theirs.
+      base.planVia = ent.via || (ent.plan === "free" ? "none" : "billing");
+      base.teamId = ent.teamId || null;
+      base.teamRole = ent.teamRole || null;
     }
     return base;
   }
@@ -939,20 +967,129 @@ export function makeFirebaseBackend() {
       const fields = {
         userId,
         name: data.name || "Untitled project",
+        // Absent on personal projects. The rules read it to decide whether the
+        // rest of a workspace may open this document, so it is only ever set to
+        // a team the caller is actually in — they cannot write it otherwise.
+        teamId: data.teamId || null,
         createdAt: now,
         updatedAt: now,
         ...(await stateFields(state)),
       };
       const created = await fs(`/projects`, { method: "POST", body: { fields: toFirestoreFields(fields) } });
-      return { id: created.name.split("/").pop(), userId, name: fields.name, state, createdAt: now, updatedAt: now };
+      return {
+        id: created.name.split("/").pop(),
+        userId,
+        teamId: fields.teamId,
+        name: fields.name,
+        state,
+        createdAt: now,
+        updatedAt: now,
+      };
     },
 
     async updateProject(id, patch) {
       const upd = { updatedAt: Date.now() };
       if (patch.name !== undefined) upd.name = patch.name;
-      if (patch.state !== undefined) Object.assign(upd, await stateFields(patch.state));
+      if (patch.teamId !== undefined) upd.teamId = patch.teamId || null;
+
+      // A blob-backed state gets a NEW blob on every save (uploads are content-
+      // addressed by a random id, not by their content). Without this, autosaving
+      // one large project all afternoon fills the account's storage quota with
+      // superseded copies of itself.
+      let previousBlob = null;
+      if (patch.state !== undefined) {
+        try {
+          const before = await fs(`/projects/${id}`);
+          previousBlob = before?.fields?.stateBlob?.stringValue || null;
+        } catch {
+          /* couldn't read it — skip the cleanup, never the save */
+        }
+        Object.assign(upd, await stateFields(patch.state));
+      }
+
       const d = await patchDoc(`/projects/${id}`, upd);
+
+      // Only after the new state is safely written, and only if it really did
+      // replace the old blob. Best-effort: a teammate editing a SHARED project
+      // uploads under their own credentials and cannot delete the author's blob,
+      // which the store refuses — the save still stands.
+      if (previousBlob && upd.stateBlob !== previousBlob) await deleteStateBlob(previousBlob);
+
       return d ? hydrate(restDocToProject(d.name, d.fields)) : null;
+    },
+
+    /**
+     * Upload an image and get back a short same-origin URL.
+     *
+     * Exposed because the team brand kit needs the blob store WITHOUT touching
+     * the caller's own profile logo — a shared logo and a personal one are
+     * different things that happen to be stored the same way.
+     */
+    async uploadImage(dataUrl) {
+      if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) return dataUrl || null;
+      return putImageBlob(dataUrl);
+    },
+
+    /* --- team library --- */
+
+    /** Every project shared with a workspace, newest first. */
+    async listTeamProjects(teamId) {
+      if (!teamId) return [];
+      const rows = await fs(":runQuery", {
+        method: "POST",
+        body: {
+          structuredQuery: {
+            from: [{ collectionId: "projects" }],
+            where: {
+              fieldFilter: { field: { fieldPath: "teamId" }, op: "EQUAL", value: { stringValue: teamId } },
+            },
+          },
+        },
+      });
+      const projects = (rows || [])
+        .filter((row) => row.document)
+        .map((row) => restDocToProject(row.document.name, row.document.fields));
+      const hydrated = await Promise.all(projects.map(hydrate));
+      return hydrated.sort((a, b) => b.updatedAt - a.updatedAt);
+    },
+
+    /** Share a project with the workspace, or pass null to make it private again. */
+    async setProjectTeam(id, teamId) {
+      const d = await patchDoc(`/projects/${id}`, { teamId: teamId || null, updatedAt: Date.now() });
+      return d ? restDocToProject(d.name, d.fields) : null;
+    },
+
+    /* --- shared templates ---
+     * Style only: background, type, layout, device. No screenshots, so every
+     * value stays under Firestore's 1500-byte indexed-field limit and a template
+     * can never leak an unreleased app design to the rest of the workspace. */
+    async listTeamTemplates(teamId) {
+      if (!teamId) return [];
+      const res = await fs(`/teams/${teamId}/templates`, { query: "?pageSize=100" });
+      return (res?.documents || [])
+        .map((d) => ({ id: d.name.split("/").pop(), ...fromFirestoreFields(d.fields) }))
+        .sort((a, b) => (b.at || 0) - (a.at || 0));
+    },
+
+    async saveTeamTemplate(teamId, { name, style, createdBy, createdByName }) {
+      const now = Date.now();
+      const fields = {
+        name: String(name || "Untitled template").slice(0, 60),
+        style: style || {},
+        createdBy,
+        createdByName: createdByName || null,
+        at: now,
+      };
+      const created = await fs(`/teams/${teamId}/templates`, {
+        method: "POST",
+        body: { fields: toFirestoreFields(fields) },
+      });
+      return { id: created.name.split("/").pop(), ...fields };
+    },
+
+    async deleteTeamTemplate(teamId, id) {
+      await fs(`/teams/${teamId}/templates/${id}`, { method: "DELETE" });
+      return true;
     },
 
     /**

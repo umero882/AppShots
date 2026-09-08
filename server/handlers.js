@@ -342,6 +342,29 @@ export function statusForError(code) {
   if (String(code).startsWith("reset-link-failed") || String(code).startsWith("action-link-failed") || String(code).startsWith("smtp-") || String(code).startsWith("google-token-failed")) return 502;
   if (code === "github-bad-url" || code === "store-bad-query" || code === "invalid-email") return 400;
   if (code === "unknown-waitlist" || code === "plan-unavailable") return 400;
+  // Team workspaces. "forbidden" is a rank problem, not a sign-in problem, so it
+  // must not be a 401 — a client that retries the login loop cannot fix it.
+  if (code === "forbidden") return 403;
+  if (code === "no-team" || code === "not-a-member" || code === "invite-invalid") return 404;
+  // An authenticated call to a team sub-path that does not exist. Without this it
+  // fell through to 502, which blames the server for the client's typo.
+  if (code === "not-found") return 404;
+  if (
+    [
+      "already-a-member",
+      "already-invited",
+      "already-in-a-team",
+      "already-owner",
+      "no-seats-left",
+      "invite-wrong-email",
+      "cannot-change-owner",
+      "owner-must-transfer-or-disband",
+      "invalid-role",
+      "invalid-name",
+    ].includes(code)
+  )
+    return 409;
+  if (String(code).startsWith("firestore-admin-")) return 502;
   if (code === "not-configured") return 501; // self-sent reset email not set up → client falls back to Firebase's
   if (code === "unauthorized") return 401;
   if (code === "rate-limited" || code === "quota-exceeded") return 429;

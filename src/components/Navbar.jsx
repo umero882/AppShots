@@ -1,8 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { Menu, X, LogOut, LayoutGrid, Radar, Settings as SettingsIcon } from "lucide-react";
+import { Menu, X, LogOut, LayoutGrid, Radar, Users, Settings as SettingsIcon } from "lucide-react";
 import Logo from "./Logo";
 import { useAuth } from "../lib/auth";
+import { useTeam } from "../lib/teamContext";
 import { publishedCount } from "../lib/blog";
 
 /** First letters of up to two name words, for the avatar chip. */
@@ -14,6 +15,9 @@ function navInitials(name = "") {
 
 export default function Navbar() {
   const { user, signOut } = useAuth();
+  // Only shown once a workspace actually exists — a link to an empty Team page
+  // is a link to a sales pitch, and the pricing page already does that job.
+  const { team } = useTeam();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   // Fall back to initials if the avatar image fails to load (e.g. missing blob).
@@ -63,6 +67,11 @@ export default function Navbar() {
               <Link to="/dashboard" className="btn-ghost">
                 <LayoutGrid size={16} /> Dashboard
               </Link>
+              {team && (
+                <Link to="/team" className="btn-ghost">
+                  <Users size={16} /> Team
+                </Link>
+              )}
               <button onClick={handleSignOut} className="btn-ghost">
                 <LogOut size={16} /> Sign out
               </button>
@@ -128,6 +137,11 @@ export default function Navbar() {
                 <Link to="/dashboard" className="btn-ghost" onClick={() => setOpen(false)}>
                   Dashboard
                 </Link>
+                {team && (
+                  <Link to="/team" className="btn-ghost" onClick={() => setOpen(false)}>
+                    <Users size={16} /> Team
+                  </Link>
+                )}
                 <Link to="/settings" className="btn-ghost" onClick={() => setOpen(false)}>
                   <SettingsIcon size={16} /> Profile &amp; settings
                 </Link>

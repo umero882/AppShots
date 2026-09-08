@@ -15,7 +15,7 @@ import { randomBytes } from "crypto";
 import { mkdirSync, existsSync, writeFileSync, readFileSync, unlinkSync, readdirSync } from "fs";
 import path from "path";
 import { verifyIdToken } from "./firebaseAuth.js";
-import { readRecord, publicEntitlement } from "./stripe.js";
+import { planFor } from "./entitlement.js";
 
 const BLOB_DIR = process.env.BLOB_DIR || path.join(process.cwd(), "data", "blobs");
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB ceiling per blob
@@ -95,15 +95,6 @@ export function addUsage(uid, deltaBytes, deltaCount = deltaBytes > 0 ? 1 : -1) 
     if (deltaBytes > 0) return; // the rebuild already counted this upload
   }
   writeUsage(uid, { bytes: (cur.bytes || 0) + deltaBytes, count: (cur.count || 0) + deltaCount });
-}
-
-/** The caller's plan, straight from the server-owned entitlement record. */
-function planFor(uid) {
-  try {
-    return publicEntitlement(readRecord(uid)).plan || "free";
-  } catch {
-    return "free";
-  }
 }
 
 function ensureDir() {

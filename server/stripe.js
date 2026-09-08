@@ -18,26 +18,36 @@
  * in Coolify or entitlements vanish on redeploy.
  */
 import { createHmac, timingSafeEqual } from "crypto";
-import { mkdirSync, existsSync, writeFileSync, readFileSync, unlinkSync } from "fs";
-import path from "path";
+import { readFileSync, unlinkSync } from "fs";
 import { verifyIdTokenClaims } from "./firebaseAuth.js";
+import { resolveEntitlement } from "./entitlement.js";
+import {
+  SUB_DIR,
+  ENTITLED_STATUSES,
+  FREE,
+  secretKey,
+  keyMode,
+  validUid,
+  readRecord,
+  writeRecord,
+  linkCustomer,
+  uidForCustomer,
+  publicEntitlement,
+  recordInMode,
+  recPath,
+  custPath,
+} from "./subscriptionStore.js";
+
+// Re-exported so callers (and tests) keep importing the billing surface from one
+// place even though the record layer now lives next door.
+export { readRecord, publicEntitlement, recordInMode };
 
 const STRIPE_API = "https://api.stripe.com/v1";
-const SUB_DIR = process.env.SUB_DIR || path.join(process.cwd(), "data", "subscriptions");
-const CUST_DIR = path.join(SUB_DIR, "customers");
 
-// Statuses that still entitle the user to their paid plan (past_due keeps access
-// during Stripe's Smart Retries grace window; the UI can nudge to fix payment).
-const ENTITLED_STATUSES = new Set(["active", "trialing", "past_due"]);
-
-const secretKey = () => process.env.STRIPE_SECRET_KEY || "";
 const webhookSecret = () => process.env.STRIPE_WEBHOOK_SECRET || "";
 // Stripe Tax is opt-out (auto-on) but falls back gracefully if the account hasn't
 // finished Tax setup — see createCheckoutSession.
 const taxEnabled = () => process.env.STRIPE_AUTOMATIC_TAX !== "false";
-// Which Stripe mode the configured key talks to. Customer/subscription ids are
-// mode-specific, so records remember the mode they were written in.
-const keyMode = () => (secretKey().startsWith("sk_live_") ? "live" : "test");
 // Stripe's error code for "that id doesn't exist here" (deleted, or another mode).
 const isMissing = (e) => e?.stripeCode === "resource_missing";
 
@@ -45,31 +55,23 @@ const isMissing = (e) => e?.stripeCode === "resource_missing";
 // Stable price lookup_keys created by scripts/stripe/setup.mjs. Referencing prices
 // by lookup_key (not hard-coded price ids) keeps this env-agnostic: the same code
 // works in test and live once setup.mjs has run in each.
-/** Plans that exist in the catalog but must not be sold right now. */
+/**
+ * Plans that exist in the catalog but must not be sold right now.
+ *
+ * Team sat here while the pricing page advertised it as "coming soon" — hiding
+ * the button was never the enforcement, this was. Now that seats, roles, shared
+ * projects and the brand kit exist (server/teams.js), the default is empty and
+ * the kill switch stays: set UNAVAILABLE_PLANS=team to stop selling it again
+ * without a deploy.
+ */
 export const UNAVAILABLE_PLANS = new Set(
-  (process.env.UNAVAILABLE_PLANS ?? "team").split(",").map((p) => p.trim().toLowerCase()).filter(Boolean),
+  (process.env.UNAVAILABLE_PLANS ?? "").split(",").map((p) => p.trim().toLowerCase()).filter(Boolean),
 );
 
 export const PLAN_LOOKUP_KEYS = {
   pro: { month: "pro_monthly", year: "pro_yearly" },
   team: { month: "team_monthly", year: "team_yearly" },
 };
-const FREE = Object.freeze({ plan: "free", status: "none" });
-
-/**
- * Project a stored record into the Stripe mode we're running in. A record written
- * in the OTHER mode (e.g. a sandbox purchase from before the key was switched to
- * live) is meaningless here: its customer/subscription ids don't exist in this
- * mode, so it must neither grant a plan nor be reused for Checkout/portal calls.
- * Legacy records without a `mode` were all written in test mode.
- */
-export function recordInMode(rec, mode) {
-  if (!rec) return null;
-  const recMode = rec.mode || "test";
-  if (recMode === mode) return rec;
-  return { ...FREE, mode, updatedAt: Date.now(), migratedFrom: recMode };
-}
-
 /* ------------------------------- form-url encoding ------------------------------ */
 // Stripe expects application/x-www-form-urlencoded with PHP-style bracket nesting,
 // e.g. line_items[0][price]=price_x, metadata[firebase_uid]=abc.
@@ -137,58 +139,6 @@ export function constructWebhookEvent(rawBody, sigHeader, secret, nowSec = Math.
   if (a.length !== b.length || !timingSafeEqual(a, b)) throw new Error("signature-mismatch");
 
   return JSON.parse(payload);
-}
-
-/* --------------------------------- disk store ----------------------------------- */
-// uids come from a verified Firebase token; validate anyway so nothing can escape
-// the store directory.
-const validUid = (uid) => (/^[A-Za-z0-9_-]{1,128}$/.test(uid || "") ? uid : null);
-const validCid = (cid) => (/^cus_[A-Za-z0-9]+$/.test(cid || "") ? cid : null);
-
-function ensureDirs() {
-  if (!existsSync(SUB_DIR)) mkdirSync(SUB_DIR, { recursive: true });
-  if (!existsSync(CUST_DIR)) mkdirSync(CUST_DIR, { recursive: true });
-}
-const recPath = (uid) => path.join(SUB_DIR, `${uid}.json`);
-const custPath = (cid) => path.join(CUST_DIR, `${cid}.json`);
-
-export function readRecord(uid) {
-  if (!validUid(uid)) return null;
-  try {
-    return recordInMode(JSON.parse(readFileSync(recPath(uid), "utf8")), keyMode());
-  } catch {
-    return null;
-  }
-}
-function writeRecord(uid, rec) {
-  if (!validUid(uid)) return;
-  ensureDirs();
-  writeFileSync(recPath(uid), JSON.stringify({ ...rec, mode: keyMode() }));
-}
-function linkCustomer(cid, uid) {
-  if (!validCid(cid) || !validUid(uid)) return;
-  ensureDirs();
-  writeFileSync(custPath(cid), JSON.stringify({ uid }));
-}
-function uidForCustomer(cid) {
-  if (!validCid(cid)) return null;
-  try {
-    return JSON.parse(readFileSync(custPath(cid), "utf8")).uid || null;
-  } catch {
-    return null;
-  }
-}
-
-/** Public entitlement shape the client consumes (no internal churn leaks out). */
-export function publicEntitlement(rec) {
-  if (!rec || !rec.plan) return { ...FREE };
-  return {
-    plan: rec.plan,
-    interval: rec.interval || null,
-    status: rec.status || "none",
-    currentPeriodEnd: rec.currentPeriodEnd || null,
-    cancelAtPeriodEnd: !!rec.cancelAtPeriodEnd,
-  };
 }
 
 /* ----------------------------- catalog / price lookup --------------------------- */
@@ -428,10 +378,8 @@ async function createCheckoutSession(req, res, uid, email) {
   }
   const plan = String(body.plan || "").toLowerCase();
   const interval = body.interval === "year" ? "year" : "month";
-  // Team is advertised as a waitlist, not a product: none of what it promises
-  // (seats, shared templates, roles) is built. Hiding the button is not the
-  // enforcement — this is. Existing Team subscriptions, if any, are untouched;
-  // this only refuses to sell a new one.
+  // The kill switch above, applied. Existing subscriptions are untouched; this
+  // only refuses to sell a new one.
   if (UNAVAILABLE_PLANS.has(plan)) {
     return sendJson(res, 400, { error: "plan-unavailable", plan });
   }
@@ -534,6 +482,17 @@ async function createPortalSession(req, res, uid) {
   }
 }
 
+/**
+ * Answer with the caller's EFFECTIVE plan, not just their invoice.
+ *
+ * Someone holding a seat on a colleague's Team has no Stripe record of their own,
+ * so reading the record alone would tell them they are on Free — and the client
+ * would go on watermarking the exports their team is paying not to have.
+ */
+function sendEntitlement(res, uid, record, extra = {}) {
+  return sendJson(res, 200, { ...resolveEntitlement(uid, record ? { record } : {}), ...extra });
+}
+
 async function getSubscription(req, res, uid, query) {
   if (query.sync === "1" || query.session_id) {
     // If we came back from Checkout with a session_id, make sure we've linked the
@@ -552,9 +511,10 @@ async function getSubscription(req, res, uid, query) {
           linkCustomer(cid, uid);
         }
       }
-      return sendJson(res, 200, await reconcile(uid));
+      await reconcile(uid);
+      return sendEntitlement(res, uid, readRecord(uid));
     } catch (e) {
-      return sendJson(res, 200, { ...publicEntitlement(readRecord(uid)), syncError: e.message });
+      return sendEntitlement(res, uid, readRecord(uid), { syncError: e.message });
     }
   }
   // Records written before the interval was stored have a plan but no period,
@@ -563,12 +523,13 @@ async function getSubscription(req, res, uid, query) {
   const rec = readRecord(uid);
   if (rec?.plan && rec.plan !== "free" && !rec.interval) {
     try {
-      return sendJson(res, 200, await reconcile(uid));
+      await reconcile(uid);
+      return sendEntitlement(res, uid, readRecord(uid));
     } catch {
       // Stripe unreachable: serve what we have rather than fail the page.
     }
   }
-  return sendJson(res, 200, publicEntitlement(rec));
+  return sendEntitlement(res, uid, rec);
 }
 
 /** Resolve the AppShots uid a Stripe event object belongs to. */

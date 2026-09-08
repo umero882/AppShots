@@ -250,14 +250,18 @@ with our keys, the last two proxy outbound requests from our IP. They are gated 
    No token, expired token, forged token → `401 unauthorized`, and the upstream call
    is never made. `/api/capabilities` stays open (it returns booleans only).
 2. **Quota.** One unit is charged against the caller's daily allowance *before* the
-   upstream request, using the plan from their server-owned Stripe entitlement —
-   never a plan claimed by the client. Defaults per day (`server/usage.js`):
+   upstream request, using the plan from `server/entitlement.js` — their own Stripe
+   record or a Team seat, never a plan claimed by the client. Defaults per day (`server/usage.js`):
 
    | | suggest | image | translate | search | appStore |
    |---|---|---|---|---|---|
    | free | 20 | 5 | — | 100 | 100 |
    | pro | 200 | 60 | 400 | 600 | 600 |
    | team | 600 | 200 | 1200 | 2000 | 2000 |
+
+   Since Team shipped, `team` is the plan of **every seat holder**, not one account —
+   a five-seat workspace can spend five times the row above. `GLOBAL_DAILY` in the
+   same file is the instance-wide backstop that keeps that bounded.
 
 3. **Paid-only features.** The pricing page sells "Localization sets" under Pro, so
    `/api/ai/translate` answers `403 plan-required` on the free plan — a different
@@ -426,25 +430,63 @@ exploration with `sign_up → project_created → begin_checkout → purchase`. 
 names take up to 24 hours to appear in the standard reports; DebugView shows them
 immediately.
 
-## The Team plan is a waitlist, not a product
+## Team workspaces
 
 Team was on the pricing page — and purchasable at $29/month — while none of what it
-promised existed: `grep` for seats, invites, roles or shared templates finds them only
-in the sales copy. It now says **Coming soon** and collects intent instead of money.
+promised existed, so it became a waitlist. It is now built and sold: `UNAVAILABLE_PLANS`
+defaults to empty, and the Pricing card is an ordinary Checkout card.
 
-- `server/waitlist.js` — `POST /api/waitlist` appends to `<DATA_DIR>/waitlist/team.jsonl`
-  (on the volume, so it lands in the nightly backup) and emails `ALERT_EMAIL_TO`.
-  Open by design: the whole point is hearing from people who have not signed up.
-  Idempotent per address — signing up twice is a normal thing to do and must not look
-  like an error — rate-limited to 20/min, and it never takes a uid from the body.
-- `UNAVAILABLE_PLANS` (default `team`) in `server/stripe.js` refuses to create a
-  Checkout session for it. **Hiding the button is not the enforcement, this is** — the
-  same lesson as the localization paywall. Existing Team subscriptions, if any, are
-  untouched; only new sales are refused.
-- GA4 gets `waitlist_joined`, so demand is measured before anything is built.
+The full design is in **[TEAM-SETUP.md](TEAM-SETUP.md)**. The parts that matter for a
+deploy:
 
-**When Team is built:** drop `team` from `UNAVAILABLE_PLANS`, remove `comingSoon` from
-the card in `src/pages/Pricing.jsx`, and mail the list.
+- **Membership is server-owned.** The roster is a JSON file per team under
+  `<DATA_DIR>/teams/` (`server/teams.js`), beside the Stripe records — because a seat
+  grants a paid plan, and anything that grants a plan must not be client-writable.
+- **The Firestore mirror is what the rules read.** Every roster change is written to
+  `teams/{id}/members/{uid}` with the service account (`server/firestoreAdmin.js`);
+  `firestore.rules` makes those documents read-only to every client. **Requires
+  `FIREBASE_SERVICE_ACCOUNT`** — without it seats, roles, billing and the brand kit
+  still work, but shared projects and templates are reported as unavailable rather
+  than half-working. The volume is written first and the mirror second, so a failed
+  mirror costs shared access until the next read repairs it, never the other way round.
+- **Publish `firestore.rules` after deploying**, or shared projects 403.
+- **Entitlement is resolved in one place.** `server/entitlement.js` combines the
+  caller's own Stripe record with any seat they hold, and quotas, storage and the
+  `/api/stripe/subscription` response all read it. Grep that one file to answer "how
+  could someone get a paid plan?".
+
+| Env | Default | What it does |
+|---|---|---|
+| `TEAM_SEATS` | `5` | Seats sold with the plan. Match the pricing page. |
+| `TEAM_INVITE_TTL_DAYS` | `14` | How long an invite link lives. |
+| `TEAM_INVITE_MAX_PER_MINUTE` | `10` | Instance-wide invite-send budget. |
+| `TEAM_DIR` | `<DATA_DIR>/teams` | Roster storage. Must be on the volume. |
+| `PUBLIC_URL` | request host | Origin used to build invite links. |
+| `UNAVAILABLE_PLANS` | *(empty)* | Kill switch — set to `team` to stop selling it. |
+
+**Storage is now per seat.** `STORAGE_QUOTA_TEAM` (20 GB) is charged against each
+member's own counter, so a full five-seat workspace can hold 100 GB for $29/month —
+generous next to Pro's 5 GB for $9. Tune `STORAGE_QUOTA_TEAM` before the first Team
+sale if that is not the intent. The daily AI quotas are per seat too, but
+`USAGE_GLOBAL_IMAGE_CAP` (300/day) already backstops the expensive one instance-wide.
+
+### The waitlist, and telling it
+
+`server/waitlist.js` still owns `POST /api/waitlist` — open by design, idempotent per
+address, rate-limited, and it never takes a uid from the body. The pricing page no
+longer offers it (Team is buyable), but the collected list is on the volume and the
+page promised those people an email.
+
+```bash
+npm run waitlist                 # who is on it, and who has been told
+npm run waitlist:export          # → team-waitlist.csv
+npm run waitlist:announce -- --dry-run     # print the recipients, send nothing
+npm run waitlist:announce -- --limit 5     # a first batch to watch
+npm run waitlist:announce                  # the rest
+```
+
+Every delivered address is recorded in `team.announced.json` **as it sends**, so a
+crash halfway through resumes rather than mailing anyone twice.
 
 ## Analytics consent
 

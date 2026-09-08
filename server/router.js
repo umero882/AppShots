@@ -6,18 +6,33 @@
  * Endpoints that spend money (AI calls, outbound search proxies) are metered:
  * they require a Firebase ID token and are charged against the caller's daily
  * per-plan quota before the upstream request is made. See server/usage.js.
+ *
+ * The plan behind that quota is server-owned and never a client claim: it comes
+ * from server/entitlement.js, which combines the user's own Stripe subscription
+ * with any Team seat they hold.
  */
 import { capabilities, suggest, image, search, translate, appStore, statusForError } from "./handlers.js";
 import { requestPasswordReset, sendVerificationEmail } from "./authEmail.js";
 import { verifyIdTokenClaims } from "./firebaseAuth.js";
-import { readRecord, publicEntitlement } from "./stripe.js";
+import { planFor } from "./entitlement.js";
 import { consume, refund } from "./usage.js";
 import { deleteAccount } from "./account.js";
 import { reportClientError } from "./clientErrors.js";
 import { joinWaitlist } from "./waitlist.js";
+import { handleTeam } from "./teams.js";
 import { captureException } from "./sentry.js";
 
 const ok = (body) => ({ status: 200, body });
+
+/**
+ * Which methods carry a JSON body worth parsing.
+ *
+ * Lives here, next to the routes, because both transports (server/index.js and
+ * server/devProxy.js) have to agree. They did not: only POST was read, so every
+ * PATCH handler was quietly handed `{}` — a rename that renamed nothing, and no
+ * error anywhere to say why.
+ */
+export const methodHasBody = (method) => method === "POST" || method === "PATCH";
 
 /** "METHOD /path" → quota kind. Everything listed here costs us money per call. */
 const METERED = {
@@ -27,15 +42,6 @@ const METERED = {
   "GET /api/search": "search",
   "GET /api/app-store": "appStore",
 };
-
-/** Entitlement is server-owned: read the Stripe record, never a client claim. */
-function planFor(uid) {
-  try {
-    return publicEntitlement(readRecord(uid)).plan || "free";
-  } catch {
-    return "free";
-  }
-}
 
 /**
  * Authenticate and charge one unit before a metered handler runs. Throws
@@ -86,6 +92,10 @@ export async function route({ method, path, query = {}, body = {}, headers = {} 
     if (key === "POST /api/client-error") return ok(await (deps.reportClientError || reportClientError)(body, headers, deps));
     // Open: the whole point is to hear from people who have not signed up.
     if (key === "POST /api/waitlist") return ok(await (deps.joinWaitlist || joinWaitlist)(body, headers, deps));
+    // Team workspaces: seats, roles, invites, brand kit. Sub-paths carry ids and
+    // tokens, so this one dispatches on the path itself rather than an exact key.
+    if (path === "/api/team" || path.startsWith("/api/team/"))
+      return ok(await (deps.handleTeam || handleTeam)({ method, path, query, body, headers }, deps));
     return { status: 404, body: { error: "not-found" } };
   } catch (e) {
     // The upstream failed (or was misconfigured) after we charged the caller —

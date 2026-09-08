@@ -8,18 +8,19 @@
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("../../lib/auth", () => ({ useAuth: () => ({ user: null }) }));
-vi.mock("../../lib/apiClient", () => ({ apiFetch: vi.fn(), describeApiError: (e, f) => f }));
-vi.mock("../../lib/analytics", () => ({ trackWaitlistJoined: vi.fn() }));
 
 const { planCardState } = await import("../Pricing");
 
 const PRO = { id: "pro", name: "Pro", cta: "Upgrade to Pro" };
-const TEAM = { id: "team", name: "Team", cta: "Join the waitlist", comingSoon: true };
+const TEAM = { id: "team", name: "Team", cta: "Start with Team" };
 const FREE = { id: "free", name: "Free", cta: "Start free" };
 
 const monthlySubscriber = { plan: "pro", subscription: { interval: "month" } };
 const yearlySubscriber = { plan: "pro", subscription: { interval: "year" } };
 const freeUser = { plan: "free" };
+// Someone seated on a colleague's Team: the plan is real, the subscription is
+// not theirs. The server marks this with planVia: "seat".
+const seatHolder = { plan: "team", planVia: "seat", teamId: "tm_abc", subscription: { status: "seat", interval: null } };
 
 const MONTHLY = false;
 const YEARLY = true;
@@ -105,13 +106,41 @@ describe("an entitlement record written before the interval was stored", () => {
 });
 
 describe("the Team card", () => {
-  it("stays a waitlist for everyone, including paying customers", () => {
-    for (const user of [null, freeUser, monthlySubscriber]) {
-      expect(planCardState(TEAM, user, MONTHLY)).toMatchObject({
-        isCurrent: false,
-        cta: "Join the waitlist",
-        action: "waitlist",
-      });
+  it("is a plan you can buy", () => {
+    expect(planCardState(TEAM, null, MONTHLY)).toMatchObject({ isCurrent: false, action: "signup" });
+    expect(planCardState(TEAM, freeUser, MONTHLY)).toMatchObject({ isCurrent: false, action: "checkout" });
+  });
+
+  it("routes an existing subscriber through the portal, never a second Checkout", () => {
+    expect(planCardState(TEAM, monthlySubscriber, MONTHLY)).toMatchObject({
+      isCurrent: false,
+      cta: "Switch to Team",
+      action: "portal",
+    });
+  });
+
+  it("is the current plan for the person paying for it", () => {
+    const owner = { plan: "team", planVia: "billing", subscription: { interval: "month" } };
+    expect(planCardState(TEAM, owner, MONTHLY)).toMatchObject({ isCurrent: true, cta: "Current plan", action: "none" });
+  });
+});
+
+describe("someone holding a seat on a colleague's Team", () => {
+  // Their plan came from a seat, so they have no Stripe customer. Sending them
+  // to the billing portal answers "no-customer" — a dead end wearing a button.
+  it("sees Team as theirs but not as something to manage", () => {
+    expect(planCardState(TEAM, seatHolder, MONTHLY)).toMatchObject({
+      isCurrent: true,
+      cta: "Your team's plan",
+      action: "none",
+    });
+  });
+
+  it("can still buy a plan of their own", () => {
+    for (const plan of [PRO, FREE]) {
+      const card = planCardState(plan, seatHolder, MONTHLY);
+      expect(card.isCurrent).toBe(false);
+      expect(card.action).toBe("checkout");
     }
   });
 });

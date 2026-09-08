@@ -16,6 +16,10 @@ beforeEach(() => {
       order.push("stripe");
       return { stripeCustomerId: "cus_1", subscriptionsCancelled: 1, customerDeleted: true };
     }),
+    purgeTeamsForUid: vi.fn(async () => {
+      order.push("teams");
+      return { disbanded: false, left: false };
+    }),
     deleteBlobsForUid: vi.fn(() => (order.push("blobs"), 7)),
     deleteUsage: vi.fn(() => (order.push("usage"), true)),
   };
@@ -38,6 +42,7 @@ describe("authentication", () => {
     for (const fn of [deps.purgeStripeForUid, deps.deleteBlobsForUid, deps.deleteUsage]) {
       expect(fn).toHaveBeenCalledWith("uid-123");
     }
+    expect(deps.purgeTeamsForUid).toHaveBeenCalledWith("uid-123", deps);
   });
 });
 
@@ -49,6 +54,8 @@ describe("the cascade", () => {
       usageCleared: true,
       subscriptionsCancelled: 1,
       stripeCustomerDeleted: true,
+      teamDisbanded: false,
+      teamLeft: false,
     });
   });
 
@@ -56,7 +63,24 @@ describe("the cascade", () => {
     // An account that is gone but still charging is the worst failure mode, so
     // Stripe goes first and everything after it is recoverable data.
     await deleteAccount(TOKEN, deps);
-    expect(order).toEqual(["stripe", "blobs", "usage"]);
+    expect(order).toEqual(["stripe", "teams", "blobs", "usage"]);
+  });
+
+  it("disbands a workspace the departing user owned", async () => {
+    // The subscription that paid for the seats was just cancelled, so leaving
+    // the workspace standing would hand four other people a plan nobody pays for.
+    deps.purgeTeamsForUid = vi.fn(async () => ({ disbanded: true, left: false, teamId: "tm_x", members: 4 }));
+    await expect(deleteAccount(TOKEN, deps)).resolves.toMatchObject({ teamDisbanded: true, teamLeft: false });
+  });
+
+  it("still deletes the account when the team cleanup fails", async () => {
+    // The seat cannot outlive the entitlement check either way — it reads the
+    // owner's now-cancelled subscription — so this must not block the deletion.
+    deps.purgeTeamsForUid = vi.fn(async () => {
+      throw new Error("disk-on-fire");
+    });
+    await expect(deleteAccount(TOKEN, deps)).resolves.toMatchObject({ ok: true, teamDisbanded: false });
+    expect(deps.deleteBlobsForUid).toHaveBeenCalled();
   });
 
   it("aborts the whole deletion if billing cleanup fails", async () => {

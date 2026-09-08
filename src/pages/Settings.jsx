@@ -1,9 +1,11 @@
 import { useRef, useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { User, Mail, Crown, Check, LogOut, Sparkles, Upload, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { User, Mail, Crown, Check, LogOut, Sparkles, Upload, Trash2, AlertTriangle, Loader2, Users } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../lib/auth";
+import { useTeam } from "../lib/teamContext";
+import { roleLabel, seatSummary } from "../lib/team";
 import { fileToAvatarDataUrl } from "../lib/avatar";
 
 /** First letters of up to two name words, for the avatar chip. */
@@ -50,6 +52,7 @@ export function formatDate(unixSeconds) {
 
 export default function Settings() {
   const { user, updateProfile, signOut, openBillingPortal, deleteAccount } = useAuth();
+  const team = useTeam();
   const navigate = useNavigate();
   const fileRef = useRef(null);
 
@@ -74,6 +77,11 @@ export default function Settings() {
   const isPaid = !!user?.plan && user.plan !== "free";
   const sub = user?.subscription || null;
   const pastDue = sub?.status === "past_due";
+  // A seat is a plan someone else pays for. Showing a renewal date or a
+  // "Manage billing" button to a seat holder sends them to a portal that is not
+  // theirs (and answers "no-customer" when they get there).
+  const viaSeat = user?.planVia === "seat";
+  const ownerOfTeam = team.role === "owner";
 
   // Typing the word is the confirmation: a single click is far too cheap for
   // something that cancels a subscription and erases every project.
@@ -263,11 +271,13 @@ export default function Settings() {
               <div>
                 <p className="font-semibold capitalize text-white">{user?.plan || "free"} plan</p>
                 <p className="text-xs text-slate-500">
-                  {isPaid
-                    ? "Watermark-free, full-resolution exports."
-                    : "Free forever — exports include a small watermark."}
+                  {viaSeat
+                    ? `Through your seat in ${team.team?.name || "your workspace"} — billed to the workspace owner.`
+                    : isPaid
+                      ? "Watermark-free, full-resolution exports."
+                      : "Free forever — exports include a small watermark."}
                 </p>
-                {isPaid && sub?.currentPeriodEnd && (
+                {isPaid && !viaSeat && sub?.currentPeriodEnd && (
                   <p className="mt-1 text-xs text-slate-500">
                     {sub.cancelAtPeriodEnd
                       ? `Cancels on ${formatDate(sub.currentPeriodEnd)}`
@@ -277,7 +287,11 @@ export default function Settings() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isPaid ? (
+              {viaSeat ? (
+                <Link to="/team" className="btn-ghost">
+                  <Users size={16} /> View workspace
+                </Link>
+              ) : isPaid ? (
                 <>
                   <button type="button" onClick={openPortal} disabled={portalBusy} className="btn-primary">
                     {portalBusy ? "Opening…" : "Manage billing"}
@@ -290,6 +304,13 @@ export default function Settings() {
             </div>
           </div>
 
+          {viaSeat && (
+            <p className="mt-4 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-400">
+              You hold a seat, so there&rsquo;s nothing to pay here. Leaving the workspace returns you to
+              the Free plan.
+            </p>
+          )}
+
           {pastDue && (
             <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300">
               Your last payment failed. Update your card in “Manage billing” to keep your plan.
@@ -297,6 +318,29 @@ export default function Settings() {
           )}
           {portalError && <p className="mt-4 text-sm text-red-400">{portalError}</p>}
         </section>
+
+        {/* Team */}
+        {team.team && (
+          <section className="card mt-6 p-6 sm:p-7">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Workspace</h2>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-500/15 text-brand-300">
+                  <Users size={18} />
+                </div>
+                <div>
+                  <p className="font-semibold text-white">{team.team.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {roleLabel(team.role)} · {seatSummary(team).used} of {seatSummary(team).total} seats used
+                  </p>
+                </div>
+              </div>
+              <Link to="/team" className="btn-ghost">
+                {ownerOfTeam ? "Manage workspace" : "View workspace"}
+              </Link>
+            </div>
+          </section>
+        )}
 
         {/* Account */}
         <section className="card mt-6 p-6 sm:p-7">
@@ -331,7 +375,14 @@ export default function Settings() {
                   <li>every project and screenshot you've saved</li>
                   <li>your uploaded images and logo</li>
                   <li>your sign-in — the email becomes free to register again</li>
-                  {isPaid && <li>your {user.plan} subscription, cancelled immediately with no refund for the rest of the period</li>}
+                  {isPaid && !viaSeat && <li>your {user.plan} subscription, cancelled immediately with no refund for the rest of the period</li>}
+                  {ownerOfTeam && (
+                    <li>
+                      the {team.team?.name} workspace — its {team.members.length} members lose their seats
+                      (their own projects are untouched)
+                    </li>
+                  )}
+                  {team.team && !ownerOfTeam && <li>your seat in {team.team.name}</li>}
                 </ul>
                 <p className="mt-3 text-xs text-slate-500">
                   We keep your paid invoices, without your card details, because tax law requires it. See our{" "}

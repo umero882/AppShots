@@ -20,7 +20,7 @@ vi.mock("./authEmail.js", () => ({
   sendVerificationEmail: vi.fn(async () => ({ ok: true })),
 }));
 
-const { route } = await import("./router.js");
+const { route, methodHasBody } = await import("./router.js");
 const handlers = await import("./handlers.js");
 
 const TOKEN = { authorization: "Bearer good-token" };
@@ -218,6 +218,75 @@ describe("unmetered routes", () => {
     const res = await route({ method: "DELETE", path: "/api/account", headers: TOKEN }, deps);
     expect(res.status).toBe(502);
     expect(res.body).toEqual({ error: "billing-cleanup-failed", detail: "stripe timeout" });
+  });
+
+  it("routes every /api/team sub-path to the team handler, unmetered", async () => {
+    // Ids and tokens live in the path, so this one dispatches on the path itself
+    // rather than an exact "METHOD /path" key like the others.
+    deps.handleTeam = vi.fn(async () => ({ team: null }));
+    for (const [method, path] of [
+      ["GET", "/api/team"],
+      ["POST", "/api/team/invites"],
+      ["DELETE", "/api/team/invites/abc123"],
+      ["PATCH", "/api/team/members/uid-9"],
+      ["GET", "/api/team/invite/abc123"],
+    ]) {
+      const res = await route({ method, path, headers: TOKEN }, deps);
+      expect(res.status, path).toBe(200);
+    }
+    expect(deps.handleTeam).toHaveBeenCalledTimes(5);
+    expect(deps.consume).not.toHaveBeenCalled(); // nobody is rate-limited out of their own workspace
+  });
+
+  it("maps a rank problem to 403, not to 401", async () => {
+    // A 401 tells the client to sign in again, which cannot fix "you are not an
+    // admin" — it just loops them through the login screen.
+    deps.handleTeam = vi.fn(async () => {
+      throw new Error("forbidden");
+    });
+    expect((await route({ method: "POST", path: "/api/team/invites", headers: TOKEN }, deps)).status).toBe(403);
+  });
+
+  it("maps a used-up invite to 404 and a full workspace to 409", async () => {
+    for (const [code, status] of [
+      ["invite-invalid", 404],
+      ["no-team", 404],
+      ["no-seats-left", 409],
+      ["already-a-member", 409],
+      ["invite-wrong-email", 409],
+    ]) {
+      deps.handleTeam = vi.fn(async () => {
+        throw new Error(code);
+      });
+      const res = await route({ method: "POST", path: "/api/team/join", headers: TOKEN }, deps);
+      expect(res.status, code).toBe(status);
+      expect(res.body.error).toBe(code);
+    }
+  });
+
+  it("agrees with both transports about which methods carry a body", () => {
+    // server/index.js and server/devProxy.js both read this. When they disagreed,
+    // PATCH handlers were handed {} and a rename renamed nothing, silently.
+    expect(methodHasBody("POST")).toBe(true);
+    expect(methodHasBody("PATCH")).toBe(true);
+    for (const m of ["GET", "DELETE", "HEAD", "OPTIONS"]) expect(methodHasBody(m), m).toBe(false);
+  });
+
+  it("hands a PATCH body through to the handler", async () => {
+    deps.handleTeam = vi.fn(async ({ body }) => ({ team: { name: body.name } }));
+    const res = await route(
+      { method: "PATCH", path: "/api/team", body: { name: "Acme" }, headers: TOKEN },
+      deps,
+    );
+    expect(res.body.team.name).toBe("Acme");
+  });
+
+  it("404s an unknown team sub-path instead of blaming itself with a 502", async () => {
+    deps.handleTeam = vi.fn(async () => {
+      throw new Error("not-found");
+    });
+    const res = await route({ method: "GET", path: "/api/team/nonsense", headers: TOKEN }, deps);
+    expect(res.status).toBe(404);
   });
 
   it("404s an unknown path", async () => {

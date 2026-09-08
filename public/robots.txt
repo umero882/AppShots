@@ -9,5 +9,9 @@ Disallow: /dashboard
 Disallow: /tracker
 Disallow: /editor/
 Disallow: /settings
+Disallow: /team
+# One-time invite links. Public so an invitee can read them before signing up,
+# but there is nothing here for an index.
+Disallow: /join/
 
 Sitemap: https://appshots.nextechlabs.tech/sitemap.xml

@@ -14,6 +14,8 @@ import Inspiration from "./pages/Inspiration";
 import Tracker from "./pages/Tracker";
 import Editor from "./pages/Editor";
 import Settings from "./pages/Settings";
+import Team from "./pages/Team";
+import JoinTeam from "./pages/JoinTeam";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import SeoSync from "./components/SeoSync";
@@ -34,6 +36,9 @@ export default function App() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/data-deletion" element={<DataDeletion />} />
+        {/* Public on purpose: an invitee may not have an account yet, and the
+            page itself explains what they'd be signing up for. */}
+        <Route path="/join/:token" element={<JoinTeam />} />
         <Route
           path="/dashboard"
           element={
@@ -63,6 +68,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/team"
+          element={
+            <ProtectedRoute>
+              <Team />
             </ProtectedRoute>
           }
         />

@@ -3,7 +3,7 @@
  * the Node side and never enter the browser bundle. Same router is reusable for
  * a production Node/serverless wrapper later.
  */
-import { route } from "./router.js";
+import { route, methodHasBody } from "./router.js";
 import { handleBlob } from "./blob.js";
 import { handleStripe } from "./stripe.js";
 
@@ -41,7 +41,7 @@ export function apiProxyPlugin() {
             return;
           }
           const query = Object.fromEntries(u.searchParams);
-          const body = req.method === "POST" ? await readJson(req) : {};
+          const body = methodHasBody(req.method) ? await readJson(req) : {};
           const result = await route({ method: req.method, path: u.pathname, query, body, headers: req.headers });
           res.statusCode = result.status;
           res.setHeader("content-type", "application/json");

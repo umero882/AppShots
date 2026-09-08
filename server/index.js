@@ -11,7 +11,7 @@ import { readFile } from "fs/promises";
 import { existsSync, statSync, mkdirSync, writeFileSync, unlinkSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { route } from "./router.js";
+import { route, methodHasBody } from "./router.js";
 import { handleBlob } from "./blob.js";
 import { handleStripe } from "./stripe.js";
 import { contentTypeFor, cacheControlFor, fallbackStatus } from "./static.js";
@@ -93,7 +93,7 @@ const server = http.createServer(async (req, res) => {
 
     if (u.pathname.startsWith("/api/")) {
       const query = Object.fromEntries(u.searchParams);
-      const body = req.method === "POST" ? await readBody(req) : {};
+      const body = methodHasBody(req.method) ? await readBody(req) : {};
       const result = await route({ method: req.method, path: u.pathname, query, body, headers: req.headers });
       sendJson(res, result.status, result.body);
       return;

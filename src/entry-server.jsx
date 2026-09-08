@@ -8,9 +8,9 @@
  *
  * Anything that needs a browser must stay inside an effect or an event
  * handler. Effects do not run during this render, which is what makes the
- * app's providers safe to mount here: AuthProvider only reaches the backend
- * from a useEffect, so on the server it renders its signed-out state, which is
- * exactly what an anonymous crawler should be shown.
+ * app's providers safe to mount here: AuthProvider and TeamProvider only reach
+ * the backend from a useEffect, so on the server they render their signed-out
+ * state, which is exactly what an anonymous crawler should be shown.
  */
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
@@ -18,6 +18,7 @@ import { StaticRouter } from "react-router-dom/server";
 
 import App from "./App.jsx";
 import { AuthProvider } from "./lib/auth.jsx";
+import { TeamProvider } from "./lib/teamContext.jsx";
 
 /**
  * @param {string} url the route to render, e.g. "/pricing"
@@ -28,7 +29,9 @@ export function render(url) {
     <StrictMode>
       <StaticRouter location={url}>
         <AuthProvider>
-          <App />
+          <TeamProvider>
+            <App />
+          </TeamProvider>
         </AuthProvider>
       </StaticRouter>
     </StrictMode>,

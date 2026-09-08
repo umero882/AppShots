@@ -1,24 +1,110 @@
 rules_version = '2';
 
-// AppShots Firestore security rules — owner-only access.
+// AppShots Firestore security rules.
+//
+// Two kinds of access:
+//   1. Owner-only — your profile, your projects. Unchanged.
+//   2. Team — a shared workspace whose ROSTER THE SERVER OWNS. Membership grants
+//      a paid plan, so no client may write it: `teams/{id}` and its `members`
+//      subcollection are read-only here and written only by the service account
+//      (server/teams.js), which bypasses rules. These rules can therefore trust
+//      the roster they read.
+//
 // Publish in the Firebase console: Firestore Database → Rules → paste → Publish
 // (or `firebase deploy --only firestore:rules` with the CLI).
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Per-user profile doc (display name + plan). Only the owner may read/write it.
-    match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // Projects are owned by the signed-in user who created them.
+    // One `get()` per evaluation, billed as a document read. Membership is the
+    // only thing that opens someone else's project, so it is worth the read.
+    function memberDoc(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid));
+    }
+    function isMember(teamId) {
+      return signedIn()
+        && teamId is string
+        && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid));
+    }
+    function teamRole(teamId) {
+      return memberDoc(teamId).data.role;
+    }
+    function isManager(teamId) {
+      return isMember(teamId) && teamRole(teamId) in ['owner', 'admin'];
+    }
+
+    // Per-user profile doc (display name + plan). Only the owner may read/write it.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // The workspace itself. Readable by its members so the app can show the team
+    // name and brand kit; never writable from a browser — the seat it represents
+    // is the thing being paid for.
+    match /teams/{teamId} {
+      allow read: if isMember(teamId);
+      allow write: if false;
+
+      match /members/{uid} {
+        allow read: if isMember(teamId);
+        allow write: if false;
+      }
+
+      // Shared templates are style presets (background, type, layout) — no
+      // screenshots, nothing that grants access. Members add them, managers and
+      // the author can remove them, which needs no server round-trip.
+      match /templates/{templateId} {
+        allow read: if isMember(teamId);
+        allow create: if isMember(teamId)
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isMember(teamId)
+          && (resource.data.createdBy == request.auth.uid || isManager(teamId))
+          && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if isMember(teamId)
+          && (resource.data.createdBy == request.auth.uid || isManager(teamId));
+      }
+    }
+
+    // Projects belong to the user who created them, and optionally to a team.
     match /projects/{projectId} {
-      // Read/modify/delete only your own projects.
-      allow read, update, delete:
-        if request.auth != null && resource.data.userId == request.auth.uid;
-      // On create, the new doc must be stamped with the caller's own uid.
-      allow create:
-        if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // `teamId` is absent on every project created before Team shipped, so the
+      // shared branch must tolerate a missing field rather than error on it.
+      function projectTeam(data) {
+        return data.keys().hasAny(['teamId']) ? data.teamId : null;
+      }
+      function ownsIt() {
+        return signedIn() && resource.data.userId == request.auth.uid;
+      }
+      function sharedWithMe() {
+        return projectTeam(resource.data) != null && isMember(projectTeam(resource.data));
+      }
+
+      allow read: if ownsIt() || sharedWithMe();
+
+      // Deleting is the author's alone, even in a shared library. A teammate
+      // cannot delete the state blob that hangs off the document — the blob
+      // store is owner-only — so letting them delete the document would leave
+      // orphaned bytes charged to someone else's storage quota forever.
+      allow delete: if ownsIt();
+
+      // A shared project is editable by the whole team — that is the point of
+      // sharing it. What nobody may do is re-home it: changing `userId` would
+      // hand off someone else's storage, and pointing `teamId` at a team you are
+      // not in would publish their work to strangers.
+      allow update: if (ownsIt() || sharedWithMe())
+        && request.resource.data.userId == resource.data.userId
+        && (projectTeam(request.resource.data) == null
+            || isMember(projectTeam(request.resource.data)));
+
+      // On create, the new doc must be stamped with the caller's own uid, and may
+      // only be filed under a team the caller actually belongs to.
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && (projectTeam(request.resource.data) == null
+            || isMember(projectTeam(request.resource.data)));
     }
   }
 }

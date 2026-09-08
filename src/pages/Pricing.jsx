@@ -1,11 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Check, Sparkles } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../lib/auth";
-import { apiFetch, describeApiError } from "../lib/apiClient";
-import { trackWaitlistJoined } from "../lib/analytics";
 
 const plans = [
   {
@@ -42,17 +40,15 @@ const plans = [
     id: "team",
     name: "Team",
     price: { mo: 29, yr: 276 },
-    tagline: "Shared workspaces for product teams.",
-    // Not built yet, so the card says so and collects intent instead of money.
-    comingSoon: true,
+    tagline: "One workspace, five people, one bill.",
     features: [
-      "Everything in Pro",
-      "5 team seats",
+      "Everything in Pro, for all 5 seats",
+      "Shared project library",
       "Shared templates",
-      "Brand kit",
+      "Brand kit — colours, fonts, logo",
       "Roles & permissions",
     ],
-    cta: "Join the waitlist",
+    cta: "Start with Team",
   },
 ];
 
@@ -66,17 +62,28 @@ const plans = [
  * Pure and exported so every combination can be tested without driving the
  * billing-period toggle through the DOM.
  *
- * @param {{id:string,name:string,cta:string,comingSoon?:boolean}} plan
- * @param {{plan?:string, subscription?:{interval?:string|null}}|null} user
+ * A seat holder is a special case: their plan is real but someone else's card is
+ * paying for it, so every button that would start or change a subscription has
+ * to keep working — they are buying their OWN plan, not editing the workspace's.
+ *
+ * @param {{id:string,name:string,cta:string}} plan
+ * @param {{plan?:string, planVia?:string, subscription?:{interval?:string|null}}|null} user
  * @param {boolean} yearly which period the toggle is showing
- * @returns {{isCurrent:boolean, cta:string, action:"waitlist"|"signup"|"checkout"|"portal"|"none"}}
+ * @returns {{isCurrent:boolean, cta:string, action:"signup"|"checkout"|"portal"|"none"}}
  */
 export function planCardState(plan, user, yearly) {
   const wanted = yearly ? "year" : "month";
-  const subscribed = !!user?.plan && user.plan !== "free";
+  // A plan that came from a seat is not a subscription this person can manage.
+  const viaSeat = user?.planVia === "seat";
+  const subscribed = !!user?.plan && user.plan !== "free" && !viaSeat;
   const current = user?.subscription?.interval || null;
 
-  if (plan.comingSoon) return { isCurrent: false, cta: plan.cta, action: "waitlist" };
+  if (viaSeat) {
+    // Their seat already gives them Team; the same card is not something to buy
+    // twice, and the cheaper ones are not an upgrade.
+    if (plan.id === "team") return { isCurrent: true, cta: "Your team's plan", action: "none" };
+    return { isCurrent: false, cta: plan.cta, action: "checkout" };
+  }
 
   // An unknown interval means an entitlement record written before we stored it.
   // Fall back to plan-only — the previous behaviour — rather than guess wrong.
@@ -107,39 +114,12 @@ export default function Pricing() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
-  const [waitlistOpen, setWaitlistOpen] = useState(false);
-  const [waitlistEmail, setWaitlistEmail] = useState("");
-  const [waitlistDone, setWaitlistDone] = useState(false);
-  const [waitlistErr, setWaitlistErr] = useState("");
 
-  useEffect(() => {
-    if (user?.email) setWaitlistEmail(user.email);
-  }, [user?.email]);
-
-  const subscribed = !!user?.plan && user.plan !== "free";
-
-  async function joinWaitlist(e) {
-    e.preventDefault();
-    const email = waitlistEmail.trim();
-    if (!email) return;
-    setBusy("team");
-    setWaitlistErr("");
-    try {
-      const res = await apiFetch("/api/waitlist", { method: "POST", body: { plan: "team", email } });
-      setWaitlistDone(true);
-      trackWaitlistJoined({ plan: "team", already: !!res.already });
-    } catch (err) {
-      setWaitlistErr(describeApiError(err, "Couldn't add you to the list — please try again."));
-    } finally {
-      setBusy(null);
-    }
-  }
+  // A seat holder has no subscription of their own, so the portal has nothing to
+  // show them — they buy through Checkout like anyone else.
+  const subscribed = !!user?.plan && user.plan !== "free" && user.planVia !== "seat";
 
   async function choose(plan) {
-    if (plan.comingSoon) {
-      setWaitlistOpen(true);
-      return;
-    }
     if (plan.id === "free") {
       navigate(user ? "/dashboard" : "/signup");
       return;
@@ -237,62 +217,29 @@ export default function Pricing() {
                     Most popular
                   </span>
                 )}
-                {p.comingSoon && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-white/15 bg-ink-800 px-3 py-1 text-xs font-bold text-slate-300">
-                    Coming soon
-                  </span>
-                )}
                 <h3 className="text-lg font-bold text-white">{p.name}</h3>
                 <p className="mt-1 text-sm text-slate-400">{p.tagline}</p>
                 <div className="mt-5 flex items-end gap-1">
                   <span className="text-4xl font-extrabold text-white">${price}</span>
                   <span className="mb-1 text-sm text-slate-400">/mo</span>
                 </div>
-                {p.comingSoon ? (
-                  <p className="text-xs text-slate-500">planned price — not available yet</p>
-                ) : (
-                  yearly && p.price.yr > 0 && <p className="text-xs text-slate-500">billed ${p.price.yr}/year</p>
-                )}
+                {yearly && p.price.yr > 0 && <p className="text-xs text-slate-500">billed ${p.price.yr}/year</p>}
+                {p.id === "team" && <p className="text-xs text-slate-500">5 seats included · one bill</p>}
                 <ul className="mt-6 space-y-3">
                   {p.features.map((f) => (
-                    <li
-                      key={f}
-                      className={`flex items-start gap-2.5 text-sm ${p.comingSoon ? "text-slate-400" : "text-slate-300"}`}
-                    >
-                      <Check size={16} className={`mt-0.5 shrink-0 ${p.comingSoon ? "text-slate-600" : "text-brand-400"}`} />{" "}
-                      {f}
+                    <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
+                      <Check size={16} className="mt-0.5 shrink-0 text-brand-400" /> {f}
                     </li>
                   ))}
                 </ul>
 
-                {p.comingSoon && waitlistDone ? (
-                  <p className="mt-7 rounded-lg border border-brand-400/30 bg-brand-500/10 px-4 py-3 text-center text-sm text-brand-200">
-                    You&rsquo;re on the list &mdash; we&rsquo;ll email you when Team is ready.
-                  </p>
-                ) : p.comingSoon && waitlistOpen ? (
-                  <form onSubmit={joinWaitlist} className="mt-7 space-y-2">
-                    <input
-                      type="email"
-                      required
-                      value={waitlistEmail}
-                      onChange={(e) => setWaitlistEmail(e.target.value)}
-                      placeholder="you@company.com"
-                      className="input"
-                    />
-                    {waitlistErr && <p className="text-xs text-red-400">{waitlistErr}</p>}
-                    <button type="submit" disabled={busy === p.id} className="btn-ghost w-full">
-                      {busy === p.id ? "Adding…" : "Join the waitlist"}
-                    </button>
-                  </form>
-                ) : (
-                  <button
-                    onClick={() => choose(p)}
-                    disabled={busy === p.id || isCurrent}
-                    className={`mt-7 ${p.highlight ? "btn-primary" : "btn-ghost"}`}
-                  >
-                    {busy === p.id ? "Processing…" : card.cta}
-                  </button>
-                )}
+                <button
+                  onClick={() => choose(p)}
+                  disabled={busy === p.id || isCurrent}
+                  className={`mt-7 ${p.highlight ? "btn-primary" : "btn-ghost"}`}
+                >
+                  {busy === p.id ? "Processing…" : card.cta}
+                </button>
               </div>
             );
           })}
@@ -300,6 +247,8 @@ export default function Pricing() {
 
         <p className="mt-10 text-center text-xs text-slate-500">
           Secure checkout by Stripe. Cancel anytime — manage your plan from Settings.
+          <br />
+          Team seats are invited by email and cost nothing extra — the workspace owner pays one bill.
         </p>
       </section>
       <Footer />

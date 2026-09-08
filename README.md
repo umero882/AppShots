@@ -26,7 +26,8 @@ PNG export — all in the browser.
   - Multi-screen sets with a filmstrip (add / duplicate / delete), connected-panorama backgrounds, and localization
   - Live autosave
   - **Exports**: PNG/JPEG at exact store resolution (no alpha channel), whole-set `.zip`, **"All sizes"** (render one design across every required App Store + Google Play size), copy-to-clipboard, and an animated video reel
-- **Pricing** — Free / Pro / Team tiers with monthly–yearly toggle and a simulated upgrade.
+- **Team workspaces** — one subscription seats five people: email invites with expiring links, owner/admin/member roles, a shared project library, shared templates, and a brand kit (colours, fonts, logo) one click from the editor's colour pickers. Membership is server-owned and mirrored into Firestore for the security rules — see **[TEAM-SETUP.md](TEAM-SETUP.md)**.
+- **Pricing** — Free / Pro / Team tiers with a monthly–yearly toggle, sold through Stripe hosted Checkout.
 
 ## Quick start
 
@@ -113,10 +114,19 @@ src/
     devices.js     device frame definitions (CSS-drawn, store dimensions)
     templates.js   gradients, fonts, layouts, default project state
     export.js      DOM → PNG export at store resolution
-  pages/           Landing, Pricing, Login, Signup, Dashboard, Editor, NotFound
+    team.js        team API calls + the "which buttons to render" helpers
+    teamContext.jsx  loads the workspace once, shares it with every screen
+  pages/           Landing, Pricing, Login, Signup, Dashboard, Editor, Team, JoinTeam, NotFound
   App.jsx          routes
   main.jsx         entry
+server/
+  teams.js         the roster, the roles, /api/team — server-owned by design
+  entitlement.js   Stripe record + Team seat -> one effective plan
+  firestoreAdmin.js  the only writer of teams/** in Firestore
 ```
+
+Deeper docs: [TEAM-SETUP.md](TEAM-SETUP.md) · [STRIPE-SETUP.md](STRIPE-SETUP.md) ·
+[FIREBASE-SETUP.md](FIREBASE-SETUP.md) · [DEPLOY.md](DEPLOY.md)
 
 ## Tech
 
