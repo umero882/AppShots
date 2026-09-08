@@ -12,7 +12,7 @@ process.env.WAITLIST_DIR = mkdtempSync(path.join(tmpdir(), "appshots-waitlist-")
 process.env.PUBLIC_URL = "https://appshots.nextechlabs.tech";
 const DIR = process.env.WAITLIST_DIR;
 
-const { announce, announcementFor, exportCsv, pendingRecipients, readAnnounced } = await import("./waitlist-cli.js");
+const { announce, announcementFor, exportCsv, isDeliverable, pendingRecipients, readAnnounced } = await import("./waitlist-cli.js");
 
 const seed = (rows) =>
   writeFileSync(path.join(DIR, "team.jsonl"), rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
@@ -38,6 +38,28 @@ describe("pendingRecipients", () => {
   it("skips anyone already told", () => {
     writeFileSync(path.join(DIR, "team.announced.json"), JSON.stringify({ sent: ["ada@acme.com"] }));
     expect(pendingRecipients("team").map((r) => r.email)).toEqual(["bob@acme.com"]);
+  });
+});
+
+describe("undeliverable addresses", () => {
+  // A public signup form collects test entries — someone trying the form, a
+  // monitoring probe, a developer checking the endpoint answers. Mailing them
+  // bounces, and enough bounces is how a sending domain earns a spam reputation.
+  it("recognises the reserved domains that can never receive mail", () => {
+    for (const bad of ["probe@example.invalid", "x@foo.test", "a@b.example", "root@localhost", "x@example.com"]) {
+      expect(isDeliverable(bad), bad).toBe(false);
+    }
+  });
+
+  it("does not punish a real domain that merely looks like one", () => {
+    for (const good of ["ada@acme.com", "x@invalidcorp.com", "y@testlabs.io", "z@example-studio.com"]) {
+      expect(isDeliverable(good), good).toBe(true);
+    }
+  });
+
+  it("keeps them out of the send list entirely", () => {
+    seed([...ROWS, { email: "probe@example.invalid", plan: "team", at: "2026-09-08T00:00:00.000Z" }]);
+    expect(pendingRecipients("team").map((r) => r.email)).toEqual(["ada@acme.com", "bob@acme.com"]);
   });
 });
 

@@ -28,6 +28,22 @@ const APP_URL = (process.env.PUBLIC_URL || "https://appshots.nextechlabs.tech").
 
 const sentPath = (plan) => path.join(WAITLIST_DIR, `${plan}.announced.json`);
 
+/**
+ * Domains reserved by RFC 2606 / RFC 6761 — they cannot receive mail, ever.
+ *
+ * A public signup form collects test entries: someone trying the form, a
+ * monitoring probe, a developer checking the endpoint answers. Mailing them
+ * bounces, and enough bounces is how a sending domain earns a spam reputation.
+ * Cheaper to never send than to explain the bounce rate afterwards.
+ */
+const UNDELIVERABLE = /(^|\.)(invalid|test|example|localhost)$|(^|\.)example\.(com|net|org)$/i;
+
+/** Is this an address that could actually receive the announcement? */
+export function isDeliverable(email) {
+  const domain = String(email || "").split("@")[1] || "";
+  return !!domain && !UNDELIVERABLE.test(domain);
+}
+
 /** Addresses already told about this plan. Missing file means nobody yet. */
 export function readAnnounced(plan) {
   try {
@@ -54,6 +70,7 @@ export function pendingRecipients(plan, { entries = readWaitlist(plan), announce
   for (const entry of entries) {
     const email = String(entry?.email || "").trim().toLowerCase();
     if (!email || seen.has(email) || announced.has(email)) continue;
+    if (!isDeliverable(email)) continue;
     seen.add(email);
     out.push({ email, at: entry.at, uid: entry.uid || null });
   }
@@ -112,9 +129,18 @@ function mailer() {
 export function list(plan = "team", { log = console.log } = {}) {
   const entries = readWaitlist(plan);
   const announced = readAnnounced(plan);
-  log(`${entries.length} on the ${plan} waitlist · ${announced.size} already told`);
+  const undeliverable = entries.filter((e) => !isDeliverable(e.email)).length;
+  log(
+    `${entries.length} on the ${plan} waitlist · ${announced.size} already told` +
+      (undeliverable ? ` · ${undeliverable} undeliverable (skipped)` : ""),
+  );
   for (const e of entries) {
-    log(`  ${e.at || "?"}  ${e.email}${announced.has(e.email) ? "  (announced)" : ""}${e.seats ? `  seats:${e.seats}` : ""}`);
+    const notes = [
+      announced.has(e.email) ? "announced" : null,
+      isDeliverable(e.email) ? null : "undeliverable — will not be mailed",
+      e.seats ? `seats:${e.seats}` : null,
+    ].filter(Boolean);
+    log(`  ${e.at || "?"}  ${e.email}${notes.length ? `  (${notes.join(", ")})` : ""}`);
   }
   return entries.length;
 }
