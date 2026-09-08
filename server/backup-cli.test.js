@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
-import { backup, prune, restore, snapshotKey } from "./backup-cli.js";
+import { alertFailure, backup, prune, restore, snapshotKey } from "./backup-cli.js";
 import { listArchive, packDirectory } from "./tarball.js";
 
 const ENV = {
@@ -100,5 +100,57 @@ describe("backup-cli", () => {
   it("refuses to run without configuration", async () => {
     delete process.env.BACKUP_S3_SECRET_KEY;
     await expect(backup({ log: () => {} })).rejects.toThrow(/backup-not-configured/);
+  });
+});
+
+describe("alertFailure", () => {
+  // The nightly snapshot runs as a scheduled task, so a failure's only other
+  // trace is a log line nobody reads — and a backup that has been failing for a
+  // month is discovered on the day it is needed.
+  const env = {
+    ALERT_EMAIL_TO: "ops@example.test",
+    SMTP_HOST: "smtp.example.test",
+    SMTP_USER: "bot@example.test",
+    SMTP_PASS: "pw",
+  };
+
+  it("emails the failure to the alert address", async () => {
+    const send = vi.fn(async () => {});
+    const res = await alertFailure("backup", new Error("bucket unreachable"), { send, env, log: () => {} });
+    expect(res.sent).toBe(true);
+    const mail = send.mock.calls[0][0];
+    expect(mail.to).toBe("ops@example.test");
+    expect(mail.subject).toMatch(/backup FAILED/i);
+    expect(mail.text).toContain("bucket unreachable");
+  });
+
+  it("carries the upstream body when there is one", async () => {
+    const send = vi.fn(async () => {});
+    const err = Object.assign(new Error("HTTP 403"), { body: "<Error>AccessDenied</Error>" });
+    await alertFailure("backup", err, { send, env, log: () => {} });
+    expect(send.mock.calls[0][0].text).toContain("AccessDenied");
+  });
+
+  it("says so in the log rather than throwing when it is not configured", async () => {
+    const send = vi.fn();
+    const log = vi.fn();
+    const res = await alertFailure("backup", new Error("x"), { send, env: {}, log });
+    expect(res).toMatchObject({ sent: false, reason: "not-configured" });
+    expect(send).not.toHaveBeenCalled();
+    expect(log.mock.calls[0][0]).toMatch(/ALERT/);
+  });
+
+  it("never replaces the real error with a mail error", async () => {
+    // This is already the failure path. Throwing here would lose the reason the
+    // backup failed and report a broken mailbox instead.
+    const send = vi.fn(async () => {
+      throw new Error("smtp refused");
+    });
+    const log = vi.fn();
+    await expect(alertFailure("backup", new Error("disk full"), { send, env, log })).resolves.toMatchObject({
+      sent: false,
+      reason: "smtp-failed",
+    });
+    expect(log.mock.calls[0][0]).toMatch(/smtp refused/);
   });
 });

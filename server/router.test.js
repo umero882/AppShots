@@ -289,6 +289,16 @@ describe("unmetered routes", () => {
     expect(res.status).toBe(404);
   });
 
+  it("no longer accepts waitlist signups", async () => {
+    // Retired with the Team launch. The collected list is still readable by the
+    // announce CLI; what is gone is the public write path for a plan that exists.
+    const res = await route(
+      { method: "POST", path: "/api/waitlist", body: { plan: "team", email: "a@b.co" }, headers: {} },
+      deps,
+    );
+    expect(res.status).toBe(404);
+  });
+
   it("404s an unknown path", async () => {
     const res = await route({ method: "GET", path: "/api/nope", headers: TOKEN }, deps);
     expect(res.status).toBe(404);

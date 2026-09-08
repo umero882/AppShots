@@ -87,9 +87,6 @@ export const trackProjectCreated = ({ source = "blank" } = {}) => track("project
 export const trackExport = ({ format, screens, sizes = 1 }) =>
   track("export_completed", { format, screens, sizes });
 
-/** Someone asked for a plan that does not exist yet — demand, before building. */
-export const trackWaitlistJoined = ({ plan, already = false }) =>
-  track("waitlist_joined", { plan, already });
 
 /** Test hook: forget the memoised instance so consent is re-read. */
 export function _resetAnalytics() {

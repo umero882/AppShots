@@ -13,6 +13,7 @@
     "stripe:setup": "node --env-file=.env.local scripts/stripe/setup.mjs",
     "og:image": "node scripts/og/make-og-image.mjs",
     "uptime": "node scripts/ops/uptime-check.mjs",
+    "coolify:env": "node --env-file=.env.local scripts/ops/coolify-set-env.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "rules:check": "firebase deploy --only firestore:rules --project appshots-76a56 --dry-run",

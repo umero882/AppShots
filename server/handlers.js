@@ -341,7 +341,7 @@ export function statusForError(code) {
   if (code === "no-llm-key" || code === "no-image-key") return 503;
   if (String(code).startsWith("reset-link-failed") || String(code).startsWith("action-link-failed") || String(code).startsWith("smtp-") || String(code).startsWith("google-token-failed")) return 502;
   if (code === "github-bad-url" || code === "store-bad-query" || code === "invalid-email") return 400;
-  if (code === "unknown-waitlist" || code === "plan-unavailable") return 400;
+  if (code === "plan-unavailable") return 400;
   // Team workspaces. "forbidden" is a rank problem, not a sign-in problem, so it
   // must not be a 401 — a client that retries the login loop cannot fix it.
   if (code === "forbidden") return 403;

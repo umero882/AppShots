@@ -17,6 +17,9 @@
  *   BACKUP_PREFIX        key prefix (default "appshots")
  *   BACKUP_RETENTION_DAYS  delete snapshots older than this (default 30; 0 = keep all)
  *   BACKUP_DIR           directory to snapshot (default: parent of BLOB_DIR, i.e. /app/data)
+ *   ALERT_EMAIL_TO       where to email if a backup fails (with the SMTP_* block).
+ *                        Unset means failures are only a log line in a scheduled
+ *                        task nobody reads.
  *
  * Run nightly as a Coolify "Scheduled Task" inside the app container.
  */
@@ -25,6 +28,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { s3ConfigFromEnv, s3Configured, putObject, getObject, listObjects, deleteObject } from "./s3.js";
 import { packDirectory, extractArchive, listArchive } from "./tarball.js";
+import { sendMail } from "./smtp.js";
 
 const env = process.env;
 const dataDir = () => env.BACKUP_DIR || path.dirname(env.BLOB_DIR || path.join(process.cwd(), "data", "blobs"));
@@ -98,6 +102,57 @@ export async function check({ log = console.log } = {}) {
   return objects.length;
 }
 
+/* -------------------------------- alerting -------------------------------- */
+
+/**
+ * Tell someone when a backup fails.
+ *
+ * This runs as a nightly Coolify Scheduled Task, so a failure's only trace is a
+ * non-zero exit and a line in a log nobody reads — and a backup that has been
+ * quietly failing for a month is discovered on the day it is needed. Alerts go
+ * to ALERT_EMAIL_TO, the same address the uptime check uses.
+ *
+ * Failures only. The doc for the uptime check makes the point: alerts that
+ * arrive every night get filtered, and then they are not alerts.
+ *
+ * Best effort by construction — it is already the error path, and a broken
+ * mailbox must not replace the real error with a mail error.
+ */
+export async function alertFailure(command, error, { send = sendMail, env = process.env, log = console.error } = {}) {
+  const to = env.ALERT_EMAIL_TO;
+  if (!to || !env.SMTP_HOST) {
+    log(`ALERT (not emailed — SMTP/ALERT_EMAIL_TO not set): backup ${command} failed`);
+    return { sent: false, reason: "not-configured" };
+  }
+  try {
+    await send({
+      host: env.SMTP_HOST,
+      port: Number(env.SMTP_PORT) || 465,
+      secure: (env.SMTP_SECURE || "") !== "false",
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+      from: env.EMAIL_FROM || `AppShots <${env.SMTP_USER}>`,
+      to,
+      subject: `AppShots backup FAILED (${command})`,
+      text: [
+        `The nightly backup task "${command}" failed.`,
+        ``,
+        String(error?.message || error),
+        error?.body ? `\n${error.body}` : ``,
+        ``,
+        `Nothing was restored or deleted — this is the snapshot step.`,
+        `Check it with: npm run backup:check`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+    return { sent: true };
+  } catch (e) {
+    log(`ALERT (email failed: ${e.message}): backup ${command} failed`);
+    return { sent: false, reason: "smtp-failed" };
+  }
+}
+
 /* --------------------------------- CLI ---------------------------------- */
 const isMain = !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
@@ -108,8 +163,11 @@ if (isMain) {
     console.error("usage: node server/backup-cli.js <backup|list|check|restore <key> [--into dir]>");
     process.exit(2);
   }
-  run().catch((e) => {
+  run().catch(async (e) => {
     console.error("FAILED:", e.message, e.body ? `\n${e.body}` : "");
+    // Awaited, not fired and forgotten: process.exit() below would kill the
+    // socket mid-send and the one alert that matters would never leave.
+    await alertFailure(cmd, e);
     process.exit(1);
   });
 }

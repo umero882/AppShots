@@ -18,7 +18,6 @@ import { planFor } from "./entitlement.js";
 import { consume, refund } from "./usage.js";
 import { deleteAccount } from "./account.js";
 import { reportClientError } from "./clientErrors.js";
-import { joinWaitlist } from "./waitlist.js";
 import { handleTeam } from "./teams.js";
 import { captureException } from "./sentry.js";
 
@@ -91,7 +90,9 @@ export async function route({ method, path, query = {}, body = {}, headers = {} 
     // but rate-limited and size-capped inside the handler.
     if (key === "POST /api/client-error") return ok(await (deps.reportClientError || reportClientError)(body, headers, deps));
     // Open: the whole point is to hear from people who have not signed up.
-    if (key === "POST /api/waitlist") return ok(await (deps.joinWaitlist || joinWaitlist)(body, headers, deps));
+    // POST /api/waitlist is gone: it collected intent for Team while Team did not
+    // exist, and Team now does. The collected list is still readable — see
+    // server/waitlist.js and the announce CLI beside it.
     // Team workspaces: seats, roles, invites, brand kit. Sub-paths carry ids and
     // tokens, so this one dispatches on the path itself rather than an exact key.
     if (path === "/api/team" || path.startsWith("/api/team/"))

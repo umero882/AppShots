@@ -185,6 +185,12 @@ the volume to S3-compatible object storage — **Cloudflare R2** in production
 | `npm run backup:check` | verify env + bucket access without writing |
 | `npm run backup:restore -- <key> [--into <dir>]` | download and extract (default target: the data dir) |
 
+**Failures are emailed.** A snapshot that has been failing quietly for a month is
+discovered on the day it is needed, so `server/backup-cli.js` mails `ALERT_EMAIL_TO`
+(with the `SMTP_*` block) when a run fails — failures only, because an alert that
+arrives every night gets filtered and then is not an alert. Unset, a failure is just a
+non-zero exit and a line in a task log. Set it with `npm run coolify:env` below.
+
 **Schedule:** Coolify → application → *Scheduled Tasks* → add
 `nightly-backup`, command `node server/backup-cli.js backup`, frequency `0 3 * * *`
 (03:00 UTC daily). It runs inside the app container, so it sees the volume and the
@@ -329,6 +335,27 @@ keeping them — `/privacy` → *How long we keep it* says so, and the confirm d
 repeats it. Removed data may also sit in the nightly backup for up to 30 days.
 
 The endpoint is never metered: nobody should be rate-limited out of leaving.
+
+## Setting environment variables
+
+Env vars are the one part of this deployment that is not in the repo, so they drift
+silently — `ALERT_EMAIL_TO` was simply never set on the app, which is why a failed
+backup or a waitlist signup would have gone unreported with nothing to notice.
+
+```bash
+npm run coolify:env -- --dry-run ALERT_EMAIL_TO=you@example.com   # show the change
+npm run coolify:env -- ALERT_EMAIL_TO=you@example.com             # set it
+npm run coolify:env -- --restart ALERT_EMAIL_TO=you@example.com   # set + restart
+```
+
+Needs `COOLIFY_API_TOKEN` in `.env.local` (Coolify → Keys & Tokens → API tokens).
+Several products share this Coolify, so the script **refuses to act unless exactly one
+application matches** and prints which one it picked; set `COOLIFY_APP_UUID` to be
+explicit. A running container keeps the old environment until it restarts, which is
+opt-in — the script says so rather than letting you find out an hour later.
+
+The API is IP-allowlisted and the office IP is dynamic; a 401/403 usually means the
+current IP needs re-adding, not that the token is wrong.
 
 ## Error reporting and uptime
 
@@ -477,10 +504,12 @@ backstops the expensive one instance-wide.
 
 ### The waitlist, and telling it
 
-`server/waitlist.js` still owns `POST /api/waitlist` — open by design, idempotent per
-address, rate-limited, and it never takes a uid from the body. The pricing page no
-longer offers it (Team is buyable), but the collected list is on the volume and the
-page promised those people an email.
+**`POST /api/waitlist` is retired.** It collected intent for Team while Team did not
+exist; Team exists, so an open public write path for it collects nothing anybody would
+act on. `server/waitlist.js` is now a read-only archive — the JSONL files stay on the
+volume because the pricing page promised those people an email, and deleting the list
+would quietly break that promise. The intake side (rate limiting, idempotency, the
+owner notification) is in git history if a future unbuilt plan needs it back.
 
 ```bash
 npm run waitlist                 # who is on it, and who has been told
