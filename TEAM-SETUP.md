@@ -201,7 +201,9 @@ mirror write, so the client uploads to the blob store first.
 4. **Confirm the Stripe prices exist in LIVE mode**: `npm run stripe:setup`
    creates `team_monthly` / `team_yearly`. Selling a plan whose price is missing
    answers `price-not-found-run-setup-script`.
-5. **Decide `STORAGE_QUOTA_TEAM`** — see the note in DEPLOY.md; it is per seat now.
+5. **`STORAGE_QUOTA_TEAM` is per seat** — 5 GB each, so 25 GB for a full
+   workspace. See the note in DEPLOY.md before raising it; the volume is backed
+   up to R2 nightly, so every byte is paid for twice.
 6. **Mail the waitlist**: `npm run waitlist:announce -- --dry-run` first.
 
 ## Env

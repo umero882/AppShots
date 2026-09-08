@@ -389,7 +389,7 @@ otherwise looks perfectly healthy while silently losing uploads and entitlements
 
 The 25 MB per-file cap said nothing about how many files, so any signed-in account
 could fill the volume one upload at a time — and every byte is copied to R2 nightly.
-`server/blob.js` now enforces a total per plan: **100 MB free, 5 GB Pro, 20 GB Team**
+`server/blob.js` now enforces a total per plan: **100 MB free, 5 GB Pro, 5 GB per Team seat**
 (`STORAGE_QUOTA_FREE` / `_PRO` / `_TEAM` to change). Over the limit answers `413
 storage-quota-exceeded` with `plan`, `limit`, `used` — the client turns that into a
 sentence naming the limit and what to do about it, because "Couldn't save the project"
@@ -464,11 +464,16 @@ deploy:
 | `PUBLIC_URL` | request host | Origin used to build invite links. |
 | `UNAVAILABLE_PLANS` | *(empty)* | Kill switch — set to `team` to stop selling it. |
 
-**Storage is now per seat.** `STORAGE_QUOTA_TEAM` (20 GB) is charged against each
-member's own counter, so a full five-seat workspace can hold 100 GB for $29/month —
-generous next to Pro's 5 GB for $9. Tune `STORAGE_QUOTA_TEAM` before the first Team
-sale if that is not the intent. The daily AI quotas are per seat too, but
-`USAGE_GLOBAL_IMAGE_CAP` (300/day) already backstops the expensive one instance-wide.
+**Storage is per seat.** `STORAGE_QUOTA_TEAM` is charged against each member's own
+counter, not once per workspace, so the real ceiling is that number times the seat
+count. It was 20 GB — set when "team" meant one account — which five seats turned
+into 100 GB of volume and nightly R2 backup for $29/month, against 5 GB for a $9 Pro
+user. It is now **5 GB per seat**, the same as Pro and exactly what the pricing card
+sells ("Everything in Pro, for all 5 seats"), so a full workspace holds 25 GB. Raise
+`STORAGE_QUOTA_TEAM` if that proves tight — it is an env var, no deploy needed.
+
+The daily AI quotas are per seat too, but `USAGE_GLOBAL_IMAGE_CAP` (300/day) already
+backstops the expensive one instance-wide.
 
 ### The waitlist, and telling it
 

@@ -240,6 +240,7 @@ import {
   GoogleAuthProvider,
 } from "firebase/auth";
 import { getFirebase, hasFirebase, firebaseConfig } from "./firebase";
+import { formatStorage } from "./apiClient";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -601,10 +602,9 @@ export function makeFirebaseBackend() {
    */
   async function blobError(res, fallback) {
     const j = await res.json().catch(() => ({}));
-    const mb = (n) => Math.round((Number(n) || 0) / 1048576);
     if (j.error === "storage-quota-exceeded") {
       return new Error(
-        `You've used all ${mb(j.limit)} MB of storage on the ${j.plan} plan. ` +
+        `You've used all ${formatStorage(j.limit)} of storage on the ${j.plan} plan. ` +
           (j.plan === "free"
             ? "Delete a project you no longer need, or upgrade to Pro for far more room."
             : "Delete a project you no longer need to free up space."),

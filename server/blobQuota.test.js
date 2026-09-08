@@ -26,7 +26,25 @@ beforeEach(() => {
 describe("storageQuotaFor", () => {
   it("gives paid plans more room", () => {
     expect(storageQuotaFor("free")).toBeLessThan(storageQuotaFor("pro"));
-    expect(storageQuotaFor("pro")).toBeLessThan(storageQuotaFor("team"));
+    expect(storageQuotaFor("free")).toBeLessThan(storageQuotaFor("team"));
+  });
+
+  it("gives a Team seat exactly what a Pro seat gets", () => {
+    // These numbers are PER USER, and since Team shipped every seat holder has
+    // their own counter — so this one is multiplied by the seat count in
+    // practice. When it was 20 GB (set back when "team" meant one account) a
+    // five-seat workspace could hold 100 GB, and back it up to R2 nightly, for
+    // $29/month while a $9 Pro user got 5 GB. The pricing card promises
+    // "Everything in Pro, for all 5 seats" — so that is what a seat gets.
+    expect(storageQuotaFor("team")).toBe(storageQuotaFor("pro"));
+  });
+
+  it("keeps a full workspace within a sane multiple of one Pro user", () => {
+    // The guard the original number lacked: whatever a seat is worth, five of
+    // them must not dwarf what the workspace pays. Team is ~3.2x Pro's price.
+    const SEATS = Number(process.env.TEAM_SEATS) || 5;
+    const workspace = storageQuotaFor("team") * SEATS;
+    expect(workspace / storageQuotaFor("pro")).toBeLessThanOrEqual(SEATS);
   });
 
   it("treats an unknown or missing plan as free — never as unlimited", () => {

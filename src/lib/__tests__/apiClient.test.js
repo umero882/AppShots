@@ -10,7 +10,7 @@ vi.mock("../firebase", () => ({
   getFirebase: () => ({ auth: { currentUser } }),
 }));
 
-const { apiFetch, authHeaders, describeApiError, ApiError } = await import("../apiClient");
+const { apiFetch, authHeaders, describeApiError, formatStorage, ApiError } = await import("../apiClient");
 
 const signedIn = (token = "id-token-abc") => {
   currentUser = { getIdToken: vi.fn(async () => token) };
@@ -151,5 +151,45 @@ describe("describeApiError", () => {
   it("never renders a broken reset time", () => {
     expect(describeApiError(quota({ resetAt: "not-a-date" }))).toContain("shortly");
     expect(describeApiError(quota({ resetAt: new Date(Date.now() - 1000).toISOString() }))).toContain("shortly");
+  });
+});
+
+describe("formatStorage", () => {
+  const GB = 1024 ** 3;
+
+  it("says the number people were sold", () => {
+    // The plans are round numbers of GB. "5120 MB" is nobody's plan.
+    expect(formatStorage(5 * GB)).toBe("5 GB");
+    expect(formatStorage(20 * GB)).toBe("20 GB");
+  });
+
+  it("stays in MB below a gigabyte", () => {
+    expect(formatStorage(100 * 1024 * 1024)).toBe("100 MB");
+  });
+
+  it("keeps one decimal for an awkward size", () => {
+    expect(formatStorage(1.5 * GB)).toBe("1.5 GB");
+  });
+
+  it("survives a missing limit rather than printing NaN", () => {
+    expect(formatStorage(undefined)).toBe("0 MB");
+  });
+});
+
+describe("running out of storage", () => {
+  const full = (plan, limit) => new ApiError("storage-quota-exceeded", { plan, limit });
+  const GB = 1024 ** 3;
+
+  it("offers the upgrade only to the plan that has one", () => {
+    expect(describeApiError(full("free", 100 * 1024 * 1024))).toMatch(/upgrade/i);
+  });
+
+  it("tells a Team seat holder to delete, not to upgrade", () => {
+    // They cannot buy more room — the workspace owner pays — so an upgrade
+    // prompt points at a door they cannot open.
+    const msg = describeApiError(full("team", 5 * GB));
+    expect(msg).toContain("5 GB");
+    expect(msg).not.toMatch(/upgrade/i);
+    expect(msg).toMatch(/delete/i);
   });
 });

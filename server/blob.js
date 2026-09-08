@@ -24,11 +24,19 @@ const MAX_BYTES = 25 * 1024 * 1024; // 25 MB ceiling per blob
  * Total stored bytes allowed per plan. The 25 MB per-file cap said nothing about
  * how many files, so a free account could fill the volume one 25 MB upload at a
  * time — and every byte of it is copied to R2 every night.
+ *
+ * `team` is charged against EACH SEAT's own counter, not once per workspace, so
+ * the real ceiling is this number times the seat count. It was 20 GB when "team"
+ * meant one account; five seats turned that into 100 GB of volume and nightly
+ * backup for $29/month, against 5 GB for a $9 Pro user. It is now the same 5 GB
+ * a Pro seat gets — which is exactly what the pricing card sells ("Everything in
+ * Pro, for all 5 seats") — so a full workspace holds 25 GB for 3.2x Pro's price.
+ * Raise `STORAGE_QUOTA_TEAM` if that turns out to be tight; it needs no deploy.
  */
 export const STORAGE_QUOTAS = {
   free: Number(process.env.STORAGE_QUOTA_FREE) || 100 * 1024 * 1024, // 100 MB
   pro: Number(process.env.STORAGE_QUOTA_PRO) || 5 * 1024 * 1024 * 1024, // 5 GB
-  team: Number(process.env.STORAGE_QUOTA_TEAM) || 20 * 1024 * 1024 * 1024, // 20 GB
+  team: Number(process.env.STORAGE_QUOTA_TEAM) || 5 * 1024 * 1024 * 1024, // 5 GB per seat
 };
 
 export const storageQuotaFor = (plan) => STORAGE_QUOTAS[plan] || STORAGE_QUOTAS.free;

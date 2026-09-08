@@ -56,6 +56,17 @@ const KIND_LABELS = {
   appStore: "App Store lookups",
 };
 
+/**
+ * A storage limit as a person would say it. The quotas are round numbers of GB,
+ * and "you've used all 5120 MB" is a number nobody recognises as their plan.
+ */
+export function formatStorage(bytes) {
+  const n = Number(bytes) || 0;
+  const gb = n / 1024 ** 3;
+  if (gb >= 1) return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`;
+  return `${Math.round(n / 1024 ** 2)} MB`;
+}
+
 function untilReset(resetAt) {
   const ms = new Date(resetAt).getTime() - Date.now();
   if (!Number.isFinite(ms) || ms <= 0) return "shortly";
@@ -84,8 +95,11 @@ export function describeApiError(err, fallback = "Something went wrong — pleas
     case "plan-required":
       return `${info.feature || "This feature"} is part of Pro. Upgrade to unlock it.`;
     case "storage-quota-exceeded": {
-      const mb = Math.round((Number(info.limit) || 0) / 1048576);
-      return `You've used all ${mb} MB of storage on the ${info.plan || "free"} plan. Delete something, or upgrade for more room.`;
+      // Only the free plan has somewhere to upgrade TO on their own. A Team seat
+      // holder cannot buy more room at all — the workspace owner pays — so
+      // telling them to upgrade points at a door they cannot open.
+      const room = info.plan === "free" ? " Delete something, or upgrade for more room." : " Delete something to free up space.";
+      return `You've used all ${formatStorage(info.limit)} of storage on the ${info.plan || "free"} plan.${room}`;
     }
     case "email-verification-required":
       return "Verify your email address to use the AI features — check your inbox, or resend the link from your dashboard.";
