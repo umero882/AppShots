@@ -190,8 +190,12 @@ mirror write, so the client uploads to the blob store first.
 1. **Set `FIREBASE_SERVICE_ACCOUNT`** (the branded auth emails already need it).
    Without it, seats/roles/billing/brand kit work and the Team page says shared
    projects and templates are unavailable — degraded, never half-working.
-2. **Publish `firestore.rules`** — Firestore Database → Rules → paste → Publish,
-   or `firebase deploy --only firestore:rules`. Shared projects 403 until you do.
+2. **Publish `firestore.rules`** — `npm run rules:deploy` (the repo pins
+   `appshots-76a56` in `.firebaserc`, so it cannot publish to another project by
+   accident), or Firestore Database → Rules → paste → Publish in the console.
+   `npm run rules:check` compiles them without publishing. Shared projects 403
+   until the rules are live, while seats, roles and billing look perfectly fine
+   — which is what makes this easy to miss.
 3. **Check `UNAVAILABLE_PLANS` is unset** (it defaults to empty now). Set it back
    to `team` to stop selling without a deploy.
 4. **Confirm the Stripe prices exist in LIVE mode**: `npm run stripe:setup`
