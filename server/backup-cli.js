@@ -7,6 +7,7 @@
  *   node server/backup-cli.js list              # show snapshots in the bucket
  *   node server/backup-cli.js restore <key> [--into <dir>]   # download + extract (default: the data dir)
  *   node server/backup-cli.js check             # verify config + bucket access without writing
+ *   node server/backup-cli.js test-alert        # send one alert email, prove the path works
  *
  * Env (runtime, on Coolify):
  *   BACKUP_S3_ENDPOINT   e.g. https://<region>.hostinger-object-storage-host   (as shown in hPanel)
@@ -117,6 +118,10 @@ export async function check({ log = console.log } = {}) {
  *
  * Best effort by construction — it is already the error path, and a broken
  * mailbox must not replace the real error with a mail error.
+ *
+ * It says so when it DOES send, too. Silence-on-success means "did the alert
+ * work?" can only be answered by going and looking in a mailbox, and an alerting
+ * path you cannot verify is one you do not know you have.
  */
 export async function alertFailure(command, error, { send = sendMail, env = process.env, log = console.error } = {}) {
   const to = env.ALERT_EMAIL_TO;
@@ -146,7 +151,8 @@ export async function alertFailure(command, error, { send = sendMail, env = proc
         .filter(Boolean)
         .join("\n"),
     });
-    return { sent: true };
+    log(`alert emailed to ${to}: backup ${command} failed`);
+    return { sent: true, to };
   } catch (e) {
     log(`ALERT (email failed: ${e.message}): backup ${command} failed`);
     return { sent: false, reason: "smtp-failed" };
@@ -158,9 +164,26 @@ const isMain = !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToP
 if (isMain) {
   const [cmd, ...rest] = process.argv.slice(2);
   const into = rest.includes("--into") ? rest[rest.indexOf("--into") + 1] : undefined;
-  const run = { backup, list, check, restore: () => restore(rest[0], into ? { into } : {}) }[cmd];
+  const run = {
+    backup,
+    list,
+    check,
+    restore: () => restore(rest[0], into ? { into } : {}),
+    // Proves the alerting path end to end — the env var, the SMTP credentials
+    // and this code — without waiting for a real backup to fail. Sends one
+    // email that says plainly that nothing is wrong.
+    "test-alert": async () => {
+      const res = await alertFailure(
+        "test-alert (nothing is wrong)",
+        new Error("Deliberate test of the alerting path — no backup actually failed."),
+        { log: console.log },
+      );
+      console.log(res.sent ? `OK — one alert sent to ${res.to}.` : `NOT SENT (${res.reason}).`);
+      if (!res.sent) process.exit(1);
+    },
+  }[cmd];
   if (!run) {
-    console.error("usage: node server/backup-cli.js <backup|list|check|restore <key> [--into dir]>");
+    console.error("usage: node server/backup-cli.js <backup|list|check|test-alert|restore <key> [--into dir]>");
     process.exit(2);
   }
   run().catch(async (e) => {

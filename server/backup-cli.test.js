@@ -124,6 +124,18 @@ describe("alertFailure", () => {
     expect(mail.text).toContain("bucket unreachable");
   });
 
+  it("says so when it DOES send, so silence is never the signal", async () => {
+    // A success that logs nothing means "did the alert work?" can only be
+    // answered by going and looking in a mailbox — which is how an alerting path
+    // stays broken without anyone knowing.
+    const send = vi.fn(async () => {});
+    const log = vi.fn();
+    const res = await alertFailure("backup", new Error("x"), { send, env, log });
+    expect(res).toMatchObject({ sent: true, to: "ops@example.test" });
+    expect(log).toHaveBeenCalledOnce();
+    expect(log.mock.calls[0][0]).toContain("ops@example.test");
+  });
+
   it("carries the upstream body when there is one", async () => {
     const send = vi.fn(async () => {});
     const err = Object.assign(new Error("HTTP 403"), { body: "<Error>AccessDenied</Error>" });

@@ -24,6 +24,7 @@
     "backup": "node server/backup-cli.js backup",
     "backup:list": "node server/backup-cli.js list",
     "backup:check": "node server/backup-cli.js check",
+    "backup:test-alert": "node server/backup-cli.js test-alert",
     "backup:restore": "node server/backup-cli.js restore"
   },
   "engines": {
