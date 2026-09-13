@@ -114,6 +114,18 @@ describe("sendVerificationEmail", () => {
     expect(sent[0].html).toContain("continueUrl=https%3A%2F%2Fappshotspreview.com%2Fdashboard");
   });
 
+  it("reports a typed failure when Firebase returns no link for a known address", async () => {
+    const sent = [];
+    const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ kind: "identitytoolkit#GetOobConfirmationCodeResponse", email: "a@x.com" }) });
+    await expect(
+      sendVerificationEmail(
+        { authorization: "Bearer t" },
+        { verify: claimsFor({ email: "a@x.com", email_verified: false }), fetchImpl, sendMail: async (m) => sent.push(m), tokenFn: okToken }
+      )
+    ).rejects.toThrow(/action-link-failed: no-oob-link/);
+    expect(sent).toHaveLength(0);
+  });
+
   it("brandedActionLink keeps the mode and routes verify links to the dashboard", () => {
     const u = new URL(brandedActionLink(VERIFY_LINK, "https://a.test", "verifyEmail"));
     expect(u.pathname).toBe("/auth/action");
@@ -157,6 +169,17 @@ describe("requestPasswordReset", () => {
   it("stays silent for unknown addresses (no enumeration) and sends nothing", async () => {
     const sent = [];
     const fetchImpl = async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "EMAIL_NOT_FOUND" } }) });
+    const out = await requestPasswordReset({ email: "ghost@x.com" }, { fetchImpl, sendMail: async (m) => sent.push(m), tokenFn: okToken });
+    expect(out).toEqual({ ok: true });
+    expect(sent).toHaveLength(0);
+  });
+
+  it("stays silent when enumeration protection answers 200 with no link (unknown address)", async () => {
+    // Email enumeration protection (on for this project) turns EMAIL_NOT_FOUND
+    // into a bare { kind, email } success. This used to reach new URL(undefined)
+    // and answer 502 "Invalid URL" for every mistyped address.
+    const sent = [];
+    const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ kind: "identitytoolkit#GetOobConfirmationCodeResponse", email: "ghost@x.com" }) });
     const out = await requestPasswordReset({ email: "ghost@x.com" }, { fetchImpl, sendMail: async (m) => sent.push(m), tokenFn: okToken });
     expect(out).toEqual({ ok: true });
     expect(sent).toHaveLength(0);

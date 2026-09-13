@@ -190,6 +190,10 @@ export async function sendVerificationEmail(
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`action-link-failed: ${json?.error?.message || res.status}`);
+  // The address comes from a verified ID token, so it exists; no link here
+  // means Firebase sent its own email instead. Report it as the typed failure
+  // the client already falls back on rather than a bare "Invalid URL".
+  if (!json.oobLink) throw new Error("action-link-failed: no-oob-link");
 
   const link = brandedActionLink(json.oobLink, base, "verifyEmail");
   const { subject, text, html } = renderVerifyEmail({ link, email: addr, siteUrl: base });
@@ -222,6 +226,12 @@ export async function requestPasswordReset(
     if (/EMAIL_NOT_FOUND|USER_NOT_FOUND/.test(msg)) return { ok: true };
     throw new Error(`reset-link-failed: ${msg || res.status}`);
   }
+  // With email enumeration protection on (the default for projects created
+  // after 2023-09, and on for this one) an unknown address is not an error:
+  // Firebase answers 200 with just { kind, email } and no link. Same outcome
+  // as EMAIL_NOT_FOUND — say nothing, send nothing. Before this it reached
+  // new URL(undefined) and answered 502 "Invalid URL" for every typo.
+  if (!json.oobLink) return { ok: true };
 
   const link = brandedResetLink(json.oobLink, base);
   const { subject, text, html } = renderResetEmail({ link, email: addr, siteUrl: base });
