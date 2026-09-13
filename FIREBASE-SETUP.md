@@ -99,12 +99,14 @@ answers **501** and the client silently falls back to Firebase's own email.
   key at `C:\Admin\AppShots Credentials\appshots-auth-mailer.json`.
 - Runtime env on Coolify (never build args):
   `FIREBASE_SERVICE_ACCOUNT` (key JSON, base64 is fine), `SMTP_HOST=smtp.hostinger.com`,
-  `SMTP_PORT=465`, `SMTP_USER` / `SMTP_PASS` (a real Hostinger mailbox on
-  nextechlabs.tech — aliases can't authenticate), `EMAIL_FROM="AppShots <mailbox>"`,
+  `SMTP_PORT=465`, `SMTP_USER` / `SMTP_PASS` (a real Hostinger mailbox —
+  `noreply@appshotspreview.com` since the domain move on 2026-09-13, previously
+  `noreply@nextechlabs.tech`; aliases can't authenticate), `EMAIL_FROM="AppShots <mailbox>"`,
   `APP_URL`.
-- Root-domain DNS at Hostinger already carries SPF/DKIM/MX for Hostinger mail, so
-  messages from `@nextechlabs.tech` authenticate. (The `appshots.` subdomain's
-  SPF/DKIM belong to Firebase's sender and are unaffected.)
+- The `appshotspreview.com` zone at Hostinger carries Hostinger mail's MX, SPF,
+  DKIM (`hostingermail-a/b/c._domainkey`) and DMARC, so messages from
+  `@appshotspreview.com` authenticate. (The old `appshots.nextechlabs.tech`
+  subdomain's SPF/DKIM belong to Firebase's own sender and are unaffected.)
 
 Firebase-side branding that *did* stick: sender name "AppShots", public-facing name
 "AppShots", verified sender domain `appshots.nextechlabs.tech` for the emails

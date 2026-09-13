@@ -260,8 +260,12 @@ Moving domains again means, in this order:
    domain redirecting for at least 180 days; Google reads the 301s over time.
 7. GA4 → data stream URL (cosmetic; the measurement ID is unchanged).
 
-Email still goes out as `noreply@nextechlabs.tech` — that is the sending
-domain, with its own SPF/DKIM, and is independent of where the site lives.
+Email goes out as `noreply@appshotspreview.com`, a Hostinger mailbox on the
+product domain (its zone already carries Hostinger's MX, SPF, DKIM and DMARC).
+The sending domain is independent of where the site lives — it was
+`noreply@nextechlabs.tech` until the move — so switching it is only the three
+SMTP env vars: `npm run coolify:env -- --restart SMTP_USER=… SMTP_PASS=…
+EMAIL_FROM="AppShots <…>"`.
 
 ## SEO and social cards
 
