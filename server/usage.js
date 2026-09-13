@@ -23,9 +23,9 @@ const USAGE_DIR = process.env.USAGE_DIR || path.join(process.cwd(), "data", "usa
  * generous enough that a real user will not notice the ceiling.
  */
 export const QUOTAS = {
-  free: { suggest: 20, image: 5, translate: 0, search: 100, appStore: 100 },
-  pro: { suggest: 200, image: 60, translate: 400, search: 600, appStore: 600 },
-  team: { suggest: 600, image: 200, translate: 1200, search: 2000, appStore: 2000 },
+  free: { suggest: 20, image: 5, translate: 0, copy: 20, search: 100, appStore: 100 },
+  pro: { suggest: 200, image: 60, translate: 400, copy: 300, search: 600, appStore: 600 },
+  team: { suggest: 600, image: 200, translate: 1200, copy: 900, search: 2000, appStore: 2000 },
 };
 
 /**
@@ -37,6 +37,7 @@ export const GLOBAL_DAILY = {
   image: num(process.env.USAGE_GLOBAL_IMAGE_CAP, 300),
   suggest: num(process.env.USAGE_GLOBAL_SUGGEST_CAP, 3000),
   translate: num(process.env.USAGE_GLOBAL_TRANSLATE_CAP, 5000),
+  copy: num(process.env.USAGE_GLOBAL_COPY_CAP, 4000),
   search: num(process.env.USAGE_GLOBAL_SEARCH_CAP, 0),
   appStore: num(process.env.USAGE_GLOBAL_APPSTORE_CAP, 0),
 };
@@ -45,7 +46,7 @@ export const GLOBAL_DAILY = {
 const BURST_WINDOW_MS = 60_000;
 const BURST_MAX = num(process.env.USAGE_BURST_PER_MIN, 20);
 
-export const KINDS = ["suggest", "image", "translate", "search", "appStore"];
+export const KINDS = ["suggest", "image", "translate", "copy", "search", "appStore"];
 
 /**
  * Features sold as paid on the pricing page. Gating them in the UI is not
@@ -62,14 +63,14 @@ export const PAID_ONLY = {
  *
  * Per-user quotas assume the user is a person. Nothing stopped one person from
  * signing up with twenty made-up addresses and collecting twenty free
- * allowances, and these three are the ones that spend money per call.
+ * allowances, and these four are the ones that spend money per call.
  *
  * Scoped to the free plan on purpose: the gate exists to stop throwaway
  * accounts farming free AI, and someone who has paid is not that. Blocking a
  * paying customer over an unclicked email link would be a worse bug than the
  * one this prevents.
  */
-export const VERIFY_REQUIRED = new Set(["suggest", "image", "translate"]);
+export const VERIFY_REQUIRED = new Set(["suggest", "image", "translate", "copy"]);
 
 function num(v, dflt) {
   const n = Number(v);

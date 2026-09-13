@@ -11,7 +11,7 @@
  * from server/entitlement.js, which combines the user's own Stripe subscription
  * with any Team seat they hold.
  */
-import { capabilities, suggest, image, search, translate, appStore, statusForError } from "./handlers.js";
+import { capabilities, suggest, image, search, translate, copy, appStore, statusForError } from "./handlers.js";
 import { requestPasswordReset, sendVerificationEmail } from "./authEmail.js";
 import { verifyIdTokenClaims } from "./firebaseAuth.js";
 import { planFor } from "./entitlement.js";
@@ -38,6 +38,7 @@ const METERED = {
   "POST /api/ai/suggest": "suggest",
   "POST /api/ai/image": "image",
   "POST /api/ai/translate": "translate",
+  "POST /api/ai/copy": "copy",
   "GET /api/search": "search",
   "GET /api/app-store": "appStore",
 };
@@ -79,6 +80,7 @@ export async function route({ method, path, query = {}, body = {}, headers = {} 
     if (key === "POST /api/ai/suggest") return ok(await suggest(body));
     if (key === "POST /api/ai/image") return ok(await image(body));
     if (key === "POST /api/ai/translate") return ok(await translate(body));
+    if (key === "POST /api/ai/copy") return ok(await copy(body));
     if (key === "GET /api/search") return ok(await search(query.q || ""));
     if (key === "GET /api/app-store") return ok(await appStore(query));
     if (key === "POST /api/auth/password-reset") return ok(await requestPasswordReset(body));

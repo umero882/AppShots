@@ -18,10 +18,11 @@ import {
 import { BG_PRESETS, BG_CATEGORIES } from "../lib/backgroundImages";
 import { searchImages } from "../lib/imageSearch";
 import { describeApiError } from "../lib/apiClient";
-import { trackExport } from "../lib/analytics";
+import { trackExport, track } from "../lib/analytics";
 import {
   getCapabilities, suggestBackgrounds, generateImage, aiGradientCss, AI_MODELS, translateTexts,
 } from "../lib/aiBackground";
+import { suggestCopy, shrinkForVision, COPY_TONES, COPY_LIMITS } from "../lib/aiCopy";
 import {
   BASE_LOCALE, LOCALES, localeName, projectLocales, localizeScreen, setLocaleText,
   baseStrings, applyLocaleStrings,
@@ -50,7 +51,7 @@ import { ILLUSTRATIONS } from "../lib/illustrations";
 import { PATTERNS, PATTERN_DEFAULTS, patternCss } from "../lib/patterns";
 import { TEXT_EFFECTS, TEXT_PRESETS } from "../lib/textEffects";
 import {
-  GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, defaultProjectState,
+  GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, hydrateProjectState,
 } from "../lib/templates";
 import {
   exportNode, copyNodeToClipboard, readFileAsDataURL, renderNode, dataUrlToBytes, triggerDownload,
@@ -129,7 +130,7 @@ export default function Editor() {
         return;
       }
       setProject(p);
-      setState(p.state || defaultProjectState());
+      setState(hydrateProjectState(p.state));
       setName(p.name);
     });
     return () => {
@@ -1151,6 +1152,8 @@ export default function Editor() {
                 state={state}
                 update={update}
                 screen={screen}
+                screenIndex={activeScreen}
+                appName={name}
                 onScreen={(p) => updateScreen(activeScreen, p)}
                 locale={locale}
                 onText={setScreenText}
@@ -2058,7 +2061,253 @@ function LanguagesSection({ i18n }) {
   );
 }
 
-function TextPanel({ state, update, screen, onScreen, locale = BASE_LOCALE, onText, i18n }) {
+// The default heading is a placeholder, not copy — sending it as context would
+// tell the model the set already says "Your headline here".
+const PLACEHOLDER_HEADING = defaultScreen().heading;
+
+/**
+ * AI copywriter: headline + subheading ideas for the active screen (4 options,
+ * click to use) or one per screen for the whole set (apply all, or one by one).
+ * The brief lives on the project (`state.copyBrief`) so it survives reloads and
+ * is shared with teammates; the ideas themselves are transient. Writes in the
+ * language being edited, so a Spanish tab gets Spanish copy.
+ */
+function AiCopySection({ state, update, screen, screenIndex, appName, locale, onText }) {
+  const [caps, setCaps] = useState(null);
+  useEffect(() => {
+    getCapabilities().then(setCaps);
+  }, []);
+  const hasAi = !!caps?.ai;
+
+  const [tone, setTone] = useState("punchy");
+  const [useShot, setUseShot] = useState(true);
+  const [busy, setBusy] = useState(null); // "screen" | "set" | null
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null); // { mode, ideas, forIndex }
+  const [applied, setApplied] = useState(null); // idea index just used, or "all"
+
+  const brief = state.copyBrief || "";
+  const shot = screenDevices(screen, state).find((d) => d?.image)?.image || null;
+  const language = localeName(locale);
+  // Existing copy in the language being edited, placeholders blanked, index-aligned
+  // with state.screens so "set" mode maps back one-to-one.
+  const screens = state.screens.map((s) => {
+    const l = localizeScreen(s, locale);
+    const heading = l.heading === PLACEHOLDER_HEADING ? "" : l.heading || "";
+    return { heading, subheading: l.subheading || "" };
+  });
+  const hasContext =
+    !!brief.trim() || !!appName.trim() || !!(useShot && shot) || screens.some((s) => s.heading || s.subheading);
+
+  async function run(mode) {
+    if (!hasAi || busy) return;
+    setBusy(mode);
+    setError("");
+    setApplied(null);
+    try {
+      const image = useShot && shot ? await shrinkForVision(shot) : null;
+      const { ideas } = await suggestCopy({
+        appName: appName.trim(),
+        brief: brief.trim(),
+        tone,
+        language,
+        mode,
+        screens,
+        activeIndex: screenIndex,
+        image,
+      });
+      setResult({ mode, ideas, forIndex: screenIndex });
+      track("ai_copy", { mode, tone, with_image: !!image, screens: screens.length });
+    } catch (e) {
+      setError(
+        e.message === "no-llm-key"
+          ? "Set ANTHROPIC_API_KEY in .env.local and restart the dev server."
+          : describeApiError(e, "Couldn't reach the AI — please try again.")
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // Screen mode writes to whichever screen is active NOW (onText is bound to
+  // it) — the header says which screen the ideas were written for.
+  function useIdea(idea, i) {
+    onText({ heading: idea.heading, subheading: idea.subheading });
+    setApplied(i);
+  }
+
+  function applyToScreen(prev, i, idea) {
+    return prev.screens.map((s, j) =>
+      j === i && idea ? setLocaleText(s, locale, { heading: idea.heading, subheading: idea.subheading }) : s
+    );
+  }
+
+  function applyOne(idea, i) {
+    update((prev) => ({ ...prev, screens: applyToScreen(prev, i, idea) }));
+    setApplied(i);
+  }
+
+  function applySet(ideas) {
+    update((prev) => {
+      let screens = prev.screens;
+      ideas.forEach((idea, i) => {
+        screens = applyToScreen({ screens }, i, idea);
+      });
+      return { ...prev, screens };
+    });
+    setApplied("all");
+  }
+
+  const btnDisabled = !hasAi || !hasContext || !!busy;
+  const staleFor = result?.mode === "screen" && result.forIndex !== screenIndex ? result.forIndex + 1 : null;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between">
+        <p className="label mb-0 flex items-center gap-1.5">
+          <Wand2 size={13} /> AI copywriter
+        </p>
+        {locale !== BASE_LOCALE && <span className="text-[10px] text-slate-500">writes in {language}</span>}
+      </div>
+
+      {caps && !hasAi && (
+        <div className="flex gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          <span>
+            Add <code className="rounded bg-black/30 px-1">ANTHROPIC_API_KEY</code> to{" "}
+            <code className="rounded bg-black/30 px-1">.env.local</code> and restart the dev
+            server to enable AI copy.
+          </span>
+        </div>
+      )}
+
+      <textarea
+        className="input min-h-[64px] resize-y text-xs leading-relaxed"
+        rows={2}
+        value={brief}
+        maxLength={COPY_LIMITS.brief}
+        placeholder="What does your app do, and what does this screen show? e.g. “Habit tracker for busy parents — this screen is the weekly streak view.”"
+        onChange={(e) => update({ copyBrief: e.target.value })}
+      />
+
+      <div className="flex flex-wrap gap-1.5">
+        {COPY_TONES.map((tn) => (
+          <button
+            key={tn.id}
+            onClick={() => setTone(tn.id)}
+            title={tn.hint}
+            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+              tone === tn.id ? "border-brand-500 bg-brand-500/10 text-white" : "border-white/10 text-slate-300 hover:bg-white/5"
+            }`}
+          >
+            {tn.name}
+          </button>
+        ))}
+      </div>
+
+      {shot && (
+        <label className="flex cursor-pointer items-center gap-2 text-[11px] text-slate-300">
+          <input
+            type="checkbox"
+            checked={useShot}
+            onChange={(e) => setUseShot(e.target.checked)}
+            className="accent-brand-500"
+          />
+          Read the screenshot — the AI writes about what this screen actually does
+        </label>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => run("screen")}
+          disabled={btnDisabled}
+          title={hasContext ? "Four headline ideas for this screen" : "Describe your app, or upload a screenshot, first"}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
+        >
+          {busy === "screen" ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+          Write this screen
+        </button>
+        {state.screens.length > 1 && (
+          <button
+            onClick={() => run("set")}
+            disabled={btnDisabled}
+            title="One headline per screen, telling one story across the whole set"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/5 disabled:opacity-50"
+          >
+            {busy === "set" ? <Loader2 size={13} className="animate-spin" /> : <Layers size={13} />}
+            Write all {state.screens.length}
+          </button>
+        )}
+      </div>
+
+      {error && <p className="text-[11px] text-red-400">{error}</p>}
+
+      {result?.mode === "screen" && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">
+            {staleFor ? `Written for screen ${staleFor} — click to use here` : "Ideas — click to use"}
+          </p>
+          {result.ideas.map((idea, i) => (
+            <button
+              key={i}
+              onClick={() => useIdea(idea, i)}
+              className={`w-full rounded-lg border px-3 py-2 text-left transition ${
+                applied === i ? "border-brand-500 bg-brand-500/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+              }`}
+            >
+              <span className="flex items-start justify-between gap-2">
+                <span className="text-sm font-semibold text-white">{idea.heading}</span>
+                {applied === i && <Check size={14} className="mt-0.5 shrink-0 text-brand-300" />}
+              </span>
+              {idea.subheading && <span className="mt-0.5 block text-[11px] text-slate-400">{idea.subheading}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {result?.mode === "set" && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">One per screen</p>
+            <button
+              onClick={() => applySet(result.ideas)}
+              className="flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-brand-500"
+            >
+              {applied === "all" ? <Check size={12} /> : <Wand2 size={12} />} Apply all
+            </button>
+          </div>
+          {result.ideas.map((idea, i) => (
+            <div
+              key={i}
+              className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${
+                applied === "all" || applied === i ? "border-brand-500/60 bg-brand-500/10" : "border-white/10 bg-white/[0.03]"
+              }`}
+            >
+              <span className="mt-0.5 w-4 shrink-0 text-[10px] font-bold text-slate-500">{i + 1}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-white">{idea.heading}</span>
+                {idea.subheading && <span className="mt-0.5 block text-[11px] text-slate-400">{idea.subheading}</span>}
+              </span>
+              {i < state.screens.length && (
+                <button
+                  onClick={() => applyOne(idea, i)}
+                  title={`Use on screen ${i + 1}`}
+                  className="shrink-0 text-[11px] font-semibold text-brand-300 hover:text-white"
+                >
+                  Use
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TextPanel({
+  state, update, screen, screenIndex = 0, appName = "", onScreen, locale = BASE_LOCALE, onText, i18n,
+}) {
   const t = state.text;
   const ls = localizeScreen(screen, locale);
   const setText = onText || onScreen; // locale-aware when provided
@@ -2105,6 +2354,15 @@ function TextPanel({ state, update, screen, onScreen, locale = BASE_LOCALE, onTe
           onChange={(e) => setText({ subheading: e.target.value })}
         />
       </div>
+      <AiCopySection
+        state={state}
+        update={update}
+        screen={screen}
+        screenIndex={screenIndex}
+        appName={appName}
+        locale={locale}
+        onText={setText}
+      />
       <div>
         <p className="label">Font</p>
         <div className="grid grid-cols-2 gap-2">

@@ -20,6 +20,7 @@ PNG export — all in the browser.
   - iPhone / iPad / Pixel / Android device frames at exact, store-accepted dimensions
   - Backgrounds: gradient, solid, **patterns** (dots/grid/stripes/diagonal/checker/crosshatch), image (upload or search), and AI-generated
   - Headline + subheading with font, size, weight, alignment, color, and text effects
+  - **AI copywriter** — describe the app (or let it read the screenshot), pick a voice, and get four headline + subheading ideas for the screen or one per screen for the whole set, in the language being edited
   - Elements: badges, shapes, arrows, emoji, a **searchable 250-icon library**, an **illustration library**, and photos
   - Layout presets (text top / bottom / centered / device only)
   - Multi-device / free-positioned / 3D-tilt mockups, photoreal frame overlays, and live WebGL 3D devices

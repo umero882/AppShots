@@ -11,6 +11,7 @@
  */
 import {
   buildPrompt, parseConcepts, extractHexColors, buildTranslatePrompt, parseTranslations,
+  buildCopyPrompt, parseCopy, COPY_TONES, COPY_MODES, COPY_LIMITS,
 } from "../src/lib/aiCore.js";
 
 const AI_MODEL_DEFAULT = "claude-haiku-4-5-20251001";
@@ -185,6 +186,100 @@ export async function translate({ texts = [], targets = [], model } = {}) {
   }
 }
 
+/* ----------------------------- copy (Claude) ----------------------------- */
+
+// Screenshot attached for vision. Anthropic accepts these four; anything else
+// (SVG, BMP, a stray HTML page) is refused before it costs a request.
+const COPY_IMAGE_RE = /^data:image\/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/]+=*)$/;
+// The editor downscales to ~800px before sending (~100 KB); this is the ceiling
+// for a client that did not. Base64 chars, ≈ 1.5 MB decoded.
+const COPY_IMAGE_MAX_CHARS = 2_000_000;
+
+const str = (v, max) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
+
+/**
+ * Headline + subheading ideas for one screen ("screen" mode, 4 alternatives)
+ * or the whole set ("set" mode, one per screen). Optional screenshot goes to
+ * Claude as an image block so the copy reflects what the screen actually does.
+ */
+export async function copy({
+  appName, brief, tone, language, mode, screens, activeIndex, image, model,
+} = {}) {
+  if (!env("ANTHROPIC_API_KEY")) throw new Error("no-llm-key");
+
+  const L = COPY_LIMITS;
+  const cleanScreens = (Array.isArray(screens) ? screens : [])
+    .slice(0, L.screens)
+    .map((s) => ({ heading: str(s?.heading, L.existing), subheading: str(s?.subheading, L.existing) }));
+  const useMode = COPY_MODES.includes(mode) ? mode : "screen";
+  const idx = Number.isInteger(activeIndex) ? Math.min(Math.max(activeIndex, 0), Math.max(cleanScreens.length - 1, 0)) : 0;
+  const count = useMode === "set" ? Math.max(cleanScreens.length, 1) : L.alternatives;
+
+  let imageBlock = null;
+  if (typeof image === "string" && image) {
+    if (image.length > COPY_IMAGE_MAX_CHARS) throw new Error("copy-image-too-large");
+    const m = image.match(COPY_IMAGE_RE);
+    if (!m) throw new Error("copy-image-invalid");
+    imageBlock = { type: "image", source: { type: "base64", media_type: `image/${m[1]}`, data: m[2] } };
+  }
+
+  const cleanBrief = str(brief, L.brief);
+  const cleanName = str(appName, L.appName);
+  // Nothing to write from: no brief, no screenshot, and no copy on any screen
+  // to riff off. The editor disables the button in this state; a raw client
+  // gets a 400 rather than a page of generic filler.
+  if (!cleanBrief && !imageBlock && !cleanName && !cleanScreens.some((s) => s.heading || s.subheading)) {
+    throw new Error("copy-no-context");
+  }
+
+  const prompt = buildCopyPrompt({
+    appName: cleanName,
+    brief: cleanBrief,
+    tone: COPY_TONES.some((t) => t.id === tone) ? tone : "punchy",
+    language: str(language, L.language) || "English",
+    mode: useMode,
+    screens: cleanScreens,
+    activeIndex: idx,
+    count,
+    hasImage: !!imageBlock,
+  });
+
+  const key = env("ANTHROPIC_API_KEY");
+  const useModel = model || AI_MODEL_DEFAULT;
+
+  async function callOnce(extra) {
+    const content = [];
+    if (imageBlock) content.push(imageBlock);
+    content.push({ type: "text", text: prompt + (extra || "") });
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: useModel,
+        max_tokens: 1024,
+        messages: [{ role: "user", content }],
+      }),
+    });
+    if (!resp.ok) throw new Error("llm-error");
+    const data = await resp.json();
+    const text = (data.content || []).map((b) => b.text || "").join("");
+    return parseCopy(text, count);
+  }
+
+  let ideas;
+  try {
+    ideas = await callOnce("");
+  } catch (e) {
+    if (e.message !== "ai-parse") throw e;
+    ideas = await callOnce("\n\nRespond with ONLY the JSON array — nothing else.");
+  }
+  return { ideas, mode: useMode, count };
+}
+
 /* ----------------------------- image gen ----------------------------- */
 
 export async function image({ concept, prompt = "" } = {}) {
@@ -341,6 +436,8 @@ export function statusForError(code) {
   if (code === "no-llm-key" || code === "no-image-key") return 503;
   if (String(code).startsWith("reset-link-failed") || String(code).startsWith("action-link-failed") || String(code).startsWith("smtp-") || String(code).startsWith("google-token-failed")) return 502;
   if (code === "github-bad-url" || code === "store-bad-query" || code === "invalid-email") return 400;
+  if (code === "copy-no-context" || code === "copy-image-invalid") return 400;
+  if (code === "copy-image-too-large") return 413;
   if (code === "plan-unavailable") return 400;
   // Team workspaces. "forbidden" is a rank problem, not a sign-in problem, so it
   // must not be a 401 — a client that retries the login loop cannot fix it.

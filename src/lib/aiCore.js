@@ -199,3 +199,156 @@ export function buildPrompt({ repoContext, prompt }) {
   );
   return parts.join("\n");
 }
+
+/* ------------------------------ copywriter ------------------------------- */
+/**
+ * AI headline + subheading writer. Same rules as the rest of this module: pure,
+ * no network, shared by the browser panel and the server proxy.
+ *
+ * Idea = { heading: string, subheading: string }
+ */
+
+/** Voice presets offered in the editor; `hint` is what the model is told. */
+export const COPY_TONES = [
+  { id: "punchy", name: "Punchy", hint: "short, bold, benefit-first" },
+  { id: "friendly", name: "Friendly", hint: "warm and conversational, speaks to 'you'" },
+  { id: "professional", name: "Professional", hint: "clear and credible, no hype" },
+  { id: "playful", name: "Playful", hint: "light and fun, a little cheeky" },
+  { id: "minimal", name: "Minimal", hint: "as few words as possible" },
+];
+
+/** "screen" = alternatives for one screen; "set" = one idea per screen, in order. */
+export const COPY_MODES = ["screen", "set"];
+
+/** Hard limits — the store shows a headline at ~40 chars before it wraps twice. */
+export const COPY_LIMITS = {
+  brief: 1500, // user's description of the app/screen
+  appName: 80,
+  language: 40,
+  screens: 12, // a store listing allows 10; leave headroom for drafts
+  existing: 200, // each existing heading/subheading sent as context
+  heading: 60,
+  subheading: 120,
+  alternatives: 4, // ideas returned in "screen" mode
+};
+
+const tidy = (s, max) =>
+  String(s ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+
+/** Coerce one raw idea → Idea | null. Drops empty headings and stray quotes. */
+export function normalizeCopyIdea(obj) {
+  if (!obj || typeof obj !== "object") return null;
+  const heading = tidy(obj.heading, COPY_LIMITS.heading).replace(/^["'“”‘’]+|["'“”‘’.]+$/g, "");
+  const subheading = tidy(obj.subheading, COPY_LIMITS.subheading).replace(/^["'“”‘’]+|["'“”‘’]+$/g, "");
+  if (!heading) return null;
+  return { heading, subheading };
+}
+
+/**
+ * Build the copywriter prompt.
+ *   mode "screen": `count` alternatives for `screens[activeIndex]`.
+ *   mode "set":    one idea per screen, telling one story across the set.
+ * `screens` is [{ heading, subheading }] in listing order — existing copy is
+ * context (what the neighbours say), never something to repeat.
+ */
+export function buildCopyPrompt({
+  appName = "",
+  brief = "",
+  tone = "punchy",
+  language = "English",
+  mode = "screen",
+  screens = [],
+  activeIndex = 0,
+  count = COPY_LIMITS.alternatives,
+  hasImage = false,
+} = {}) {
+  const voice = COPY_TONES.find((t) => t.id === tone) || COPY_TONES[0];
+  const total = screens.length || 1;
+  const parts = [];
+
+  parts.push(
+    "You write App Store / Google Play screenshot captions: the big headline over " +
+      "each screenshot and its optional supporting line. Captions sell one benefit " +
+      "per screen, in plain words a shopper skims in a second."
+  );
+  if (appName) parts.push(`\nAPP: ${appName}`);
+  if (brief) parts.push(`ABOUT THE APP / THIS SCREEN: ${brief}`);
+  if (hasImage) {
+    parts.push(
+      "A screenshot of the screen is attached. Read what the UI actually does and " +
+        "write about that — do not describe the picture, sell the benefit it shows."
+    );
+  }
+
+  if (screens.length) {
+    parts.push(`\nTHE SET (${total} screen${total === 1 ? "" : "s"}, in store order):`);
+    screens.forEach((s, i) => {
+      const here = mode === "screen" && i === activeIndex ? "  ← write for this one" : "";
+      const sub = s.subheading ? ` / ${JSON.stringify(s.subheading)}` : "";
+      parts.push(`${i + 1}. ${JSON.stringify(s.heading || "")}${sub}${here}`);
+    });
+  }
+
+  parts.push(`\nVOICE: ${voice.name} — ${voice.hint}.`);
+  parts.push(`LANGUAGE: write in ${language}.`);
+  parts.push(
+    "RULES: headline 2–6 words, at most 40 characters, no trailing period, no " +
+      "emoji, no exclamation marks unless the voice is Playful. Subheading is one " +
+      "short sentence under 80 characters, or an empty string when the headline " +
+      "stands alone. Never repeat the app name in the headline. Do not reuse a " +
+      "headline that already appears in the set."
+  );
+
+  if (mode === "set") {
+    parts.push(
+      `\nWrite ONE headline + subheading for EACH of the ${total} screens, in order, ` +
+        "so the set tells one story: screen 1 states the core promise, the rest " +
+        "each cover a different feature or benefit, and the last one closes " +
+        "(social proof, a nudge, or the outcome)."
+    );
+    parts.push(
+      `Return ONLY a JSON array of exactly ${total} objects, no prose, no markdown ` +
+        `fences: [{ "heading": string, "subheading": string }, …] — index i is screen i+1.`
+    );
+  } else {
+    parts.push(
+      `\nWrite ${count} DIFFERENT options for screen ${Math.min(activeIndex, total - 1) + 1}. ` +
+        "Vary the angle (outcome, feature, feeling, contrast with the old way) — " +
+        "not just the wording."
+    );
+    parts.push(
+      `Return ONLY a JSON array of exactly ${count} objects, no prose, no markdown ` +
+        `fences: [{ "heading": string, "subheading": string }, …].`
+    );
+  }
+  return parts.join("\n");
+}
+
+/**
+ * Parse the copywriter response into exactly `count` ideas. Throws "ai-parse"
+ * when the model gave fewer usable ideas than asked — the caller retries once
+ * with a stricter nudge, the same way the other parsers do.
+ */
+export function parseCopy(rawText, count) {
+  if (!rawText || typeof rawText !== "string") throw new Error("ai-parse");
+  let text = rawText.trim();
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) text = fence[1].trim();
+  if (text[0] !== "[") {
+    const arr = text.match(/\[[\s\S]*\]/);
+    if (arr) text = arr[0];
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("ai-parse");
+  }
+  const list = Array.isArray(parsed) ? parsed : [parsed];
+  const ideas = list.map(normalizeCopyIdea).filter(Boolean).slice(0, count);
+  if (ideas.length < count) throw new Error("ai-parse");
+  return ideas;
+}

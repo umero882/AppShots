@@ -11,6 +11,7 @@ vi.mock("./handlers.js", async (importOriginal) => {
     suggest: vi.fn(async () => ({ concepts: [{ name: "dusk" }] })),
     image: vi.fn(async () => ({ image: "data:image/png;base64,AAA" })),
     translate: vi.fn(async () => ({ translations: {} })),
+    copy: vi.fn(async () => ({ ideas: [{ heading: "Go", subheading: "" }], mode: "screen", count: 4 })),
     search: vi.fn(async () => ({ provider: "pexels", results: [] })),
     appStore: vi.fn(async () => ({ results: [], country: "us" })),
   };
@@ -43,6 +44,7 @@ const METERED = [
   ["POST", "/api/ai/suggest", "suggest"],
   ["POST", "/api/ai/image", "image"],
   ["POST", "/api/ai/translate", "translate"],
+  ["POST", "/api/ai/copy", "copy"],
   ["GET", "/api/search", "search"],
   ["GET", "/api/app-store", "appStore"],
 ];

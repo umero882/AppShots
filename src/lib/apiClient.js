@@ -1,7 +1,7 @@
 /**
  * Shared plumbing for the same-origin `/api/*` proxy — BROWSER side.
  *
- * The endpoints that spend money (AI suggest/image/translate, image search, App
+ * The endpoints that spend money (AI suggest/image/translate/copy, image search, App
  * Store lookup) are metered server-side: they need the signed-in user's Firebase
  * ID token and are charged against a daily per-plan quota. See server/usage.js.
  * No keys live here; the token is the user's own.
@@ -52,6 +52,7 @@ const KIND_LABELS = {
   suggest: "AI background ideas",
   image: "AI image generations",
   translate: "translations",
+  copy: "AI headline ideas",
   search: "image searches",
   appStore: "App Store lookups",
 };

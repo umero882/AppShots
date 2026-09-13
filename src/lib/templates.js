@@ -72,3 +72,18 @@ export function defaultProjectState() {
     screens: [defaultScreen()],
   };
 }
+
+/**
+ * A stored project state made safe to render. The backend saves `{}` for a
+ * project created without a state, and older projects predate some fields, so
+ * anything reading `state.text.font` straight off the record crashed the
+ * dashboard and the editor. Missing top-level fields take their defaults;
+ * present ones win untouched. `screens` is always a non-empty array.
+ */
+export function hydrateProjectState(stored) {
+  const base = defaultProjectState();
+  const s = stored && typeof stored === "object" ? stored : {};
+  const out = { ...base, ...s };
+  if (!Array.isArray(out.screens) || !out.screens.length) out.screens = base.screens;
+  return out;
+}

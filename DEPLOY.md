@@ -101,7 +101,7 @@ Two behaviours worth knowing before they surprise you:
 
    | Variable | Purpose |
    |---|---|
-   | `ANTHROPIC_API_KEY` | AI background suggestions (required for the AI tab) |
+   | `ANTHROPIC_API_KEY` | AI background suggestions, the AI copywriter (headline + subheading ideas, reads the screenshot) and AI translate |
    | `OPENAI_API_KEY` | "Generate image" button (optional) |
    | `GITHUB_TOKEN` | read private repos in the AI tab (optional) |
    | `PEXELS_API_KEY` | image search (optional; falls back to Openverse) |
@@ -246,8 +246,8 @@ must stay out of the immutable branch.
 
 ## Metered API endpoints
 
-`/api/ai/suggest`, `/api/ai/image`, `/api/ai/translate`, `/api/search` and
-`/api/app-store` all spend money — the first three call Anthropic/OpenAI/Stability
+`/api/ai/suggest`, `/api/ai/image`, `/api/ai/translate`, `/api/ai/copy`, `/api/search`
+and `/api/app-store` all spend money — the first four call Anthropic/OpenAI/Stability
 with our keys, the last two proxy outbound requests from our IP. They are gated in
 `server/router.js`:
 
@@ -259,11 +259,18 @@ with our keys, the last two proxy outbound requests from our IP. They are gated 
    upstream request, using the plan from `server/entitlement.js` — their own Stripe
    record or a Team seat, never a plan claimed by the client. Defaults per day (`server/usage.js`):
 
-   | | suggest | image | translate | search | appStore |
-   |---|---|---|---|---|---|
-   | free | 20 | 5 | — | 100 | 100 |
-   | pro | 200 | 60 | 400 | 600 | 600 |
-   | team | 600 | 200 | 1200 | 2000 | 2000 |
+   | | suggest | image | translate | copy | search | appStore |
+   |---|---|---|---|---|---|---|
+   | free | 20 | 5 | — | 20 | 100 | 100 |
+   | pro | 200 | 60 | 400 | 300 | 600 | 600 |
+   | team | 600 | 200 | 1200 | 900 | 2000 | 2000 |
+
+   `copy` is the AI copywriter in the editor's Text tab: one unit buys four
+   headline + subheading ideas for a screen, or one idea per screen for the whole
+   set. When the screen has a screenshot the editor downscales it to ~800 px and
+   sends it along so the copy describes what the screen actually does; the
+   handler refuses anything but PNG/JPEG/WebP/GIF data URLs and anything over
+   ~2 MB before the request is made.
 
    Since Team shipped, `team` is the plan of **every seat holder**, not one account —
    a five-seat workspace can spend five times the row above. `GLOBAL_DAILY` in the
@@ -277,7 +284,7 @@ with our keys, the last two proxy outbound requests from our IP. They are gated 
    locale sets already saved in a free user's project keep working — only new
    translation requests are gated.
 4. **Verified email.** A **free** account must have a verified address to use
-   `suggest`, `image` or `translate` → `403 email-verification-required`. Per-user
+   `suggest`, `image`, `translate` or `copy` → `403 email-verification-required`. Per-user
    quotas assume the user is a person, and nothing else stopped one person signing up
    with twenty made-up addresses for twenty free allowances. Scoped to the free plan
    deliberately: the gate exists to stop throwaway accounts farming free AI, and

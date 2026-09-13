@@ -8,7 +8,7 @@ import { useAuth } from "../lib/auth";
 import { useTeam } from "../lib/teamContext";
 import { trackPurchase, trackProjectCreated } from "../lib/analytics";
 import { backend } from "../lib/backend";
-import { defaultProjectState } from "../lib/templates";
+import { defaultProjectState, hydrateProjectState } from "../lib/templates";
 import TemplatePicker from "../components/TemplatePicker";
 import { templateToProjectState, textPosFor, makeVariantState, nextVariantName } from "../lib/galleryTemplates";
 
@@ -230,8 +230,8 @@ export default function Dashboard() {
               >
                 <div className="grid place-items-center rounded-xl bg-ink-900 p-4">
                   <ScreenCanvas
-                    state={{ ...p.state, _textPos: textPosFor(p.state.layoutId) }}
-                    screen={p.state.screens?.[0] || { heading: "", image: null }}
+                    state={{ ...hydrateProjectState(p.state), _textPos: textPosFor(p.state?.layoutId) }}
+                    screen={p.state?.screens?.[0] || { heading: "", image: null }}
                     width={150}
                   />
                 </div>
@@ -244,8 +244,8 @@ export default function Dashboard() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-white">{p.name}</p>
                     <p className="text-xs text-slate-500">
-                      {(p.state.screens?.length || 1)} screen
-                      {(p.state.screens?.length || 1) > 1 ? "s" : ""} ·{" "}
+                      {(p.state?.screens?.length || 1)} screen
+                      {(p.state?.screens?.length || 1) > 1 ? "s" : ""} ·{" "}
                       {inTeamScope ? `by ${memberName(p.userId)}` : new Date(p.updatedAt).toLocaleDateString()}
                     </p>
                   </div>

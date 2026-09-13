@@ -128,7 +128,7 @@ describe("paid-only features", () => {
   });
 
   it("leaves the free features free", () => {
-    for (const kind of ["suggest", "image", "search", "appStore"]) {
+    for (const kind of ["suggest", "image", "copy", "search", "appStore"]) {
       expect(() => consume({ uid: `f-${kind}`, plan: "free", kind, now: T0 })).not.toThrow();
     }
   });
@@ -138,7 +138,7 @@ describe("email verification", () => {
   const unverified = { emailVerified: false };
 
   it("blocks free AI calls from an unverified address", () => {
-    for (const kind of ["suggest", "image"]) {
+    for (const kind of ["suggest", "image", "copy"]) {
       const err = grab(() => consume({ uid: `v-${kind}`, plan: "free", kind, ...unverified, now: T0 }));
       expect(err.message, kind).toBe("email-verification-required");
     }
@@ -259,7 +259,7 @@ describe("usageSummary", () => {
     const s = usageSummary("sum1", "pro", T0);
     expect(s.plan).toBe("pro");
     expect(s.resetAt).toBe(resetAt(T0));
-    expect(Object.keys(s.kinds).sort()).toEqual(["appStore", "image", "search", "suggest", "translate"]);
+    expect(Object.keys(s.kinds).sort()).toEqual(["appStore", "copy", "image", "search", "suggest", "translate"]);
     expect(s.kinds.image).toEqual({ limit: QUOTAS.pro.image, used: 0, remaining: QUOTAS.pro.image });
   });
 

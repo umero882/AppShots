@@ -8,6 +8,11 @@ import {
   buildPrompt,
   buildTranslatePrompt,
   parseTranslations,
+  buildCopyPrompt,
+  parseCopy,
+  normalizeCopyIdea,
+  COPY_TONES,
+  COPY_LIMITS,
 } from "../aiCore.js";
 
 describe("buildTranslatePrompt", () => {
@@ -131,5 +136,104 @@ describe("buildPrompt", () => {
     const p = buildPrompt({ repoContext: null, prompt: "calm" });
     expect(p).toContain("calm");
     expect(p).not.toContain("PROJECT CONTEXT");
+  });
+});
+
+describe("buildCopyPrompt", () => {
+  const screens = [
+    { heading: "Sleep better", subheading: "Track every night." },
+    { heading: "", subheading: "" },
+    { heading: "Wake up rested", subheading: "" },
+  ];
+
+  it("screen mode asks for N different options for the active screen and marks it", () => {
+    const p = buildCopyPrompt({ appName: "Nod", brief: "a sleep tracker", mode: "screen", screens, activeIndex: 1, count: 4 });
+    expect(p).toContain("APP: Nod");
+    expect(p).toContain("a sleep tracker");
+    expect(p).toContain("THE SET (3 screens");
+    expect(p).toContain('1. "Sleep better" / "Track every night."');
+    expect(p).toContain('2. ""  ← write for this one');
+    expect(p).toContain("4 DIFFERENT options for screen 2");
+    expect(p).toContain("exactly 4 objects");
+    expect(p).toContain("write in English");
+  });
+
+  it("set mode asks for one idea per screen, in order, as one story", () => {
+    const p = buildCopyPrompt({ brief: "x", mode: "set", screens });
+    expect(p).toContain("ONE headline + subheading for EACH of the 3 screens");
+    expect(p).toContain("exactly 3 objects");
+    expect(p).not.toContain("← write for this one");
+  });
+
+  it("names the voice, the language and the attached screenshot", () => {
+    const p = buildCopyPrompt({ brief: "x", tone: "playful", language: "Spanish", hasImage: true });
+    const playful = COPY_TONES.find((t) => t.id === "playful");
+    expect(p).toContain(`VOICE: Playful — ${playful.hint}`);
+    expect(p).toContain("write in Spanish");
+    expect(p).toContain("screenshot of the screen is attached");
+  });
+
+  it("falls back to the first tone for an unknown id and omits absent context", () => {
+    const p = buildCopyPrompt({ brief: "x", tone: "nope" });
+    expect(p).toContain(`VOICE: ${COPY_TONES[0].name}`);
+    expect(p).not.toContain("APP:");
+    expect(p).not.toContain("THE SET");
+    expect(p).not.toContain("attached");
+  });
+});
+
+describe("normalizeCopyIdea", () => {
+  it("trims, collapses whitespace, strips wrapping quotes and a trailing period", () => {
+    expect(normalizeCopyIdea({ heading: '  "Sleep   better." ', subheading: " ‘Track every night.’ " })).toEqual({
+      heading: "Sleep better",
+      subheading: "Track every night.",
+    });
+  });
+  it("strips curly double quotes too", () => {
+    expect(normalizeCopyIdea({ heading: "“Go far”", subheading: "“Every day.”" })).toEqual({
+      heading: "Go far",
+      subheading: "Every day.",
+    });
+  });
+  it("caps lengths and drops an idea with no headline", () => {
+    const long = "x".repeat(500);
+    const out = normalizeCopyIdea({ heading: long, subheading: long });
+    expect(out.heading).toHaveLength(COPY_LIMITS.heading);
+    expect(out.subheading).toHaveLength(COPY_LIMITS.subheading);
+    expect(normalizeCopyIdea({ heading: "", subheading: "only a sub" })).toBeNull();
+    expect(normalizeCopyIdea({ subheading: 5 })).toBeNull();
+    expect(normalizeCopyIdea(null)).toBeNull();
+    expect(normalizeCopyIdea("str")).toBeNull();
+  });
+  it("tolerates a missing subheading", () => {
+    expect(normalizeCopyIdea({ heading: "Go" })).toEqual({ heading: "Go", subheading: "" });
+  });
+});
+
+describe("parseCopy", () => {
+  const two = JSON.stringify([
+    { heading: "Sleep better", subheading: "Track every night." },
+    { heading: "Wake up rested", subheading: "" },
+  ]);
+
+  it("parses a bare JSON array", () => {
+    expect(parseCopy(two, 2)).toEqual([
+      { heading: "Sleep better", subheading: "Track every night." },
+      { heading: "Wake up rested", subheading: "" },
+    ]);
+  });
+  it("strips markdown fences and surrounding prose", () => {
+    expect(parseCopy("Here you go:\n```json\n" + two + "\n```\nEnjoy!", 2)).toHaveLength(2);
+    expect(parseCopy("Sure! " + two + " Let me know.", 2)).toHaveLength(2);
+  });
+  it("trims extra ideas to count", () => {
+    expect(parseCopy(two, 1)).toHaveLength(1);
+  });
+  it("throws ai-parse when fewer usable ideas than asked, or on malformed JSON", () => {
+    expect(() => parseCopy(two, 3)).toThrow("ai-parse");
+    expect(() => parseCopy(JSON.stringify([{ heading: "" }, { heading: "" }]), 1)).toThrow("ai-parse");
+    expect(() => parseCopy("not json", 1)).toThrow("ai-parse");
+    expect(() => parseCopy("", 1)).toThrow("ai-parse");
+    expect(() => parseCopy(null, 1)).toThrow("ai-parse");
   });
 });
