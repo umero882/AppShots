@@ -19,10 +19,10 @@ const ENV = {
   SMTP_USER: "noreply@nextechlabs.tech",
   SMTP_PASS: "pw",
   EMAIL_FROM: "AppShots <noreply@nextechlabs.tech>",
-  APP_URL: "https://appshots.nextechlabs.tech",
+  APP_URL: "https://appshotspreview.com",
 };
 const FIREBASE_LINK =
-  "https://appshots-76a56.firebaseapp.com/__/auth/action?mode=resetPassword&oobCode=ABC123&apiKey=k&continueUrl=https%3A%2F%2Fappshots.nextechlabs.tech%2Flogin&lang=en";
+  "https://appshots-76a56.firebaseapp.com/__/auth/action?mode=resetPassword&oobCode=ABC123&apiKey=k&continueUrl=https%3A%2F%2Fappshotspreview.com%2Flogin&lang=en";
 
 const saved = {};
 beforeEach(() => {
@@ -41,12 +41,12 @@ afterEach(() => {
 
 describe("brandedResetLink", () => {
   it("re-targets Firebase's oobCode at our /auth/action page", () => {
-    const link = brandedResetLink(FIREBASE_LINK, "https://appshots.nextechlabs.tech");
+    const link = brandedResetLink(FIREBASE_LINK, "https://appshotspreview.com");
     const u = new URL(link);
-    expect(u.origin + u.pathname).toBe("https://appshots.nextechlabs.tech/auth/action");
+    expect(u.origin + u.pathname).toBe("https://appshotspreview.com/auth/action");
     expect(u.searchParams.get("mode")).toBe("resetPassword");
     expect(u.searchParams.get("oobCode")).toBe("ABC123");
-    expect(u.searchParams.get("continueUrl")).toBe("https://appshots.nextechlabs.tech/login");
+    expect(u.searchParams.get("continueUrl")).toBe("https://appshotspreview.com/login");
     expect(link).not.toContain("apiKey"); // the public key isn't needed by our page
   });
 
@@ -110,8 +110,8 @@ describe("sendVerificationEmail", () => {
     expect(out).toEqual({ ok: true, alreadyVerified: false });
     expect(sent[0].to).toBe("new@x.com");
     expect(sent[0].subject).toBe("Verify your AppShots email");
-    expect(sent[0].html).toContain("https://appshots.nextechlabs.tech/auth/action?mode=verifyEmail&amp;oobCode=VER456");
-    expect(sent[0].html).toContain("continueUrl=https%3A%2F%2Fappshots.nextechlabs.tech%2Fdashboard");
+    expect(sent[0].html).toContain("https://appshotspreview.com/auth/action?mode=verifyEmail&amp;oobCode=VER456");
+    expect(sent[0].html).toContain("continueUrl=https%3A%2F%2Fappshotspreview.com%2Fdashboard");
   });
 
   it("brandedActionLink keeps the mode and routes verify links to the dashboard", () => {
@@ -151,7 +151,7 @@ describe("requestPasswordReset", () => {
     expect(out).toEqual({ ok: true });
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ host: "smtp.example.com", port: 465, secure: true, user: "noreply@nextechlabs.tech", to: "user@x.com", from: "AppShots <noreply@nextechlabs.tech>" });
-    expect(sent[0].html).toContain("https://appshots.nextechlabs.tech/auth/action?mode=resetPassword&amp;oobCode=ABC123");
+    expect(sent[0].html).toContain("https://appshotspreview.com/auth/action?mode=resetPassword&amp;oobCode=ABC123");
   });
 
   it("stays silent for unknown addresses (no enumeration) and sends nothing", async () => {

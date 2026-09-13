@@ -24,7 +24,7 @@ import { sendMail } from "./smtp.js";
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const WAITLIST_DIR = process.env.WAITLIST_DIR || path.join(DATA_DIR, "waitlist");
-const APP_URL = (process.env.PUBLIC_URL || "https://appshots.nextechlabs.tech").replace(/\/+$/, "");
+const APP_URL = (process.env.PUBLIC_URL || "https://appshotspreview.com").replace(/\/+$/, "");
 
 const sentPath = (plan) => path.join(WAITLIST_DIR, `${plan}.announced.json`);
 
@@ -101,7 +101,7 @@ export function announcementFor(plan) {
       "",
       "Invite your team by email once you're in — their seats cost nothing extra.",
       "",
-      "You're getting this because you joined the Team waitlist on appshots.nextechlabs.tech.",
+      "You're getting this because you joined the Team waitlist on appshotspreview.com.",
       "It's the only email that list was for, and you won't hear from it again.",
       "",
       "— AppShots",

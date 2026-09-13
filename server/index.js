@@ -15,6 +15,7 @@ import { route, methodHasBody } from "./router.js";
 import { handleBlob } from "./blob.js";
 import { handleStripe } from "./stripe.js";
 import { contentTypeFor, cacheControlFor, fallbackStatus } from "./static.js";
+import { canonicalRedirect } from "./canonicalHost.js";
 import { captureException, sentryConfigured, installProcessHandlers } from "./sentry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +48,16 @@ function sendJson(res, status, body) {
 const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, "http://localhost");
+
+    // The old domain and www. answer with a 301 to the canonical host. Done
+    // first so nothing below ever serves a page under a hostname the canonical
+    // tags and sitemap do not name. See canonicalHost.js for what is exempt.
+    const moved = canonicalRedirect({ method: req.method, host: req.headers.host, url: req.url });
+    if (moved) {
+      res.writeHead(301, { location: moved, "cache-control": "public, max-age=3600" });
+      res.end();
+      return;
+    }
 
     // Liveness: is the process answering? Deliberately cheap and dependency-free
     // — the Docker HEALTHCHECK restarts the container when this fails, so it must

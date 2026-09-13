@@ -122,7 +122,7 @@ function buildRenderer(siteHost) {
  * @param {{siteHost?: string}} [options] host treated as internal for link rel
  * @returns {string} HTML safe to place in the page
  */
-export function renderMarkdown(md, { siteHost = "appshots.nextechlabs.tech" } = {}) {
+export function renderMarkdown(md, { siteHost = "appshotspreview.com" } = {}) {
   if (!md) return "";
   return marked.parse(String(md), {
     renderer: buildRenderer(siteHost),

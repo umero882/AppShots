@@ -336,7 +336,7 @@ function ownPlan(uid, deps = {}) {
 function originFrom(headers = {}) {
   if (process.env.PUBLIC_URL) return String(process.env.PUBLIC_URL).replace(/\/+$/, "");
   const proto = headers["x-forwarded-proto"] || "https";
-  const host = headers["host"] || "appshots.nextechlabs.tech";
+  const host = headers["host"] || "appshotspreview.com";
   return `${proto}://${host}`;
 }
 

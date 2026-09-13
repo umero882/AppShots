@@ -11,7 +11,7 @@ const sections = [
         <p>
           These Terms of Service ("Terms") are a contract between you and <strong>Next Tech Labs</strong>, Sharjah Media
           City, Sharjah, United Arab Emirates ("we", "us"), covering your use of AppShots at{" "}
-          <a href="https://appshots.nextechlabs.tech">appshots.nextechlabs.tech</a> (the "Service"). By creating an
+          <a href="https://appshotspreview.com">appshotspreview.com</a> (the "Service"). By creating an
           account or using the Service you agree to these Terms and to our{" "}
           <a href="/privacy">Privacy Policy</a>.
         </p>

@@ -57,7 +57,7 @@ p{margin-top:26px;font-size:29px;line-height:1.45;color:#94a3b8;max-width:34ch;f
   <p>Templates, device frames and pixel-exact exports for the App Store and Google Play.</p>
 </div>
 <div class="foot">
-  <div>appshots.nextechlabs.tech</div>
+  <div>appshotspreview.com</div>
   <div class="pills"><div class="pill">iOS</div><div class="pill">Android</div><div class="pill">Exact sizes</div></div>
 </div>
 </body></html>`;

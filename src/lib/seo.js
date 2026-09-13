@@ -22,7 +22,7 @@
  * behaviour — a test in src/__tests__ holds the two lists together.
  */
 
-export const SITE_URL = "https://appshots.nextechlabs.tech";
+export const SITE_URL = "https://appshotspreview.com";
 export const SITE_NAME = "AppShots";
 export const OG_IMAGE = `${SITE_URL}/og-cover.png`;
 

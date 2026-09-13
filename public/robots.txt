@@ -1,4 +1,4 @@
-# AppShots — https://appshots.nextechlabs.tech
+# AppShots — https://appshotspreview.com
 # Public marketing + legal pages are crawlable; the app itself is not.
 
 User-agent: *
@@ -14,4 +14,4 @@ Disallow: /team
 # but there is nothing here for an index.
 Disallow: /join/
 
-Sitemap: https://appshots.nextechlabs.tech/sitemap.xml
+Sitemap: https://appshotspreview.com/sitemap.xml

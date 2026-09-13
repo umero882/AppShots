@@ -26,7 +26,7 @@ const sections = [
         </p>
         <ol>
           <li>
-            Sign in at <a href="https://appshots.nextechlabs.tech/login">appshots.nextechlabs.tech/login</a>.
+            Sign in at <a href="https://appshotspreview.com/login">appshotspreview.com/login</a>.
           </li>
           <li>
             Open <b>Settings</b> from the menu under your avatar.
@@ -162,7 +162,7 @@ const sections = [
         <p>
           Anything about deletion, or about the data we hold:{" "}
           <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. The{" "}
-          <a href="https://appshots.nextechlabs.tech/privacy">Privacy Policy</a> covers the rest — what is collected,
+          <a href="https://appshotspreview.com/privacy">Privacy Policy</a> covers the rest — what is collected,
           why, and the other rights you have over it.
         </p>
       </>

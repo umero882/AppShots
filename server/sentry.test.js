@@ -64,8 +64,8 @@ describe("redaction", () => {
   });
 
   it("drops the query string, where tokens and emails hide", () => {
-    expect(safeUrl("https://appshots.nextechlabs.tech/auth/action?oobCode=SECRET&email=a@b.c")).toBe(
-      "https://appshots.nextechlabs.tech/auth/action",
+    expect(safeUrl("https://appshotspreview.com/auth/action?oobCode=SECRET&email=a@b.c")).toBe(
+      "https://appshotspreview.com/auth/action",
     );
   });
 });

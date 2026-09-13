@@ -12,7 +12,7 @@ import { buildSitemap } from "../../scripts/sitemap.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (...p) => readFileSync(path.join(ROOT, ...p), "utf8");
-const ORIGIN = "https://appshots.nextechlabs.tech";
+const ORIGIN = "https://appshotspreview.com";
 
 const robots = read("public", "robots.txt");
 // The sitemap stopped being a file in public/ when the blog arrived: articles

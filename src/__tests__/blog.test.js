@@ -74,7 +74,7 @@ describe("article markdown", () => {
     expect(outbound).toContain('rel="nofollow noopener noreferrer"');
     expect(outbound).toContain('target="_blank"');
 
-    const ours = renderMarkdown("[Pricing](https://appshots.nextechlabs.tech/pricing)");
+    const ours = renderMarkdown("[Pricing](https://appshotspreview.com/pricing)");
     expect(ours).not.toContain("nofollow");
 
     const relative = renderMarkdown("[Pricing](/pricing)");

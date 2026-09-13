@@ -212,6 +212,57 @@ record reads `plan=free` for an account that is now Pro — which is the system 
 designed, not a gap: Stripe is the source of truth and `GET /api/stripe/subscription?sync=1`
 rebuilds the record from it. The blobs are the part that only exists here.
 
+## Domain
+
+The product lives at **https://appshotspreview.com** (since 2026-09-13; it was
+`appshots.nextechlabs.tech` before). The hostname is written in exactly two
+places and everything else derives from them:
+
+- **In the repo:** `SITE_URL` in `src/lib/seo.js` — canonical tags, Open Graph,
+  the sitemap and the prerendered structured data all come from it. The legal
+  pages, the auth-email footers, `public/robots.txt` and `index.html` name it
+  literally, so a domain change is a search-and-replace across the repo (last
+  time: 21 files, plus `npm run og:image` to redraw the social card, which has
+  the domain baked into the pixels).
+- **In Coolify:** `APP_URL` (Stripe return URLs, links in auth emails) and
+  `CANONICAL_HOST` (below), plus the app's domain list. `npm run coolify:domain`
+  sets all three from one command — see `scripts/ops/coolify-set-domain.mjs`.
+
+**The old domain keeps answering.** Every link ever shared, every result Google
+indexed and every return URL Stripe stored names the old host, so it stays in
+Coolify's domain list and `server/canonicalHost.js` answers it — and `www.` —
+with a **301 to the same path on `CANONICAL_HOST`**. That is what carries the
+search ranking across and what makes an old bookmark land. The redirect is
+GET/HEAD only and never touches `/api/*` or the health checks: Stripe does not
+follow redirects (a 301 is a failed delivery to it), so the webhook on the old
+URL keeps working until the endpoint is edited in the Stripe dashboard.
+
+Moving domains again means, in this order:
+
+1. DNS at the registrar: `A @ -> 76.13.240.144` and `A www -> 76.13.240.144`
+   (the server), and remove the registrar's parking records. Wait until
+   `nslookup` agrees — the domain script refuses to continue before then,
+   because Traefik asks Let's Encrypt for the certificate the moment the domain
+   is added and a domain still pointing elsewhere fails that.
+2. `npm run coolify:domain -- --deploy https://NEW https://www.NEW https://OLD`
+   — first one is canonical. A domain change is only read by a deploy, not a
+   restart; the script says so.
+3. Search-and-replace the old host in the repo, `npm run og:image`, push.
+4. **Firebase → Authentication → Settings → Authorized domains:** add the new
+   host, or Google sign-in and the `continueUrl` on auth emails are refused
+   with `auth/unauthorized-domain`.
+5. **Stripe → Developers → Webhooks:** edit the endpoint's URL to the new host
+   (editing keeps the signing secret; adding a second endpoint would not).
+   **Settings → Customer portal:** the privacy and terms links.
+6. **Search Console:** add the new property (the `googleeb…html` token is
+   account-bound and verifies it too — keep the file), submit
+   `/sitemap.xml`, then **Change of address** on the old property. Keep the old
+   domain redirecting for at least 180 days; Google reads the 301s over time.
+7. GA4 → data stream URL (cosmetic; the measurement ID is unchanged).
+
+Email still goes out as `noreply@nextechlabs.tech` — that is the sending
+domain, with its own SPF/DKIM, and is independent of where the site lives.
+
 ## SEO and social cards
 
 Everything a crawler or link unfurler needs is a static file in `public/`, so it
@@ -220,9 +271,9 @@ ships with the normal build — no runtime work.
 | File | Purpose |
 |---|---|
 | `public/robots.txt` | Marketing + legal pages crawlable; `/api/`, `/auth/action` and every signed-in route disallowed. Advertises the sitemap. |
-| `public/sitemap.xml` | The six public URLs, absolute, on `https://appshots.nextechlabs.tech`. |
+| `public/sitemap.xml` | The six public URLs, absolute, on `https://appshotspreview.com`. |
 | `public/og-cover.png` | 1200×630 OpenGraph / Twitter card. |
-| `public/googleeb75106204844a1b.html` | Google Search Console ownership token. |
+| `public/googleeb75106204844a1b.html` | Google Search Console ownership token (account-bound: verifies the new domain's property too). |
 
 **Do not delete `googleeb75106204844a1b.html`.** Google re-checks it periodically;
 removing the file silently un-verifies the property and Search Console stops

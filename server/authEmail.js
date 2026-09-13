@@ -77,7 +77,7 @@ export function _resetRateLimits() {
 /* --------------------------------- email --------------------------------- */
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-export function renderResetEmail({ link, email, siteUrl = "https://appshots.nextechlabs.tech" }) {
+export function renderResetEmail({ link, email, siteUrl = "https://appshotspreview.com" }) {
   const subject = "Reset your AppShots password";
   const text = [
     "Reset your AppShots password",
@@ -118,7 +118,7 @@ export function brandedResetLink(oobLink, base) {
   return u.toString();
 }
 
-export function renderVerifyEmail({ link, email, siteUrl = "https://appshots.nextechlabs.tech" }) {
+export function renderVerifyEmail({ link, email, siteUrl = "https://appshotspreview.com" }) {
   const subject = "Verify your AppShots email";
   const text = [
     "Verify your AppShots email",

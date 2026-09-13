@@ -30,7 +30,7 @@ const arg = (name, dflt) => {
   return i > -1 && process.argv[i + 1] && !process.argv[i + 1].startsWith("--") ? process.argv[i + 1] : dflt;
 };
 const VERBOSE = process.argv.includes("--verbose");
-const BASE = (arg("url", process.env.UPTIME_URL || "https://appshots.nextechlabs.tech")).replace(/\/+$/, "");
+const BASE = (arg("url", process.env.UPTIME_URL || "https://appshotspreview.com")).replace(/\/+$/, "");
 const STATE_FILE =
   process.env.UPTIME_STATE_FILE || path.join(os.tmpdir(), `appshots-uptime-${Buffer.from(BASE).toString("hex").slice(0, 12)}.json`);
 const FAILURES_BEFORE_ALERT = Number(process.env.UPTIME_FAILURES_BEFORE_ALERT) || 2;

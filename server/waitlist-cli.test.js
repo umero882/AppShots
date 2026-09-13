@@ -9,7 +9,7 @@ import { tmpdir } from "os";
 import path from "path";
 
 process.env.WAITLIST_DIR = mkdtempSync(path.join(tmpdir(), "appshots-waitlist-"));
-process.env.PUBLIC_URL = "https://appshots.nextechlabs.tech";
+process.env.PUBLIC_URL = "https://appshotspreview.com";
 const DIR = process.env.WAITLIST_DIR;
 
 const { announce, announcementFor, exportCsv, isDeliverable, pendingRecipients, readAnnounced } = await import("./waitlist-cli.js");
@@ -67,7 +67,7 @@ describe("the announcement itself", () => {
   it("says what shipped and where to go", () => {
     const { subject, text } = announcementFor("team");
     expect(subject).toMatch(/Team is ready/i);
-    expect(text).toContain("https://appshots.nextechlabs.tech/pricing");
+    expect(text).toContain("https://appshotspreview.com/pricing");
   });
 
   it("explains why they are getting it", () => {

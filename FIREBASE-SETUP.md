@@ -108,4 +108,14 @@ answers **501** and the client silently falls back to Firebase's own email.
 
 Firebase-side branding that *did* stick: sender name "AppShots", public-facing name
 "AppShots", verified sender domain `appshots.nextechlabs.tech` for the emails
-Firebase still sends itself (email verification, fallback resets).
+Firebase still sends itself (email verification, fallback resets). That sender
+domain is a DNS-verified mail identity, separate from where the site lives; the
+site moved to `appshotspreview.com` on 2026-09-13 and the sender did not have
+to. To move it too: Authentication → Templates → *Customize domain*, add the
+SPF/DKIM records Firebase shows at the registrar, wait for verification.
+
+**Authorized domains (Authentication → Settings):** every hostname the app is
+served on must be listed — `appshotspreview.com`, `www.appshotspreview.com`,
+the old `appshots.nextechlabs.tech` while it still redirects, and `localhost`.
+A host that is missing gets `auth/unauthorized-domain` on Google sign-in and on
+the `continueUrl` of every auth email, which `APP_URL` sets to the new host.

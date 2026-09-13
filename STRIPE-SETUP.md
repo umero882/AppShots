@@ -50,7 +50,7 @@ env vars on the Coolify service (never build args — the secret must not enter 
 STRIPE_SECRET_KEY=sk_test_...          # test key for now; sk_live_... to go live
 STRIPE_WEBHOOK_SECRET=whsec_...        # from `stripe listen` (local) or the Dashboard (prod)
 STRIPE_AUTOMATIC_TAX=true              # set "false" to disable Stripe Tax
-APP_URL=https://appshots.nextechlabs.tech   # required in prod; optional locally
+APP_URL=https://appshotspreview.com   # required in prod; optional locally
 ```
 
 ### 2. Create the products & prices (idempotent)
@@ -74,7 +74,7 @@ stripe listen --forward-to localhost:5173/api/stripe/webhook
 ```
 
 **Production** — Dashboard → Developers → Webhooks → Add endpoint:
-`https://appshots.nextechlabs.tech/api/stripe/webhook`, subscribe to at least:
+`https://appshotspreview.com/api/stripe/webhook`, subscribe to at least:
 `checkout.session.completed`, `customer.subscription.created`,
 `customer.subscription.updated`, `customer.subscription.deleted`,
 `invoice.paid`, `invoice.payment_failed`. Reveal the signing secret → set it as

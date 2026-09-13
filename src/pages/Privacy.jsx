@@ -9,7 +9,7 @@ const sections = [
     body: (
       <>
         <p>
-          AppShots (<a href="https://appshots.nextechlabs.tech">appshots.nextechlabs.tech</a>) is operated by{" "}
+          AppShots (<a href="https://appshotspreview.com">appshotspreview.com</a>) is operated by{" "}
           <strong>Next Tech Labs</strong>, Sharjah Media City, Sharjah, United Arab Emirates ("we", "us"). We are the
           data controller for the personal data described in this policy.
         </p>
