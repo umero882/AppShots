@@ -99,7 +99,11 @@ export async function setEnvs(app, wanted, { dryRun = false } = {}) {
     const verb = unchanged ? "unchanged" : current ? "update" : "create";
     console.log(`  ${verb.padEnd(9)} ${key} = ${mask(value)}${current && !unchanged ? ` (was ${mask(current.value)})` : ""}`);
     if (unchanged || dryRun) continue;
-    const payload = { key, value, is_preview: false, is_build_time: false, is_literal: false };
+    // Runtime-only and literal, said explicitly: a PATCH without flags resets
+    // them to Coolify's defaults, which include is_buildtime=true — and a
+    // build-time variable is a Docker build arg, i.e. a secret in the image
+    // history. (The field is is_buildtime; is_build_time is rejected with 422.)
+    const payload = { key, value, is_preview: false, is_buildtime: false, is_literal: true, is_multiline: false, is_shown_once: false };
     if (current) {
       await api(`/api/v1/applications/${app.uuid}/envs`, { method: "PATCH", body: payload });
     } else {
