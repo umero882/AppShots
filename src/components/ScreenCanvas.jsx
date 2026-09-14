@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
 import { orientedCanvas, screenDevices, isFreeMode, panoramaStyle } from "../lib/deviceLayout";
@@ -5,7 +6,9 @@ import { localizeScreen, isRtl } from "../lib/i18n";
 import { legibilityHalo } from "../lib/contrast";
 import { patternCss } from "../lib/patterns";
 import { textEffectStyle } from "../lib/textEffects";
+import { caretColorFor } from "../lib/inlineText";
 import ElementsLayer from "./ElementsLayer";
+import InlineText from "./InlineText";
 import { DeviceMockup, DevicesLayer } from "./DeviceMockup";
 import { PhotoFrame } from "./PhotoFrame";
 import { Live3DDevice } from "./Live3DDevice";
@@ -53,6 +56,12 @@ export default function ScreenCanvas({
   onSelectElement,
   onChangeElement,
   onDeleteElement,
+  // Double-click the headline / subheading to edit it in place. `onChangeText`
+  // gets `{ heading }` / `{ subheading }` for the active locale; `onSelectText`
+  // fires on a single click so the editor can surface the Text panel.
+  editableText = false,
+  onChangeText,
+  onSelectText,
   editableDevices = false,
   selectedDevice = null,
   onSelectDevice,
@@ -117,7 +126,28 @@ export default function ScreenCanvas({
   // flex-column gap replaces the flaky margin.
   const titleLine = Math.round(scaledFont * 1.12);
   const subLine = Math.round(scaledSub * 1.3);
-  const TextBlock = lscreen.heading ? (
+
+  // Which line is being edited in place ("heading" | "subheading" | null). An
+  // emptied line stays mounted until the edit ends so the caret has a home;
+  // there is deliberately no editor-only placeholder row — an extra line here
+  // would shrink the device band in the editor but not in the export.
+  const [editingText, setEditingText] = useState(null);
+  const canEditText = editableText && !exporting;
+  const textLine = (field, styles, extra = {}) => (
+    <InlineText
+      value={lscreen[field] || ""}
+      editing={canEditText && editingText === field}
+      onStart={canEditText ? () => setEditingText(field) : undefined}
+      onChange={(v) => onChangeText?.({ [field]: v })}
+      onDone={() => setEditingText(null)}
+      onPointerDown={canEditText && editingText !== field ? () => onSelectText?.(field) : undefined}
+      className={canEditText ? "rounded-sm transition hover:ring-1 hover:ring-brand-400/60" : ""}
+      style={styles}
+      {...extra}
+    />
+  );
+
+  const TextBlock = lscreen.heading || editingText === "heading" ? (
     <div
       className="px-[8%] text-center"
       dir={rtl ? "rtl" : undefined}
@@ -130,8 +160,9 @@ export default function ScreenCanvas({
         rowGap: Math.round(scaledFont * 0.32),
       }}
     >
-      <div
-        style={{
+      {textLine(
+        "heading",
+        {
           width: "100%",
           fontSize: scaledFont,
           lineHeight: `${titleLine}px`,
@@ -140,24 +171,19 @@ export default function ScreenCanvas({
           fontWeight: state.text.weight,
           textShadow: haloFor(state.text.color, scaledFont),
           ...textEffectStyle(state.text, scaledFont),
-        }}
-      >
-        {lscreen.heading}
-      </div>
-      {lscreen.subheading ? (
-        <div
-          style={{
+        },
+        { caret: caretColorFor(state.text) }
+      )}
+      {lscreen.subheading || editingText === "subheading"
+        ? textLine("subheading", {
             width: "100%",
             fontSize: scaledSub,
             lineHeight: `${subLine}px`,
             color: sub.color,
             fontWeight: sub.weight,
             textShadow: haloFor(sub.color, scaledSub),
-          }}
-        >
-          {lscreen.subheading}
-        </div>
-      ) : null}
+          })
+        : null}
     </div>
   ) : null;
 

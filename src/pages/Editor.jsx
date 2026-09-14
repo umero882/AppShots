@@ -1176,6 +1176,9 @@ export default function Editor() {
                   onSelectElement={selectElement}
                   onChangeElement={changeElement}
                   onDeleteElement={deleteElement}
+                  editableText={!exporting}
+                  onChangeText={setScreenText}
+                  onSelectText={() => setTab("text")}
                   editableDevices={!exporting}
                   selectedDevice={selectedDevice}
                   onSelectDevice={selectDevice}
@@ -2872,7 +2875,7 @@ function ElementsPanel({ onAdd, elements = [], selectedId = null, onReorder, onD
             </div>
           </div>
           <p className="text-[11px] text-slate-500">
-            Click to add a text block, then drag · resize · rotate it on the canvas. Edit the content in the panel above when it&apos;s selected.
+            Click to add a text block, then drag · resize · rotate it on the canvas. Double-click it to edit the text in place, or use the panel above when it&apos;s selected.
           </p>
         </div>
       )}

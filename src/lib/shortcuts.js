@@ -7,6 +7,8 @@ export const SHORTCUTS = [
   { keys: "Ctrl/⌘ D", desc: "Duplicate the selected element" },
   { keys: "Delete / ⌫", desc: "Delete the selected element" },
   { keys: "[ · ]", desc: "Send backward · bring forward" },
+  { keys: "Double-click", desc: "Edit a headline, text block or badge in place" },
+  { keys: "Enter · Esc", desc: "Finish · cancel editing in place" },
   { keys: "Esc", desc: "Deselect" },
   { keys: "?", desc: "Show this help" },
 ];

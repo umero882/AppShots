@@ -4,16 +4,20 @@ import { elementSvg, fracDelta, clamp01, angleFromCenter, distance, scaleFromRes
 import { elementIcon } from "../lib/elementIcons";
 import { FONTS } from "../lib/templates";
 import { textEffectStyle } from "../lib/textEffects";
+import { caretColorFor } from "../lib/inlineText";
+import InlineText from "./InlineText";
 
 /**
  * Renders a screen's elements as positioned overlays. When `editable` is set,
- * the selected element shows a bounding box + drag/resize/rotate/delete handles.
+ * the selected element shows a bounding box + drag/resize/rotate/delete handles,
+ * and double-clicking a text block or badge edits its label in place.
  * Handles are children of the element container, so geometry needs no DOM
  * measuring — corners are CSS-relative to each element's own box.
  *
  * Position is fractional (x,y of canvas); size derives from `width` (canvas px)
  * so elements scale identically in the preview, the thumbnails, and the export.
  */
+const HAS_LABEL = new Set(["text", "badge"]);
 export default function ElementsLayer({
   elements = [],
   width,
@@ -27,13 +31,16 @@ export default function ElementsLayer({
   const rootRef = useRef(null);
   const drag = useRef(null);
   const [guides, setGuides] = useState({ x: null, y: null });
+  // Element whose label is being edited in place; export flips `editable` off,
+  // which also drops the field so no caret ever rasterizes.
+  const [editingId, setEditingId] = useState(null);
 
   function canvasRect() {
     return rootRef.current?.getBoundingClientRect();
   }
 
   function startMove(e, el) {
-    if (!editable) return;
+    if (!editable || editingId === el.id) return;
     e.stopPropagation();
     onSelect?.(el.id);
     const rect = canvasRect();
@@ -124,6 +131,8 @@ export default function ElementsLayer({
       {elements.map((el) => {
         const elW = width * el.baseWidth * el.scale;
         const selected = editable && selectedId === el.id;
+        const editing = editable && editingId === el.id;
+        const labelled = editable && HAS_LABEL.has(el.kind);
         return (
           <div
             key={el.id}
@@ -137,7 +146,16 @@ export default function ElementsLayer({
               opacity: el.opacity ?? 1,
             }}
           >
-            <ElementContent el={el} elW={elW} width={width} twemoji={twemoji} />
+            <ElementContent
+              el={el}
+              elW={elW}
+              width={width}
+              twemoji={twemoji}
+              editing={editing}
+              onStart={labelled ? () => setEditingId(el.id) : undefined}
+              onChangeText={(text) => onChange?.(el.id, { text })}
+              onDone={() => setEditingId(null)}
+            />
 
             {selected && (
               <>
@@ -178,13 +196,19 @@ export default function ElementsLayer({
   );
 }
 
-function ElementContent({ el, elW, width, twemoji }) {
+function ElementContent({ el, elW, width, twemoji, editing = false, onStart, onChangeText, onDone }) {
+  // Text blocks and badge labels edit in place; the same node renders both ways.
+  const label = { editing, onStart, onChange: onChangeText, onDone };
   if (el.kind === "text") {
     const font = FONTS.find((f) => f.id === el.font) || FONTS[0];
     const fs = width * (el.size ?? 0.06) * (el.scale ?? 1);
     return (
-      <div
-        className="select-none"
+      <InlineText
+        {...label}
+        multiline
+        value={el.text}
+        caret={caretColorFor(el)}
+        className={editing ? "" : "select-none"}
         style={{
           fontFamily: font.stack,
           fontSize: fs,
@@ -197,9 +221,7 @@ function ElementContent({ el, elW, width, twemoji }) {
           maxWidth: width * 0.85,
           ...textEffectStyle(el, fs),
         }}
-      >
-        {el.text}
-      </div>
+      />
     );
   }
   if (el.kind === "shape" || el.kind === "arrow") {
@@ -239,10 +261,10 @@ function ElementContent({ el, elW, width, twemoji }) {
     );
   }
   // badge (HTML, exports crisp)
-  return <Badge el={el} width={width} />;
+  return <Badge el={el} width={width} label={label} />;
 }
 
-function Badge({ el, width }) {
+function Badge({ el, width, label }) {
   const fs = width * 0.05 * el.scale;
   const pad = fs * 0.55;
   const common = {
@@ -251,6 +273,7 @@ function Badge({ el, width }) {
     background: el.bg || "#111827",
     borderRadius: el.badge === "callout" ? fs * 0.7 : 999,
   };
+  const text = <InlineText {...label} value={el.text} caret={el.fg || "#fff"} style={{ whiteSpace: "nowrap" }} />;
   if (el.badge === "rating") {
     return (
       <div
@@ -260,7 +283,7 @@ function Badge({ el, width }) {
         <span style={{ color: el.color || "#f59e0b", letterSpacing: "0.05em" }}>
           {"★".repeat(el.stars || 5)}
         </span>
-        <span>{el.text}</span>
+        {text}
       </div>
     );
   }
@@ -272,7 +295,7 @@ function Badge({ el, width }) {
         style={{ ...common, padding: `${pad * 0.65}px ${pad}px` }}
       >
         {el.emoji ? <span>{el.emoji}</span> : null}
-        <span>{el.text}</span>
+        {text}
       </div>
       {el.badge === "callout" && (
         <div
