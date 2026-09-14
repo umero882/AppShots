@@ -101,7 +101,8 @@ answers **501** and the client silently falls back to Firebase's own email.
   `FIREBASE_SERVICE_ACCOUNT` (key JSON, base64 is fine), `SMTP_HOST=smtp.hostinger.com`,
   `SMTP_PORT=465`, `SMTP_USER` / `SMTP_PASS` (a real Hostinger mailbox —
   `info@appshotspreview.com` since the domain move on 2026-09-13, previously
-  `noreply@nextechlabs.tech`; aliases can't authenticate), `EMAIL_FROM="AppShots <mailbox>"`,
+  `noreply@nextechlabs.tech`; aliases can't authenticate but CAN be the From:
+  `EMAIL_FROM="AppShots <noreply@appshotspreview.com>"` is an alias of `info@`),
   `APP_URL`.
 - The `appshotspreview.com` zone at Hostinger carries Hostinger mail's MX, SPF,
   DKIM (`hostingermail-a/b/c._domainkey`) and DMARC, so messages from
