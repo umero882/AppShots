@@ -1104,9 +1104,11 @@ export default function Editor() {
         </div>
       </header>
 
+      {/* Two sidebars flank the stage. Below xl (1280px) they slim to 280px so a
+          laptop still leaves the 300px canvas plus its padding room to breathe. */}
       <div className="flex min-h-0 flex-1">
         {/* left controls — the scene: templates, device, background */}
-        <aside className="flex w-[330px] shrink-0 flex-col border-r border-white/5 bg-ink-900">
+        <aside className="flex w-[280px] shrink-0 flex-col border-r border-white/5 bg-ink-900 xl:w-[330px]">
           <TabStrip tabs={LEFT_TABS} active={leftTab} onChange={setLeftTab} />
 
           <div className="scroll-thin flex-1 overflow-y-auto p-4">
@@ -1265,7 +1267,7 @@ export default function Editor() {
         </main>
 
         {/* right controls — the dressing: text, layout, elements */}
-        <aside className="flex w-[330px] shrink-0 flex-col border-l border-white/5 bg-ink-900">
+        <aside className="flex w-[280px] shrink-0 flex-col border-l border-white/5 bg-ink-900 xl:w-[330px]">
           <TabStrip tabs={RIGHT_TABS} active={rightTab} onChange={setRightTab} />
 
           <div className="scroll-thin flex-1 overflow-y-auto p-4">
