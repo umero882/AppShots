@@ -14,6 +14,12 @@ body {
   @apply bg-ink-950 text-slate-200 antialiased;
 }
 
+/* Native select popups: Chrome paints the list with the control's background,
+   so every option is pinned to the dark palette regardless of the control. */
+select option {
+  @apply bg-ink-900 text-slate-100;
+}
+
 /* Thin scrollbars inside editor panels */
 .scroll-thin::-webkit-scrollbar {
   width: 8px;
@@ -51,9 +57,15 @@ body {
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-300;
   }
-  /* Compact controls for the canvas text toolbar. */
+  /* Compact controls for the canvas text toolbar. The select's background must
+     be opaque: Chrome paints the native option popup with the select's own
+     background, and a translucent white/5 composites to a white list under
+     near-white text. */
   .tb-select {
-    @apply h-7 shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-medium text-slate-100 outline-none focus:border-brand-500/60 transition;
+    @apply h-7 shrink-0 rounded-lg border border-white/10 bg-ink-800 px-2 text-xs font-medium text-slate-100 outline-none focus:border-brand-500/60 transition;
+  }
+  .tb-select option {
+    @apply bg-ink-900 text-slate-100;
   }
   .tb-icon {
     @apply grid h-7 w-7 place-items-center rounded-md text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent;
