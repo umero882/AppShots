@@ -12,6 +12,8 @@ import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
 import TeamStylePanel from "../components/TeamStylePanel";
 import BrandSwatches from "../components/BrandSwatches";
+import TextToolbar from "../components/TextToolbar";
+import { resolveTextTarget, applyTextStyle } from "../lib/textTarget";
 import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
@@ -104,6 +106,9 @@ export default function Editor() {
   const [exportMsg, setExportMsg] = useState("");
   const [selectedEl, setSelectedEl] = useState(null);
   const [selectedDevice, setSelectedDevice] = useState(null);
+  // The headline line the user clicked ("heading" | "subheading"); the text
+  // toolbar styles it. Exclusive with element/device selection.
+  const [selectedText, setSelectedText] = useState(null);
   const [format, setFormat] = useState("png"); // png | jpeg
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -223,6 +228,7 @@ export default function Editor() {
         setShowHelp((v) => !v);
       } else if (e.key === "Escape") {
         setShowHelp(false);
+        setSelectedText(null);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -347,8 +353,18 @@ export default function Editor() {
     setSelectedEl(id);
     if (id) {
       setSelectedDevice(null);
+      setSelectedText(null);
       setTab("elements"); // surface the element's layer/delete controls
     }
+  }
+
+  // A click on the headline / subheading: make it the toolbar's target and
+  // surface the Text panel.
+  function selectText(field) {
+    setSelectedText(field);
+    setSelectedEl(null);
+    setSelectedDevice(null);
+    setTab("text");
   }
 
   function reorderElement(id, op) {
@@ -453,7 +469,10 @@ export default function Editor() {
   function selectDevice(id) {
     setSelectedDevice(id);
     setSelectedEl(null);
-    if (id) setTab("device");
+    if (id) {
+      setSelectedText(null);
+      setTab("device");
+    }
   }
 
   // Apply a one-click 3D perspective pose (tilt/rotation) to the active mockup,
@@ -909,6 +928,10 @@ export default function Editor() {
   // multi-size ("all store sizes") export — never persisted to the project.
   const canvasState = { ...state, _textPos: textPos, deviceId: exportDeviceId || state.deviceId };
   const screen = state.screens[activeScreen];
+  // What the text toolbar styles: a selected text element wins, else the
+  // clicked headline line. Null (no toolbar) for badges, shapes, nothing.
+  const textSel = selectedEl ? { kind: "element", id: selectedEl } : selectedText ? { kind: selectedText } : null;
+  const textTarget = resolveTextTarget(state, screen, textSel);
   // What "Upload/Replace screenshot" targets: the selected mockup in free mode,
   // else the legacy single screen image.
   const uploadTargetImage = isFreeMode(screen)
@@ -1153,6 +1176,10 @@ export default function Editor() {
 
         {/* center stage */}
         <main className="flex min-w-0 flex-1 flex-col">
+          <TextToolbar
+            target={textTarget}
+            onChange={(patch) => update((prev) => applyTextStyle(prev, activeScreen, textSel, patch))}
+          />
           <div className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16">
             <div className="relative m-auto">
               <div
@@ -1161,6 +1188,7 @@ export default function Editor() {
                 onPointerDown={() => {
                   setSelectedEl(null);
                   setSelectedDevice(null);
+                  setSelectedText(null);
                 }}
               >
                 <ScreenCanvas
@@ -1177,8 +1205,9 @@ export default function Editor() {
                   onChangeElement={changeElement}
                   onDeleteElement={deleteElement}
                   editableText={!exporting}
+                  selectedText={selectedText}
                   onChangeText={setScreenText}
-                  onSelectText={() => setTab("text")}
+                  onSelectText={selectText}
                   editableDevices={!exporting}
                   selectedDevice={selectedDevice}
                   onSelectDevice={selectDevice}

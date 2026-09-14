@@ -57,9 +57,11 @@ export default function ScreenCanvas({
   onChangeElement,
   onDeleteElement,
   // Double-click the headline / subheading to edit it in place. `onChangeText`
-  // gets `{ heading }` / `{ subheading }` for the active locale; `onSelectText`
-  // fires on a single click so the editor can surface the Text panel.
+  // gets `{ heading }` / `{ subheading }` for the active locale; a single click
+  // calls `onSelectText(field)` and `selectedText` (the same field id) draws
+  // the selection ring so the editor's text toolbar has a visible target.
   editableText = false,
+  selectedText = null,
   onChangeText,
   onSelectText,
   editableDevices = false,
@@ -140,8 +142,21 @@ export default function ScreenCanvas({
       onStart={canEditText ? () => setEditingText(field) : undefined}
       onChange={(v) => onChangeText?.({ [field]: v })}
       onDone={() => setEditingText(null)}
-      onPointerDown={canEditText && editingText !== field ? () => onSelectText?.(field) : undefined}
-      className={canEditText ? "rounded-sm transition hover:ring-1 hover:ring-brand-400/60" : ""}
+      // Selecting a line must not bubble to the canvas root, which clears
+      // every selection; the editor swaps element/device selection itself.
+      onPointerDown={
+        canEditText && editingText !== field
+          ? (e) => {
+              e.stopPropagation();
+              onSelectText?.(field);
+            }
+          : undefined
+      }
+      className={
+        canEditText
+          ? `rounded-sm transition ${selectedText === field ? "ring-1 ring-brand-400/80" : "hover:ring-1 hover:ring-brand-400/60"}`
+          : ""
+      }
       style={styles}
       {...extra}
     />
