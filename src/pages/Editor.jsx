@@ -60,10 +60,15 @@ import { createZip } from "../lib/zip";
 import { pushPast, undoStacks, redoStacks } from "../lib/history";
 import { moveItem } from "../lib/reorder";
 
-const TABS = [
+// The editor has two sidebars: the left one shapes the scene (what's on the
+// canvas), the right one dresses it (what's drawn on top). Each keeps its own
+// active tab so opening "Elements" never hides the device controls.
+const LEFT_TABS = [
   { id: "templates", label: "Templates", icon: Sparkles },
   { id: "device", label: "Device", icon: Smartphone },
   { id: "background", label: "Background", icon: Palette },
+];
+const RIGHT_TABS = [
   { id: "text", label: "Text", icon: Type },
   { id: "layout", label: "Layout", icon: LayoutTemplate },
   { id: "elements", label: "Elements", icon: Shapes },
@@ -85,7 +90,14 @@ export default function Editor() {
   const [state, setState] = useState(null);
   const [name, setName] = useState("");
   const [activeScreen, setActiveScreen] = useState(0);
-  const [tab, setTab] = useState("device");
+  const [leftTab, setLeftTab] = useState("device");
+  const [rightTab, setRightTab] = useState("text");
+  // Route a panel id to whichever sidebar owns it, so callers that surface a
+  // panel (select an element → "elements", add a locale → "text") stay simple.
+  function setTab(id) {
+    if (RIGHT_TABS.some((t) => t.id === id)) setRightTab(id);
+    else setLeftTab(id);
+  }
   const [saveState, setSaveState] = useState("saved"); // saved | saving | dirty
   const [exporting, setExporting] = useState(false);
   const [exportDeviceId, setExportDeviceId] = useState(null);
@@ -1093,26 +1105,13 @@ export default function Editor() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* left controls */}
+        {/* left controls — the scene: templates, device, background */}
         <aside className="flex w-[330px] shrink-0 flex-col border-r border-white/5 bg-ink-900">
-          <div className="scroll-thin flex overflow-x-auto border-b border-white/5">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex min-w-[60px] flex-1 shrink-0 flex-col items-center gap-1 px-1 py-3 text-[11px] font-semibold transition ${
-                  tab === t.id ? "bg-white/5 text-brand-300" : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <t.icon size={17} />
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <TabStrip tabs={LEFT_TABS} active={leftTab} onChange={setLeftTab} />
 
           <div className="scroll-thin flex-1 overflow-y-auto p-4">
-            {tab === "templates" && <TemplatesPanel update={update} state={state} projectName={name} />}
-            {tab === "device" && (
+            {leftTab === "templates" && <TemplatesPanel update={update} state={state} projectName={name} />}
+            {leftTab === "device" && (
               <DevicePanel
                 state={state}
                 update={update}
@@ -1139,49 +1138,12 @@ export default function Editor() {
                 onChangeLive3dModel={changeLive3dModel}
               />
             )}
-            {tab === "background" && (
+            {leftTab === "background" && (
               <BackgroundPanel
                 state={state}
                 update={update}
                 screen={screen}
                 onScreen={(p) => updateScreen(activeScreen, p)}
-              />
-            )}
-            {tab === "text" && (
-              <TextPanel
-                state={state}
-                update={update}
-                screen={screen}
-                screenIndex={activeScreen}
-                appName={name}
-                onScreen={(p) => updateScreen(activeScreen, p)}
-                locale={locale}
-                onText={setScreenText}
-                i18n={{
-                  locales: projectLocales(state),
-                  locale,
-                  setLocale,
-                  onAdd: addLocale,
-                  onRemove: removeLocale,
-                  onTranslate: translateAll,
-                  translating,
-                  error: translateErr,
-                  isPaid: !!user?.plan && user.plan !== "free",
-                }}
-              />
-            )}
-            {tab === "layout" && <LayoutPanel state={state} update={update} />}
-            {tab === "elements" && (
-              <ElementsPanel
-                onAdd={addElement}
-                elements={screen.elements || []}
-                selectedId={selectedEl}
-                onReorder={reorderElement}
-                onDelete={deleteElement}
-                onChange={changeElement}
-                onDuplicate={duplicateSelectedElement}
-                twemoji={!!state.twemoji}
-                onToggleTwemoji={() => update({ twemoji: !state.twemoji })}
               />
             )}
           </div>
@@ -1301,7 +1263,72 @@ export default function Editor() {
             </div>
           </div>
         </main>
+
+        {/* right controls — the dressing: text, layout, elements */}
+        <aside className="flex w-[330px] shrink-0 flex-col border-l border-white/5 bg-ink-900">
+          <TabStrip tabs={RIGHT_TABS} active={rightTab} onChange={setRightTab} />
+
+          <div className="scroll-thin flex-1 overflow-y-auto p-4">
+            {rightTab === "text" && (
+              <TextPanel
+                state={state}
+                update={update}
+                screen={screen}
+                screenIndex={activeScreen}
+                appName={name}
+                onScreen={(p) => updateScreen(activeScreen, p)}
+                locale={locale}
+                onText={setScreenText}
+                i18n={{
+                  locales: projectLocales(state),
+                  locale,
+                  setLocale,
+                  onAdd: addLocale,
+                  onRemove: removeLocale,
+                  onTranslate: translateAll,
+                  translating,
+                  error: translateErr,
+                  isPaid: !!user?.plan && user.plan !== "free",
+                }}
+              />
+            )}
+            {rightTab === "layout" && <LayoutPanel state={state} update={update} />}
+            {rightTab === "elements" && (
+              <ElementsPanel
+                onAdd={addElement}
+                elements={screen.elements || []}
+                selectedId={selectedEl}
+                onReorder={reorderElement}
+                onDelete={deleteElement}
+                onChange={changeElement}
+                onDuplicate={duplicateSelectedElement}
+                twemoji={!!state.twemoji}
+                onToggleTwemoji={() => update({ twemoji: !state.twemoji })}
+              />
+            )}
+          </div>
+        </aside>
       </div>
+    </div>
+  );
+}
+
+/** The icon+label tab row that heads each sidebar. */
+function TabStrip({ tabs, active, onChange }) {
+  return (
+    <div className="scroll-thin flex overflow-x-auto border-b border-white/5">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className={`flex min-w-[60px] flex-1 shrink-0 flex-col items-center gap-1 px-1 py-3 text-[11px] font-semibold transition ${
+            active === t.id ? "bg-white/5 text-brand-300" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <t.icon size={17} />
+          {t.label}
+        </button>
+      ))}
     </div>
   );
 }
