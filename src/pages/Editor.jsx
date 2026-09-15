@@ -12,8 +12,9 @@ import Logo from "../components/Logo";
 import TemplateGrid from "../components/TemplateGrid";
 import TeamStylePanel from "../components/TeamStylePanel";
 import BrandSwatches from "../components/BrandSwatches";
-import TextToolbar from "../components/TextToolbar";
-import { resolveTextTarget, applyTextStyle } from "../lib/textTarget";
+import CanvasToolbar from "../components/CanvasToolbar";
+import { applyTextStyle } from "../lib/textTarget";
+import { resolveSelection } from "../lib/selectionTarget";
 import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
@@ -928,10 +929,11 @@ export default function Editor() {
   // multi-size ("all store sizes") export — never persisted to the project.
   const canvasState = { ...state, _textPos: textPos, deviceId: exportDeviceId || state.deviceId };
   const screen = state.screens[activeScreen];
-  // What the text toolbar styles: a selected text element wins, else the
-  // clicked headline line. Null (no toolbar) for badges, shapes, nothing.
-  const textSel = selectedEl ? { kind: "element", id: selectedEl } : selectedText ? { kind: selectedText } : null;
-  const textTarget = resolveTextTarget(state, screen, textSel);
+  // What the canvas toolbar shows: an element or device selection wins, else
+  // the clicked headline line. Text targets style through applyTextStyle,
+  // keyed by the element id or the headline field.
+  const selection = resolveSelection(state, screen, { selectedEl, selectedText, selectedDevice });
+  const textSel = selection?.kind === "text" ? (selection.id ? { kind: "element", id: selection.id } : { kind: selectedText }) : null;
   // What "Upload/Replace screenshot" targets: the selected mockup in free mode,
   // else the legacy single screen image.
   const uploadTargetImage = isFreeMode(screen)
@@ -1176,9 +1178,17 @@ export default function Editor() {
 
         {/* center stage */}
         <main className="flex min-w-0 flex-1 flex-col">
-          <TextToolbar
-            target={textTarget}
-            onChange={(patch) => update((prev) => applyTextStyle(prev, activeScreen, textSel, patch))}
+          <CanvasToolbar
+            target={selection}
+            onTextStyle={(patch) => update((prev) => applyTextStyle(prev, activeScreen, textSel, patch))}
+            onElementChange={changeElement}
+            onElementReorder={reorderElement}
+            onElementDuplicate={duplicateSelectedElement}
+            onElementDelete={deleteElement}
+            onDeviceChange={changeDevice}
+            onDeviceUpload={() => fileRef.current?.click()}
+            onDeviceDuplicate={duplicateDevice}
+            onDeviceDelete={deleteDevice}
           />
           <div className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16">
             <div className="relative m-auto">
