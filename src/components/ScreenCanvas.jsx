@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
-import { orientedCanvas, screenDevices, isFreeMode, panoramaStyle } from "../lib/deviceLayout";
+import { orientedCanvas, screenDevices, isFreeMode, panoramaStyle, LEGACY_DEVICE_ID } from "../lib/deviceLayout";
 import { localizeScreen, isRtl } from "../lib/i18n";
 import { legibilityHalo } from "../lib/contrast";
 import { patternCss } from "../lib/patterns";
@@ -69,6 +69,7 @@ export default function ScreenCanvas({
   onSelectDevice,
   onChangeDevice,
   onDeleteDevice,
+  onUploadDevice, // double-click a mockup (legacy or free) → screenshot picker
   onFrameCorner,
   onLive3dRotate,
   onLive3dModelInfo,
@@ -265,16 +266,43 @@ export default function ScreenCanvas({
         style={{ paddingTop: textPos === "bottom" ? "6%" : 0 }}
       >
         {!free && !photo && !live && (
-          <DeviceMockup
-            device={device}
-            image={screen.image}
-            width={width * (state.deviceScale ?? 0.78)}
-            orientation={state.orientation}
-            color={state.frameColor}
-            fit={state.deviceFit}
-            autoFill={state.autoFill !== false}
-            forceFillIpad={state.ipadForceFill !== false}
-          />
+          // The single legacy mockup selects like a free-mode instance (id
+          // LEGACY_DEVICE_ID) so the toolbar can size it and take a screenshot;
+          // double-click opens the picker straight away.
+          <div
+            className={`relative ${editableDevices ? "cursor-pointer" : ""}`}
+            title={editableDevices ? "Click to select · double-click to upload a screenshot" : undefined}
+            onPointerDown={
+              editableDevices
+                ? (e) => {
+                    e.stopPropagation();
+                    onSelectDevice?.(LEGACY_DEVICE_ID);
+                  }
+                : undefined
+            }
+            onDoubleClick={
+              editableDevices && onUploadDevice
+                ? (e) => {
+                    e.stopPropagation();
+                    onUploadDevice(LEGACY_DEVICE_ID);
+                  }
+                : undefined
+            }
+          >
+            <DeviceMockup
+              device={device}
+              image={screen.image}
+              width={width * (state.deviceScale ?? 0.78)}
+              orientation={state.orientation}
+              color={state.frameColor}
+              fit={state.deviceFit}
+              autoFill={state.autoFill !== false}
+              forceFillIpad={state.ipadForceFill !== false}
+            />
+            {editableDevices && selectedDevice === LEGACY_DEVICE_ID && (
+              <div className="pointer-events-none absolute -inset-1 rounded-[3px] border-2 border-brand-400" />
+            )}
+          </div>
         )}
       </div>
 
@@ -322,6 +350,7 @@ export default function ScreenCanvas({
           onSelect={onSelectDevice}
           onChange={onChangeDevice}
           onDelete={onDeleteDevice}
+          onUpload={onUploadDevice}
         />
       )}
 

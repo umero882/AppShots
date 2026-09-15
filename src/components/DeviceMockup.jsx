@@ -309,6 +309,7 @@ export function DevicesLayer({
   onSelect,
   onChange,
   onDelete,
+  onUpload, // double-click a mockup → put a screenshot in it
 }) {
   const rootRef = useRef(null);
   const drag = useRef(null);
@@ -395,6 +396,8 @@ export function DevicesLayer({
           <div
             key={d.id}
             onPointerDown={(e) => startMove(e, d)}
+            onDoubleClick={editable && onUpload ? (e) => { e.stopPropagation(); onUpload(d.id); } : undefined}
+            title={editable ? "Double-click to upload a screenshot" : undefined}
             className={`absolute ${editable ? "pointer-events-auto cursor-move" : ""}`}
             style={{
               left: `${d.x * 100}%`,

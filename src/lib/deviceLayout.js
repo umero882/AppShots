@@ -96,6 +96,13 @@ export function projectFit(state, screen) {
 }
 
 /**
+ * The id of the synthesized single mockup on a legacy screen. It is stable so
+ * the editor can select it like any instance; mutations to it that need a real
+ * instance (rotation, a second device) promote the screen to free mode first.
+ */
+export const LEGACY_DEVICE_ID = "legacy";
+
+/**
  * Devices to render for a screen. Returns the explicit array in free mode,
  * else a single synthesized instance from the legacy single-device fields so
  * old projects/templates render exactly as before.
@@ -104,7 +111,7 @@ export function screenDevices(screen, state) {
   if (isFreeMode(screen)) return screen.devices;
   return [
     makeDeviceInstance(state.deviceId, {
-      id: "legacy",
+      id: LEGACY_DEVICE_ID,
       image: screen?.image ?? null,
       scale: state.deviceScale ?? 0.78,
       orientation: state.orientation ?? "portrait",

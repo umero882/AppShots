@@ -42,7 +42,7 @@ import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
 import { getDevice } from "../lib/devices";
 import {
-  orientedCanvas, makeDeviceInstance, duplicateDeviceInstance, isFreeMode, screenDevices,
+  orientedCanvas, makeDeviceInstance, duplicateDeviceInstance, isFreeMode, screenDevices, LEGACY_DEVICE_ID,
 } from "../lib/deviceLayout";
 import {
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, makeTextElement, elementSvg,
@@ -438,6 +438,19 @@ export default function Editor() {
   }
 
   function changeDevice(id, patch) {
+    if (id === LEGACY_DEVICE_ID) {
+      // The legacy mockup has no instance: its size is the project-wide
+      // deviceScale and its screenshot the screen image. Anything else
+      // (rotation, tilt, position) needs an instance, so promote first.
+      const { scale, image, ...rest } = patch;
+      if (scale !== undefined) update({ deviceScale: scale });
+      if (image !== undefined) updateScreen(activeScreen, { image });
+      if (Object.keys(rest).length) {
+        const nid = promoteToFree();
+        withDevices(activeScreen, (list) => list.map((d) => (d.id === nid ? { ...d, ...rest } : d)));
+      }
+      return;
+    }
     withDevices(activeScreen, (list) => list.map((d) => (d.id === id ? { ...d, ...patch } : d)));
   }
 
@@ -1189,6 +1202,7 @@ export default function Editor() {
             onDeviceUpload={() => fileRef.current?.click()}
             onDeviceDuplicate={duplicateDevice}
             onDeviceDelete={deleteDevice}
+            onDevicePromote={promoteToFree}
           />
           <div className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16">
             <div className="relative m-auto">
@@ -1223,6 +1237,7 @@ export default function Editor() {
                   onSelectDevice={selectDevice}
                   onChangeDevice={changeDevice}
                   onDeleteDevice={deleteDevice}
+                  onUploadDevice={() => fileRef.current?.click()}
                   onFrameCorner={changeFrameCorner}
                   onLive3dRotate={live3dRotate}
                   onLive3dModelInfo={setLive3dModel}

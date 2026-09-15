@@ -84,6 +84,18 @@ describe("resolveSelection", () => {
     expect(resolveSelection(state, screen, { selectedDevice: d1.id }).scale).toBe(60);
   });
 
+  it("marks the synthesized single mockup of a legacy screen", () => {
+    const { state, screen } = setup(); // no `devices` → legacy
+    const r = resolveSelection(state, screen, { selectedDevice: "legacy" });
+    expect(r.kind).toBe("device");
+    expect(r.legacy).toBe(true);
+    expect(r.scale).toBe(Math.round((state.deviceScale ?? 0.78) * 100));
+    expect(r.count).toBe(1);
+    const d = makeDeviceInstance("iphone-69");
+    expect(resolveSelection(state, { ...screen, devices: [d] }, { selectedDevice: d.id }).legacy).toBe(false);
+    expect(resolveSelection(state, { ...screen, devices: [d] }, { selectedDevice: "legacy" })).toBeNull();
+  });
+
   it("is null for a device id not on this screen", () => {
     const { state, screen } = setup();
     expect(resolveSelection(state, screen, { selectedDevice: "nope" })).toBeNull();

@@ -1,6 +1,6 @@
 import {
   AlignCenter, AlignLeft, AlignRight, Minus, Plus, MousePointerClick,
-  ArrowDown, ArrowUp, Copy, Trash2, Upload,
+  ArrowDown, ArrowUp, Copy, Trash2, Upload, Move3d,
 } from "lucide-react";
 import { FONTS } from "../lib/templates";
 import { TEXT_EFFECTS } from "../lib/textEffects";
@@ -33,6 +33,7 @@ export default function CanvasToolbar({
   onDeviceUpload,
   onDeviceDuplicate,
   onDeviceDelete,
+  onDevicePromote,
 }) {
   if (!target) {
     return (
@@ -68,7 +69,13 @@ export default function CanvasToolbar({
         />
       )}
       {target.kind === "device" && (
-        <Actions onDuplicate={() => onDeviceDuplicate(target.id)} onDelete={() => onDeviceDelete(target.id)} />
+        <Actions
+          onDuplicate={() => onDeviceDuplicate(target.id)}
+          // The legacy single mockup can't be removed — it IS the screen's
+          // device — so offer the step that unlocks free placement instead.
+          onDelete={target.legacy ? null : () => onDeviceDelete(target.id)}
+          onPromote={target.legacy ? onDevicePromote : null}
+        />
       )}
     </div>
   );
@@ -166,7 +173,7 @@ function DeviceControls({ t, onChange, onUpload }) {
   );
 }
 
-function Actions({ onBackward, onForward, onDuplicate, onDelete }) {
+function Actions({ onBackward, onForward, onDuplicate, onDelete, onPromote }) {
   const hasLayer = onBackward !== undefined || onForward !== undefined;
   return (
     <div className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -180,12 +187,19 @@ function Actions({ onBackward, onForward, onDuplicate, onDelete }) {
           </button>
         </div>
       )}
+      {onPromote && (
+        <button type="button" className="tb-btn" onClick={onPromote} title="Drag, rotate and tilt the mockup anywhere on the canvas">
+          <Move3d size={13} /> Position freely
+        </button>
+      )}
       <button type="button" className="tb-btn" onClick={onDuplicate} title="Duplicate (Ctrl/⌘ D)">
         <Copy size={13} /> Duplicate
       </button>
-      <button type="button" className="tb-btn text-red-300 hover:bg-red-500/10" onClick={onDelete} title="Delete (⌫)">
-        <Trash2 size={13} /> Delete
-      </button>
+      {onDelete && (
+        <button type="button" className="tb-btn text-red-300 hover:bg-red-500/10" onClick={onDelete} title="Delete (⌫)">
+          <Trash2 size={13} /> Delete
+        </button>
+      )}
     </div>
   );
 }

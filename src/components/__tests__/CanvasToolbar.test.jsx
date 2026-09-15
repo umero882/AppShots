@@ -14,7 +14,7 @@ const shape = makeElement(SHAPES[0]);
 const emoji = makeEmojiElement("🚀");
 const screen = { ...defaultScreen(), heading: "Hello", subheading: "World", elements: [text, badge, shape, emoji] };
 const noop = () => {};
-const render = (target) => renderToStaticMarkup(<CanvasToolbar target={target} onTextStyle={noop} onElementChange={noop} onElementReorder={noop} onElementDuplicate={noop} onElementDelete={noop} onDeviceChange={noop} onDeviceUpload={noop} onDeviceDuplicate={noop} onDeviceDelete={noop} />);
+const render = (target) => renderToStaticMarkup(<CanvasToolbar target={target} onTextStyle={noop} onElementChange={noop} onElementReorder={noop} onElementDuplicate={noop} onElementDelete={noop} onDeviceChange={noop} onDeviceUpload={noop} onDeviceDuplicate={noop} onDeviceDelete={noop} onDevicePromote={noop} />);
 const sel = (s) => resolveSelection(state, screen, s);
 
 describe("CanvasToolbar", () => {
@@ -82,6 +82,14 @@ describe("CanvasToolbar", () => {
     expect(render(withImage)).toContain("Replace screenshot");
   });
 
+  it("offers the legacy single mockup 'position freely' instead of delete", () => {
+    const html = render(resolveSelection(state, { ...defaultScreen() }, { selectedDevice: "legacy" }));
+    expect(html).toContain("Upload screenshot");
+    expect(html).toContain("Position freely");
+    expect(html).toContain("Duplicate");
+    expect(html).not.toContain("Delete");
+  });
+
   it("disables the size stepper at the range ends", () => {
     const max = { ...state, text: { ...state.text, size: 110 } };
     const html = render(resolveSelection(max, screen, { selectedText: "heading" }));
@@ -93,6 +101,15 @@ describe("CanvasToolbar", () => {
 describe("ScreenCanvas text selection ring", () => {
   const draw = (props) =>
     renderToStaticMarkup(<ScreenCanvas state={{ ...state, _textPos: "top" }} screen={screen} width={300} {...props} />);
+
+  it("rings the selected legacy mockup only in the editor", () => {
+    const ring = "border-2 border-brand-400";
+    expect(draw({ editableDevices: true, selectedDevice: "legacy" })).toContain(ring);
+    expect(draw({ editableDevices: true })).not.toContain(ring);
+    expect(draw({ selectedDevice: "legacy" })).not.toContain(ring);
+    expect(draw({ editableDevices: true })).toContain("cursor-pointer");
+    expect(draw({})).not.toContain("cursor-pointer");
+  });
 
   it("rings the selected line only in the editor", () => {
     expect(draw({ editableText: true, selectedText: "heading" }).match(/ring-1 ring-brand-400\/80/g)?.length).toBe(1);

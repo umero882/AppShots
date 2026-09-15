@@ -5,7 +5,7 @@
  * Pure, so the mapping is unit-testable.
  */
 import { resolveTextTarget } from "./textTarget";
-import { screenDevices } from "./deviceLayout";
+import { screenDevices, LEGACY_DEVICE_ID } from "./deviceLayout";
 import { getDevice } from "./devices";
 
 const KIND_LABEL = {
@@ -35,8 +35,11 @@ export function elementColors(el) {
  * @returns one of
  *   { kind: "text",    id?,  text }               — headline/subheading/text element (styled by the text bar)
  *   { kind: "element", id,   label, colors, opacity, isTop, isBottom }
- *   { kind: "device",  id,   label, scale, hasImage, count }
+ *   { kind: "device",  id,   label, scale, hasImage, count, legacy }
  *   null
+ * `legacy` marks the synthesized single mockup of a screen that hasn't been
+ * promoted to free mode: it can be sized and given a screenshot but not
+ * deleted — the bar offers "position freely" instead.
  * A selected text element reports kind "text" (its typography is the point)
  * but still carries `id`, so the bar can offer layer/duplicate/delete too.
  */
@@ -75,6 +78,7 @@ export function resolveSelection(state, screen, sel = {}) {
       scale: Math.round((d.scale ?? 0.78) * 100),
       hasImage: !!d.image,
       count: list.length,
+      legacy: d.id === LEGACY_DEVICE_ID,
     };
   }
 
