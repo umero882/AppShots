@@ -17,6 +17,7 @@ import { applyTextStyle } from "../lib/textTarget";
 import { resolveSelection } from "../lib/selectionTarget";
 import { placeScreenshots } from "../lib/screenshots";
 import { menuItemsFor } from "../lib/contextMenu";
+import { clipFromSelection, pasteItem } from "../lib/clipboard";
 import ContextMenu from "../components/ContextMenu";
 import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
@@ -131,6 +132,9 @@ export default function Editor() {
   // makes repeated requests for the same target distinct).
   const [editRequest, setEditRequest] = useState(null);
   const bgFileRef = useRef(null);
+  // In-app clipboard for elements / mockups (see lib/clipboard). A ref: it
+  // never needs to re-render anything, and survives switching screens.
+  const clip = useRef(null);
   const [format, setFormat] = useState("png"); // png | jpeg
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -307,21 +311,47 @@ export default function Editor() {
     };
   }, []);
 
-  // Ctrl/⌘ V with an image on the clipboard → the screenshot of the selected
-  // (or first) mockup. Ignored while typing in a field.
+  // Ctrl/⌘ V: an image on the system clipboard becomes the screenshot of the
+  // selected (or first) mockup; otherwise the in-app clip (an element or a
+  // mockup copied with Ctrl/⌘ C) lands on the active screen. Ctrl/⌘ C / X
+  // fill that clip. All ignored while typing in a field.
   useEffect(() => {
-    function onPaste(e) {
-      const t = e.target;
+    const typing = (t) => {
       const tag = (t?.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || t?.isContentEditable) return;
+      return tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable;
+    };
+    function onPaste(e) {
+      if (typing(e.target)) return;
       const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
-      if (!files.length) return;
-      e.preventDefault();
-      placeFiles(files, selectedDevice);
+      if (files.length) {
+        e.preventDefault();
+        placeFiles(files, selectedDevice);
+      } else if (clip.current) {
+        e.preventDefault();
+        pasteClip();
+      }
+    }
+    function onKey(e) {
+      if (!(e.ctrlKey || e.metaKey) || typing(e.target)) return;
+      if (e.key === "c" || e.key === "C") {
+        if (copySelection()) e.preventDefault();
+      } else if (e.key === "x" || e.key === "X") {
+        if (cutSelection()) e.preventDefault();
+      }
     }
     window.addEventListener("paste", onPaste);
-    return () => window.removeEventListener("paste", onPaste);
-  }, [selectedDevice, activeScreen]);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("paste", onPaste);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [selectedDevice, selectedEl, activeScreen, state]);
+
+  // Undo / redo can shrink the screen list under the active index; snap back.
+  useEffect(() => {
+    const n = state?.screens?.length || 0;
+    if (n && activeScreen > n - 1) setActiveScreen(n - 1);
+  }, [state?.screens?.length, activeScreen]);
 
   // stop any music preview when leaving the editor
   useEffect(() => () => { if (previewStop.current) previewStop.current(); }, []);
@@ -808,6 +838,36 @@ export default function Editor() {
     update((prev) => placeScreenshots(prev, activeScreen, urls, { deviceId: deviceId || selectedDevice }));
   }
 
+  /* ----------------------------- in-app clipboard ----------------------------- */
+
+  function copySelection() {
+    const c = clipFromSelection(state.screens[activeScreen], activeScreen, { selectedEl, selectedDevice });
+    if (c) clip.current = c;
+    return !!c;
+  }
+
+  function cutSelection() {
+    if (!copySelection()) return false;
+    if (clip.current.kind === "element") deleteElement(clip.current.item.id);
+    else deleteDevice(clip.current.item.id);
+    return true;
+  }
+
+  function pasteClip() {
+    const item = pasteItem(clip.current, activeScreen);
+    if (!item) return false;
+    if (clip.current.kind === "element") {
+      addElement(item); // selects it and surfaces the Elements panel
+    } else {
+      withDevices(activeScreen, (list) => [...list, item]);
+      setSelectedDevice(item.id);
+      setSelectedEl(null);
+      setSelectedText(null);
+      setSelectedBg(false);
+    }
+    return true;
+  }
+
   const dragHandlers = {
     onDragEnter: (e) => {
       if (!hasFiles(e)) return;
@@ -857,6 +917,9 @@ export default function Editor() {
 
   const menuActions = {
     editText: (req) => setEditRequest({ ...req, n: Date.now() }),
+    copy: copySelection,
+    cut: cutSelection,
+    paste: pasteClip,
     openPanel: setTab,
     duplicateElement: () => duplicateSelectedElement(),
     reorderElement,
@@ -906,7 +969,10 @@ export default function Editor() {
       ...prev,
       screens: prev.screens.filter((_, i) => i !== idx),
     }));
-    setActiveScreen((a) => Math.max(0, a > idx ? a - 1 : a));
+    // Removing the active screen (or one before it) shifts the index; removing
+    // the last one while viewing it must fall back to the new last screen.
+    const last = state.screens.length - 2;
+    setActiveScreen((a) => Math.min(last, Math.max(0, a > idx ? a - 1 : a)));
   }
 
   async function exportOne() {
@@ -1133,7 +1199,8 @@ export default function Editor() {
   // `exportDeviceId` transiently overrides the rendered device during a
   // multi-size ("all store sizes") export — never persisted to the project.
   const canvasState = { ...state, _textPos: textPos, deviceId: exportDeviceId || state.deviceId };
-  const screen = state.screens[activeScreen];
+  // Clamp: undo/redo can shrink the screen list under the active index.
+  const screen = state.screens[Math.min(activeScreen, state.screens.length - 1)];
   // What the canvas toolbar shows: an element or device selection wins, else
   // the clicked headline line. Text targets style through applyTextStyle,
   // keyed by the element id or the headline field.
@@ -1468,7 +1535,12 @@ export default function Editor() {
 
           {showHelp && <ShortcutsModal onClose={() => setShowHelp(false)} />}
           {menu && (
-            <ContextMenu x={menu.x} y={menu.y} items={menuItemsFor(selection, menuActions)} onClose={closeMenu} />
+            <ContextMenu
+              x={menu.x}
+              y={menu.y}
+              items={menuItemsFor(selection, menuActions, { canPaste: !!clip.current })}
+              onClose={closeMenu}
+            />
           )}
 
           {/* screen filmstrip */}

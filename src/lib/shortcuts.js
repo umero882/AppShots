@@ -5,6 +5,7 @@ export const SHORTCUTS = [
   { keys: "← ↑ ↓ →", desc: "Nudge the selected element or mockup" },
   { keys: "⇧ + arrows", desc: "Nudge further" },
   { keys: "Ctrl/⌘ D", desc: "Duplicate the selected element or mockup" },
+  { keys: "Ctrl/⌘ C · X · V", desc: "Copy · cut · paste an element or mockup, across screens too" },
   { keys: "Delete / ⌫", desc: "Delete the selected element or mockup" },
   { keys: "[ · ]", desc: "Send backward · bring forward" },
   { keys: "Double-click", desc: "Edit a headline, text block or badge in place" },
