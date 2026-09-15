@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
-  ArrowLeft, Plus, Download, Trash2, Copy, Check, Loader2,
+  ArrowLeft, Download, Trash2, Copy, Check, Loader2,
   Image as ImageIcon, Upload, Smartphone, Palette, Type, LayoutTemplate, Sparkles,
   Contrast, Search, Wand2, Github, AlertCircle, Shapes,
   BringToFront, SendToBack, ArrowUp, ArrowDown, Undo2, Redo2,
-  ChevronLeft, ChevronRight, Keyboard, X, Languages, Film, Music, Play, Pause, Layers, Lock,
+  Keyboard, X, Languages, Film, Music, Play, Pause, Layers, Lock,
 } from "lucide-react";
 import { SHORTCUTS } from "../lib/shortcuts";
 import Logo from "../components/Logo";
@@ -16,9 +16,10 @@ import CanvasToolbar from "../components/CanvasToolbar";
 import { applyTextStyle } from "../lib/textTarget";
 import { resolveSelection } from "../lib/selectionTarget";
 import { placeScreenshots } from "../lib/screenshots";
-import { menuItemsFor } from "../lib/contextMenu";
+import { menuItemsFor, screenMenuItems } from "../lib/contextMenu";
 import { clipFromSelection, pasteItem } from "../lib/clipboard";
 import ContextMenu from "../components/ContextMenu";
+import Filmstrip from "../components/Filmstrip";
 import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
@@ -910,8 +911,15 @@ export default function Editor() {
     else if (devId) selectDevice(devId);
     else if (field) selectText(field);
     else selectBackground();
-    setMenu({ x: e.clientX, y: e.clientY });
+    setMenu({ x: e.clientX, y: e.clientY, kind: "canvas" });
   }
+
+  const screenActions = {
+    duplicateScreen,
+    addScreenAfter,
+    moveScreen,
+    removeScreen,
+  };
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
@@ -946,6 +954,18 @@ export default function Editor() {
       return { ...prev, screens: [...prev.screens, next] };
     });
     setActiveScreen(state.screens.length);
+  }
+
+  // A fresh screen right after `idx` (same background), which becomes active.
+  function addScreenAfter(idx) {
+    update((prev) => {
+      const base = prev.screens[idx]?.background || prev.background;
+      const next = { ...defaultScreen(), background: base ? { ...base } : undefined };
+      const screens = [...prev.screens];
+      screens.splice(idx + 1, 0, next);
+      return { ...prev, screens };
+    });
+    setActiveScreen(idx + 1);
   }
 
   function duplicateScreen(idx) {
@@ -1538,74 +1558,28 @@ export default function Editor() {
             <ContextMenu
               x={menu.x}
               y={menu.y}
-              items={menuItemsFor(selection, menuActions, { canPaste: !!clip.current })}
+              items={
+                menu.kind === "screen"
+                  ? screenMenuItems(menu.index, state.screens.length, screenActions)
+                  : menuItemsFor(selection, menuActions, { canPaste: !!clip.current })
+              }
               onClose={closeMenu}
             />
           )}
 
-          {/* screen filmstrip */}
-          <div className="border-t border-white/5 bg-ink-900 p-3">
-            <div className="scroll-thin flex items-center gap-3 overflow-x-auto">
-              {state.screens.map((s, i) => (
-                <div key={s.id} className="group relative shrink-0">
-                  <button
-                    onClick={() => setActiveScreen(i)}
-                    className={`overflow-hidden rounded-lg border-2 transition ${
-                      i === activeScreen ? "border-brand-500" : "border-transparent hover:border-white/20"
-                    }`}
-                  >
-                    <ScreenCanvas state={canvasState} screen={s} width={56} screenIndex={i} screenCount={state.screens.length} panoramaBg={panoramaBg} locale={locale} />
-                  </button>
-                  <div className="absolute -top-1.5 -right-1.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
-                    <button
-                      onClick={() => duplicateScreen(i)}
-                      className="grid h-5 w-5 place-items-center rounded-full bg-ink-800 text-slate-300 hover:text-white"
-                      title="Duplicate"
-                    >
-                      <Copy size={11} />
-                    </button>
-                    {state.screens.length > 1 && (
-                      <button
-                        onClick={() => removeScreen(i)}
-                        className="grid h-5 w-5 place-items-center rounded-full bg-ink-800 text-slate-300 hover:text-red-400"
-                        title="Delete"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    )}
-                  </div>
-                  {state.screens.length > 1 && (
-                    <>
-                      <button
-                        onClick={() => moveScreen(i, i - 1)}
-                        disabled={i === 0}
-                        title="Move left"
-                        className="absolute left-0 top-1/2 z-10 grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-ink-800 text-slate-200 opacity-0 shadow transition hover:text-white disabled:opacity-0 group-hover:opacity-100 group-hover:disabled:opacity-20"
-                      >
-                        <ChevronLeft size={12} />
-                      </button>
-                      <button
-                        onClick={() => moveScreen(i, i + 1)}
-                        disabled={i === state.screens.length - 1}
-                        title="Move right"
-                        className="absolute right-0 top-1/2 z-10 grid h-5 w-5 translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-ink-800 text-slate-200 opacity-0 shadow transition hover:text-white disabled:opacity-0 group-hover:opacity-100 group-hover:disabled:opacity-20"
-                      >
-                        <ChevronRight size={12} />
-                      </button>
-                    </>
-                  )}
-                  <span className="mt-1 block text-center text-[10px] text-slate-500">{i + 1}</span>
-                </div>
-              ))}
-              <button
-                onClick={addScreen}
-                className="grid h-[100px] w-14 shrink-0 place-items-center rounded-lg border border-dashed border-white/15 text-slate-400 hover:border-brand-500/50 hover:text-brand-300"
-                title="Add screen"
-              >
-                <Plus size={18} />
-              </button>
-            </div>
-          </div>
+          <Filmstrip
+            screens={state.screens}
+            active={activeScreen}
+            canvasState={canvasState}
+            panoramaBg={panoramaBg}
+            locale={locale}
+            onSelect={setActiveScreen}
+            onAdd={addScreen}
+            onDuplicate={duplicateScreen}
+            onRemove={removeScreen}
+            onMove={moveScreen}
+            onContextMenu={(index, at) => setMenu({ ...at, kind: "screen", index })}
+          />
         </main>
 
         {/* right controls — the dressing: text, layout, elements */}

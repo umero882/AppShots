@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { menuItemsFor } from "../contextMenu.js";
+import { menuItemsFor, screenMenuItems } from "../contextMenu.js";
 import { resolveSelection } from "../selectionTarget.js";
 import { defaultProjectState, defaultScreen } from "../templates.js";
 import { makeTextElement, makeElement, makeEmojiElement, BADGES } from "../elements.js";
@@ -105,5 +105,36 @@ describe("menuItemsFor", () => {
     expect(a.uploadBackground).toHaveBeenCalled();
     pick(items, "panel").onSelect();
     expect(a.openPanel).toHaveBeenCalledWith("background");
+  });
+});
+
+describe("screenMenuItems", () => {
+  const acts = () => ({ duplicateScreen: vi.fn(), addScreenAfter: vi.fn(), moveScreen: vi.fn(), removeScreen: vi.fn() });
+
+  it("lists the screen actions with the ends disabled", () => {
+    const a = acts();
+    const first = screenMenuItems(0, 3, a);
+    expect(labels(first)).toEqual(["Duplicate screen", "Add screen after", "—", "Move left", "Move right", "Move to start", "Move to end", "—", "Delete screen"]);
+    expect(pick(first, "left").disabled).toBe(true);
+    expect(pick(first, "first").disabled).toBe(true);
+    expect(pick(first, "right").disabled).toBe(false);
+    pick(first, "end").onSelect();
+    expect(a.moveScreen).toHaveBeenCalledWith(0, 2);
+    const last = screenMenuItems(2, 3, a);
+    expect(pick(last, "right").disabled).toBe(true);
+    expect(pick(last, "end").disabled).toBe(true);
+    pick(last, "first").onSelect();
+    expect(a.moveScreen).toHaveBeenCalledWith(2, 0);
+  });
+
+  it("never deletes the only screen", () => {
+    const a = acts();
+    expect(pick(screenMenuItems(0, 1, a), "delete").disabled).toBe(true);
+    const items = screenMenuItems(1, 2, a);
+    expect(pick(items, "delete").disabled).toBe(false);
+    pick(items, "delete").onSelect();
+    expect(a.removeScreen).toHaveBeenCalledWith(1);
+    pick(items, "add").onSelect();
+    expect(a.addScreenAfter).toHaveBeenCalledWith(1);
   });
 });

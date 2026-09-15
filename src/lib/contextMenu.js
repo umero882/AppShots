@@ -68,3 +68,19 @@ function elementItems(t, a, paste = []) {
     { id: "delete", label: "Delete", danger: true, onSelect: () => a.deleteElement(t.id) },
   ];
 }
+
+/** The filmstrip's menu for screen `index` of `count`. */
+export function screenMenuItems(index, count, a) {
+  const last = count - 1;
+  return [
+    { id: "duplicate", label: "Duplicate screen", onSelect: () => a.duplicateScreen(index) },
+    { id: "add", label: "Add screen after", onSelect: () => a.addScreenAfter(index) },
+    sep,
+    { id: "left", label: "Move left", disabled: index === 0, onSelect: () => a.moveScreen(index, index - 1) },
+    { id: "right", label: "Move right", disabled: index === last, onSelect: () => a.moveScreen(index, index + 1) },
+    { id: "first", label: "Move to start", disabled: index === 0, onSelect: () => a.moveScreen(index, 0) },
+    { id: "end", label: "Move to end", disabled: index === last, onSelect: () => a.moveScreen(index, last) },
+    sep,
+    { id: "delete", label: "Delete screen", danger: true, disabled: count <= 1, onSelect: () => a.removeScreen(index) },
+  ];
+}
