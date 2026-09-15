@@ -395,6 +395,7 @@ export function DevicesLayer({
         return (
           <div
             key={d.id}
+            data-device-id={d.id}
             onPointerDown={(e) => startMove(e, d)}
             onDoubleClick={editable && onUpload ? (e) => { e.stopPropagation(); onUpload(d.id); } : undefined}
             title={editable ? "Double-click to upload a screenshot" : undefined}

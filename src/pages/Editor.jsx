@@ -15,6 +15,7 @@ import BrandSwatches from "../components/BrandSwatches";
 import CanvasToolbar from "../components/CanvasToolbar";
 import { applyTextStyle } from "../lib/textTarget";
 import { resolveSelection } from "../lib/selectionTarget";
+import { placeScreenshots } from "../lib/screenshots";
 import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
@@ -84,6 +85,11 @@ const STORE_SIZE_EXPORT = [
   "pixel-8", "android-tablet",                                  // Google Play
 ];
 
+/** Does a drag / drop event carry files (as opposed to text or an element)? */
+function hasFiles(e) {
+  return !!e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
+}
+
 export default function Editor() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -113,6 +119,10 @@ export default function Editor() {
   // A click on the canvas backdrop: the toolbar styles the screen background.
   // Lowest precedence — any element/device/text selection hides it.
   const [selectedBg, setSelectedBg] = useState(false);
+  // A file drag is over the stage: show the drop zone. Counted, because the
+  // browser fires enter/leave for every child crossed on the way in.
+  const [dropping, setDropping] = useState(false);
+  const dragDepth = useRef(0);
   const [format, setFormat] = useState("png"); // png | jpeg
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -239,6 +249,34 @@ export default function Editor() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [state, name]);
+
+  // Files dragged anywhere over the editor must never navigate the tab to the
+  // image; only the stage accepts them (below).
+  useEffect(() => {
+    const swallow = (e) => { if (hasFiles(e)) e.preventDefault(); };
+    window.addEventListener("dragover", swallow);
+    window.addEventListener("drop", swallow);
+    return () => {
+      window.removeEventListener("dragover", swallow);
+      window.removeEventListener("drop", swallow);
+    };
+  }, []);
+
+  // Ctrl/⌘ V with an image on the clipboard → the screenshot of the selected
+  // (or first) mockup. Ignored while typing in a field.
+  useEffect(() => {
+    function onPaste(e) {
+      const t = e.target;
+      const tag = (t?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || t?.isContentEditable) return;
+      const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
+      if (!files.length) return;
+      e.preventDefault();
+      placeFiles(files, selectedDevice);
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [selectedDevice, activeScreen]);
 
   // stop any music preview when leaving the editor
   useEffect(() => () => { if (previewStop.current) previewStop.current(); }, []);
@@ -714,6 +752,44 @@ export default function Editor() {
     }
     e.target.value = "";
   }
+
+  // Dropped / pasted screenshots. The first fills `deviceId` (the mockup under
+  // the cursor, else the selected one), the rest fan out over the next
+  // screens — see placeScreenshots.
+  async function placeFiles(files, deviceId = null) {
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    if (!images.length) return;
+    const urls = await Promise.all(images.map(readFileAsDataURL));
+    update((prev) => placeScreenshots(prev, activeScreen, urls, { deviceId: deviceId || selectedDevice }));
+  }
+
+  const dragHandlers = {
+    onDragEnter: (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current += 1;
+      setDropping(true);
+    },
+    onDragOver: (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    },
+    onDragLeave: (e) => {
+      if (!hasFiles(e)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (!dragDepth.current) setDropping(false);
+    },
+    onDrop: (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDropping(false);
+      // The mockup the file landed on, if any, takes the screenshot.
+      const onDevice = e.target.closest?.("[data-device-id]")?.dataset.deviceId || null;
+      placeFiles([...e.dataTransfer.files], onDevice);
+    },
+  };
 
   function addScreen() {
     update((prev) => {
@@ -1240,6 +1316,7 @@ export default function Editor() {
             className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16"
             // The gutter around the canvas: a click here deselects everything.
             onPointerDown={(e) => { if (e.target === e.currentTarget) clearSelection(); }}
+            {...dragHandlers}
           >
             {/* The selection ring lives on this wrapper, outside the rasterized node. */}
             <div className={`relative m-auto rounded-xl ${selectedBg && !exporting ? "outline outline-2 outline-offset-4 outline-brand-400/70" : ""}`}>
@@ -1285,6 +1362,16 @@ export default function Editor() {
               >
                 <Upload size={15} /> {uploadTargetImage ? "Replace screenshot" : "Upload screenshot"}
               </button>
+              {dropping && (
+                <div className="pointer-events-none absolute -inset-2 z-50 grid place-items-center rounded-2xl border-2 border-dashed border-brand-400 bg-brand-500/15 backdrop-blur-[1px]">
+                  <div className="rounded-xl bg-ink-900/90 px-4 py-2.5 text-center shadow-lg">
+                    <p className="flex items-center justify-center gap-2 text-sm font-semibold text-white">
+                      <Upload size={15} /> Drop to use as screenshot
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">Onto a phone to fill that one · several files fill the next screens too</p>
+                  </div>
+                </div>
+              )}
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUpload} />
               <input ref={frameRef} type="file" accept="image/png,image/webp,image/*" hidden onChange={onUploadFrame} />
               <input ref={modelRef} type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" hidden onChange={onUploadModel} />

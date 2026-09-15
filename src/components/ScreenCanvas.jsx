@@ -270,6 +270,7 @@ export default function ScreenCanvas({
           // LEGACY_DEVICE_ID) so the toolbar can size it and take a screenshot;
           // double-click opens the picker straight away.
           <div
+            data-device-id={LEGACY_DEVICE_ID}
             className={`relative ${editableDevices ? "cursor-pointer" : ""}`}
             title={editableDevices ? "Click to select · double-click to upload a screenshot" : undefined}
             onPointerDown={
