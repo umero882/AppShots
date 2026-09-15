@@ -12,5 +12,6 @@ export const SHORTCUTS = [
   { keys: "Right-click", desc: "Menu for whatever is under the cursor" },
   { keys: "Enter · Esc", desc: "Finish · cancel editing in place" },
   { keys: "Esc", desc: "Deselect" },
+  { keys: "Ctrl/⌘ + · − · 0", desc: "Zoom in · out · back to 100% (also Ctrl/⌘ + scroll)" },
   { keys: "?", desc: "Show this help" },
 ];

@@ -20,6 +20,8 @@ import { menuItemsFor, screenMenuItems } from "../lib/contextMenu";
 import { clipFromSelection, pasteItem } from "../lib/clipboard";
 import ContextMenu from "../components/ContextMenu";
 import Filmstrip from "../components/Filmstrip";
+import ZoomControl from "../components/ZoomControl";
+import { BASE_WIDTH, clampZoom, zoomIn, zoomOut, fitZoom } from "../lib/zoom";
 import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
@@ -136,6 +138,18 @@ export default function Editor() {
   // In-app clipboard for elements / mockups (see lib/clipboard). A ref: it
   // never needs to re-render anything, and survives switching screens.
   const clip = useRef(null);
+  // Stage zoom: the width the canvas is rendered at, as a factor of BASE_WIDTH.
+  // Remembered across sessions; exports are unaffected (renderNode rasterizes
+  // to the store size whatever the on-screen width is).
+  const [zoom, setZoomState] = useState(() => {
+    try { return clampZoom(localStorage.getItem("appshots:zoom") || 1); } catch { return 1; }
+  });
+  const stageRef = useRef(null);
+  const setZoom = useCallback((z) => {
+    const v = clampZoom(z);
+    setZoomState(v);
+    try { localStorage.setItem("appshots:zoom", String(v)); } catch { /* private mode */ }
+  }, []);
   const [format, setFormat] = useState("png"); // png | jpeg
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -347,6 +361,40 @@ export default function Editor() {
       window.removeEventListener("keydown", onKey);
     };
   }, [selectedDevice, selectedEl, activeScreen, state]);
+
+  // Zoom: Ctrl/⌘ + wheel over the stage, Ctrl/⌘ +/− and 0 anywhere (not while
+  // typing). The wheel listener is native and non-passive so the browser's own
+  // page zoom is suppressed.
+  useEffect(() => {
+    const stage = stageRef.current;
+    function onWheel(e) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      setZoom(e.deltaY < 0 ? zoomIn(zoom) : zoomOut(zoom));
+    }
+    function onKey(e) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const t = e.target;
+      const tag = (t?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable) return;
+      if (e.key === "=" || e.key === "+") { e.preventDefault(); setZoom(zoomIn(zoom)); }
+      else if (e.key === "-") { e.preventDefault(); setZoom(zoomOut(zoom)); }
+      else if (e.key === "0") { e.preventDefault(); setZoom(1); }
+    }
+    stage?.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      stage?.removeEventListener("wheel", onWheel);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [zoom, setZoom]);
+
+  function fitToStage() {
+    const r = stageRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const oc = orientedCanvas(getDevice(state.deviceId), state.orientation);
+    setZoom(fitZoom(r.width, r.height, oc.h / oc.w));
+  }
 
   // Undo / redo can shrink the screen list under the active index; snap back.
   useEffect(() => {
@@ -1470,21 +1518,25 @@ export default function Editor() {
 
         {/* center stage */}
         <main className="flex min-w-0 flex-1 flex-col">
-          <CanvasToolbar
-            target={selection}
-            onTextStyle={(patch) => update((prev) => applyTextStyle(prev, activeScreen, textSel, patch))}
-            onElementChange={changeElement}
-            onElementReorder={reorderElement}
-            onElementDuplicate={duplicateSelectedElement}
-            onElementDelete={deleteElement}
-            onDeviceChange={changeDevice}
-            onDeviceUpload={() => fileRef.current?.click()}
-            onDeviceDuplicate={duplicateDevice}
-            onDeviceDelete={deleteDevice}
-            onDevicePromote={promoteToFree}
-            onBackgroundChange={changeBackground}
-          />
+          <div className="flex h-11 shrink-0 items-stretch border-b border-white/5 bg-ink-900/80 backdrop-blur">
+            <CanvasToolbar
+              target={selection}
+              onTextStyle={(patch) => update((prev) => applyTextStyle(prev, activeScreen, textSel, patch))}
+              onElementChange={changeElement}
+              onElementReorder={reorderElement}
+              onElementDuplicate={duplicateSelectedElement}
+              onElementDelete={deleteElement}
+              onDeviceChange={changeDevice}
+              onDeviceUpload={() => fileRef.current?.click()}
+              onDeviceDuplicate={duplicateDevice}
+              onDeviceDelete={deleteDevice}
+              onDevicePromote={promoteToFree}
+              onBackgroundChange={changeBackground}
+            />
+            <ZoomControl zoom={zoom} onChange={setZoom} onFit={fitToStage} />
+          </div>
           <div
+            ref={stageRef}
             className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16"
             // The gutter around the canvas: a click here deselects everything.
             onPointerDown={(e) => { if (e.target === e.currentTarget) clearSelection(); }}
@@ -1503,7 +1555,7 @@ export default function Editor() {
                 <ScreenCanvas
                   state={canvasState}
                   screen={screen}
-                  width={300}
+                  width={Math.round(BASE_WIDTH * zoom)}
                   screenIndex={activeScreen}
                   screenCount={state.screens.length}
                   panoramaBg={panoramaBg}

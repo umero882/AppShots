@@ -21,9 +21,9 @@ const WEIGHTS = [400, 500, 600, 700, 800, 900];
  * The contextual bar above the canvas. It reads `resolveSelection` and shows
  * the controls for whatever is selected — a headline line or text block
  * (typography), any other element (color, opacity, layer), or a device mockup
- * (screenshot, size) — plus duplicate/delete for things that can be. The row
- * is always reserved so the stage never jumps; empty, it carries the hint for
- * editing in place.
+ * (screenshot, size) — plus duplicate/delete for things that can be. It fills
+ * the row the editor reserves above the stage (next to the zoom control), so
+ * the stage never jumps; empty, it carries the hint for editing in place.
  */
 export default function CanvasToolbar({
   target,
@@ -41,7 +41,7 @@ export default function CanvasToolbar({
 }) {
   if (!target) {
     return (
-      <div className="flex h-11 shrink-0 items-center justify-center gap-2 border-b border-white/5 bg-ink-900/60 px-4 text-[11px] text-slate-500">
+      <div className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 px-4 text-[11px] text-slate-500">
         <MousePointerClick size={13} />
         Click anything on the canvas to style it · double-click text to edit it in place
       </div>
@@ -51,7 +51,7 @@ export default function CanvasToolbar({
   const label = target.kind === "text" ? target.text.label : target.label;
   return (
     <div
-      className="scroll-thin flex h-11 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-white/5 bg-ink-900/80 px-3 backdrop-blur"
+      className="scroll-thin flex h-11 min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-3"
       // Keep canvas selection intact while using the bar.
       onPointerDown={(e) => e.stopPropagation()}
     >
