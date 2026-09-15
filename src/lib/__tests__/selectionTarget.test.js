@@ -96,6 +96,18 @@ describe("resolveSelection", () => {
     expect(resolveSelection(state, { ...screen, devices: [d] }, { selectedDevice: "legacy" })).toBeNull();
   });
 
+  it("resolves the backdrop last, falling back to the project background", () => {
+    const { state, screen, shape } = setup();
+    const r = resolveSelection(state, screen, { selectedBg: true });
+    expect(r).toEqual({ kind: "background", label: "Background", bg: state.background });
+    const own = { type: "solid", solid: "#112233" };
+    expect(resolveSelection(state, { ...screen, background: own }, { selectedBg: true }).bg).toBe(own);
+    // any other selection wins
+    expect(resolveSelection(state, screen, { selectedBg: true, selectedEl: shape.id }).kind).toBe("element");
+    expect(resolveSelection(state, screen, { selectedBg: true, selectedText: "heading" }).kind).toBe("text");
+    expect(resolveSelection(state, screen, { selectedBg: true, selectedDevice: "legacy" }).kind).toBe("device");
+  });
+
   it("is null for a device id not on this screen", () => {
     const { state, screen } = setup();
     expect(resolveSelection(state, screen, { selectedDevice: "nope" })).toBeNull();

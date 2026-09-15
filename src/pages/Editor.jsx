@@ -110,6 +110,9 @@ export default function Editor() {
   // The headline line the user clicked ("heading" | "subheading"); the text
   // toolbar styles it. Exclusive with element/device selection.
   const [selectedText, setSelectedText] = useState(null);
+  // A click on the canvas backdrop: the toolbar styles the screen background.
+  // Lowest precedence — any element/device/text selection hides it.
+  const [selectedBg, setSelectedBg] = useState(false);
   const [format, setFormat] = useState("png"); // png | jpeg
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -230,6 +233,7 @@ export default function Editor() {
       } else if (e.key === "Escape") {
         setShowHelp(false);
         setSelectedText(null);
+        setSelectedBg(false);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -355,6 +359,7 @@ export default function Editor() {
     if (id) {
       setSelectedDevice(null);
       setSelectedText(null);
+      setSelectedBg(false);
       setTab("elements"); // surface the element's layer/delete controls
     }
   }
@@ -365,7 +370,32 @@ export default function Editor() {
     setSelectedText(field);
     setSelectedEl(null);
     setSelectedDevice(null);
+    setSelectedBg(false);
     setTab("text");
+  }
+
+  // A click on the canvas backdrop. It always drops whatever was selected;
+  // the Background panel only comes up when the click wasn't a deselect, so
+  // clicking away from an element doesn't yank the sidebar around.
+  function selectBackground() {
+    const wasDeselect = !!(selectedEl || selectedDevice || selectedText);
+    setSelectedEl(null);
+    setSelectedDevice(null);
+    setSelectedText(null);
+    setSelectedBg(true);
+    if (!wasDeselect) setTab("background");
+  }
+
+  function clearSelection() {
+    setSelectedEl(null);
+    setSelectedDevice(null);
+    setSelectedText(null);
+    setSelectedBg(false);
+  }
+
+  function changeBackground(patch, defaults = {}) {
+    const bg = state.screens[activeScreen]?.background || state.background;
+    updateScreen(activeScreen, { background: { ...defaults, ...bg, ...patch } });
   }
 
   function reorderElement(id, op) {
@@ -485,6 +515,7 @@ export default function Editor() {
     setSelectedEl(null);
     if (id) {
       setSelectedText(null);
+      setSelectedBg(false);
       setTab("device");
     }
   }
@@ -945,7 +976,7 @@ export default function Editor() {
   // What the canvas toolbar shows: an element or device selection wins, else
   // the clicked headline line. Text targets style through applyTextStyle,
   // keyed by the element id or the headline field.
-  const selection = resolveSelection(state, screen, { selectedEl, selectedText, selectedDevice });
+  const selection = resolveSelection(state, screen, { selectedEl, selectedText, selectedDevice, selectedBg });
   const textSel = selection?.kind === "text" ? (selection.id ? { kind: "element", id: selection.id } : { kind: selectedText }) : null;
   // What "Upload/Replace screenshot" targets: the selected mockup in free mode,
   // else the legacy single screen image.
@@ -1203,17 +1234,21 @@ export default function Editor() {
             onDeviceDuplicate={duplicateDevice}
             onDeviceDelete={deleteDevice}
             onDevicePromote={promoteToFree}
+            onBackgroundChange={changeBackground}
           />
-          <div className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16">
-            <div className="relative m-auto">
+          <div
+            className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16"
+            // The gutter around the canvas: a click here deselects everything.
+            onPointerDown={(e) => { if (e.target === e.currentTarget) clearSelection(); }}
+          >
+            {/* The selection ring lives on this wrapper, outside the rasterized node. */}
+            <div className={`relative m-auto rounded-xl ${selectedBg && !exporting ? "outline outline-2 outline-offset-4 outline-brand-400/70" : ""}`}>
               <div
                 ref={canvasRef}
                 className="relative"
-                onPointerDown={() => {
-                  setSelectedEl(null);
-                  setSelectedDevice(null);
-                  setSelectedText(null);
-                }}
+                // Anything on the canvas that isn't a target stops propagation
+                // itself, so a pointerdown reaching here is a click on the backdrop.
+                onPointerDown={selectBackground}
               >
                 <ScreenCanvas
                   state={canvasState}

@@ -14,6 +14,9 @@ const KIND_LABEL = {
 
 export const OPACITY_SPEC = { min: 10, max: 100, step: 10, unit: "%" };
 export const DEVICE_SCALE_SPEC = { min: 20, max: 160, step: 5, unit: "%" };
+export const BLUR_SPEC = { min: 0, max: 10, step: 1, unit: "" };
+/** Background kinds the toolbar can switch between (AI lives in the panel). */
+export const BACKGROUND_TYPES = ["gradient", "solid", "pattern", "image"];
 
 /** Which color fields an element exposes, in toolbar order. */
 export function elementColors(el) {
@@ -31,11 +34,12 @@ export function elementColors(el) {
 }
 
 /**
- * @param sel { selectedEl, selectedText, selectedDevice }
+ * @param sel { selectedEl, selectedText, selectedDevice, selectedBg }
  * @returns one of
- *   { kind: "text",    id?,  text }               — headline/subheading/text element (styled by the text bar)
- *   { kind: "element", id,   label, colors, opacity, isTop, isBottom }
- *   { kind: "device",  id,   label, scale, hasImage, count, legacy }
+ *   { kind: "text",       id?, text }               — headline/subheading/text element (styled by the text bar)
+ *   { kind: "element",    id,  label, colors, opacity, isTop, isBottom }
+ *   { kind: "device",     id,  label, scale, hasImage, count, legacy }
+ *   { kind: "background", label, bg }               — the screen's backdrop (falls back to the project's)
  *   null
  * `legacy` marks the synthesized single mockup of a screen that hasn't been
  * promoted to free mode: it can be sized and given a screenshot but not
@@ -45,7 +49,7 @@ export function elementColors(el) {
  */
 export function resolveSelection(state, screen, sel = {}) {
   if (!state || !screen) return null;
-  const { selectedEl, selectedText, selectedDevice } = sel;
+  const { selectedEl, selectedText, selectedDevice, selectedBg } = sel;
 
   if (selectedEl) {
     const els = screen.elements || [];
@@ -85,6 +89,10 @@ export function resolveSelection(state, screen, sel = {}) {
   if (selectedText) {
     const text = resolveTextTarget(state, screen, { kind: selectedText });
     return text ? { kind: "text", text } : null;
+  }
+
+  if (selectedBg) {
+    return { kind: "background", label: "Background", bg: screen.background || state.background };
   }
 
   return null;

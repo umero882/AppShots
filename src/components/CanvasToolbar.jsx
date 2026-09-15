@@ -1,11 +1,14 @@
+import { useRef } from "react";
 import {
   AlignCenter, AlignLeft, AlignRight, Minus, Plus, MousePointerClick,
-  ArrowDown, ArrowUp, Copy, Trash2, Upload, Move3d,
+  ArrowDown, ArrowUp, Copy, Trash2, Upload, Move3d, Image,
 } from "lucide-react";
-import { FONTS } from "../lib/templates";
+import { FONTS, GRADIENTS } from "../lib/templates";
 import { TEXT_EFFECTS } from "../lib/textEffects";
+import { PATTERN_DEFAULTS } from "../lib/patterns";
 import { stepSize } from "../lib/textTarget";
-import { OPACITY_SPEC, DEVICE_SCALE_SPEC } from "../lib/selectionTarget";
+import { OPACITY_SPEC, DEVICE_SCALE_SPEC, BLUR_SPEC, BACKGROUND_TYPES } from "../lib/selectionTarget";
+import { readFileAsDataURL } from "../lib/export";
 
 const ALIGNS = [
   { id: "left", icon: AlignLeft, title: "Align left" },
@@ -34,12 +37,13 @@ export default function CanvasToolbar({
   onDeviceDuplicate,
   onDeviceDelete,
   onDevicePromote,
+  onBackgroundChange, // (patch, defaults?) → merged under the screen's background
 }) {
   if (!target) {
     return (
       <div className="flex h-11 shrink-0 items-center justify-center gap-2 border-b border-white/5 bg-ink-900/60 px-4 text-[11px] text-slate-500">
         <MousePointerClick size={13} />
-        Click text on the canvas to style it · double-click to edit it in place
+        Click anything on the canvas to style it · double-click text to edit it in place
       </div>
     );
   }
@@ -58,6 +62,7 @@ export default function CanvasToolbar({
       {target.kind === "device" && (
         <DeviceControls t={target} onChange={(p) => onDeviceChange(target.id, p)} onUpload={onDeviceUpload} />
       )}
+      {target.kind === "background" && <BackgroundControls bg={target.bg} onChange={onBackgroundChange} />}
 
       {/* element actions — text elements have an id, headline lines don't */}
       {target.id && target.kind !== "device" && (
@@ -169,6 +174,77 @@ function DeviceControls({ t, onChange, onUpload }) {
         labels={["Smaller", "Larger"]}
         title="Size"
       />
+    </>
+  );
+}
+
+function BackgroundControls({ bg, onChange }) {
+  const fileRef = useRef(null);
+  const type = bg.type || "gradient";
+  async function pick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    onChange({ type: "image", image: await readFileAsDataURL(file) });
+  }
+  return (
+    <>
+      <div className="flex shrink-0 items-center rounded-lg border border-white/10 bg-white/5">
+        {BACKGROUND_TYPES.map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={type === t}
+            onClick={() => onChange({ type: t }, t === "pattern" ? PATTERN_DEFAULTS : undefined)}
+            className={`h-7 px-2 text-[11px] font-semibold capitalize transition ${
+              type === t ? "rounded-md bg-brand-500/20 text-brand-200" : "text-slate-300 hover:text-white"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {type === "gradient" && (
+        <div className="flex shrink-0 items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-1.5 py-1" role="group" aria-label="Gradient presets">
+          {GRADIENTS.map((g) => {
+            const on = bg.gradient === g.id && !bg.aiGradient;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                title={g.name}
+                aria-label={g.name}
+                aria-pressed={on}
+                onClick={() => onChange({ gradient: g.id, aiGradient: null })}
+                className={`h-5 w-5 rounded-full ring-2 transition ${on ? "ring-white" : "ring-transparent hover:ring-white/40"}`}
+                style={{ background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})` }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {type === "solid" && <ColorWell label="Color" value={bg.solid || "#6366f1"} onChange={(solid) => onChange({ solid })} />}
+
+      {type === "pattern" && (
+        <>
+          <ColorWell label="Ink" value={bg.patternFg || PATTERN_DEFAULTS.patternFg} onChange={(patternFg) => onChange({ patternFg })} />
+          <ColorWell label="Paper" value={bg.patternBg || PATTERN_DEFAULTS.patternBg} onChange={(patternBg) => onChange({ patternBg })} />
+        </>
+      )}
+
+      {type === "image" && (
+        <>
+          <button type="button" className="tb-btn" onClick={() => fileRef.current?.click()} title="Use a photo or artwork as the backdrop">
+            <Image size={13} /> {bg.image ? "Replace image" : "Upload image"}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
+          {bg.image && (
+            <Stepper value={bg.blur || 0} spec={BLUR_SPEC} onChange={(blur) => onChange({ blur })} labels={["Less blur", "More blur"]} title="Blur" />
+          )}
+        </>
+      )}
     </>
   );
 }

@@ -14,13 +14,13 @@ const shape = makeElement(SHAPES[0]);
 const emoji = makeEmojiElement("🚀");
 const screen = { ...defaultScreen(), heading: "Hello", subheading: "World", elements: [text, badge, shape, emoji] };
 const noop = () => {};
-const render = (target) => renderToStaticMarkup(<CanvasToolbar target={target} onTextStyle={noop} onElementChange={noop} onElementReorder={noop} onElementDuplicate={noop} onElementDelete={noop} onDeviceChange={noop} onDeviceUpload={noop} onDeviceDuplicate={noop} onDeviceDelete={noop} onDevicePromote={noop} />);
+const render = (target) => renderToStaticMarkup(<CanvasToolbar target={target} onTextStyle={noop} onElementChange={noop} onElementReorder={noop} onElementDuplicate={noop} onElementDelete={noop} onDeviceChange={noop} onDeviceUpload={noop} onDeviceDuplicate={noop} onDeviceDelete={noop} onDevicePromote={noop} onBackgroundChange={noop} />);
 const sel = (s) => resolveSelection(state, screen, s);
 
 describe("CanvasToolbar", () => {
   it("shows the in-place editing hint when nothing is selected", () => {
     const html = render(null);
-    expect(html).toContain("double-click to edit it in place");
+    expect(html).toContain("double-click text to edit it in place");
     expect(html).not.toContain('aria-label="Font"');
   });
 
@@ -88,6 +88,32 @@ describe("CanvasToolbar", () => {
     expect(html).toContain("Position freely");
     expect(html).toContain("Duplicate");
     expect(html).not.toContain("Delete");
+  });
+
+  it("styles the backdrop: type switch plus the controls for the current type", () => {
+    const bgOf = (background) => resolveSelection(state, { ...defaultScreen(), background }, { selectedBg: true });
+    const grad = render(bgOf({ type: "gradient", gradient: "sunset" }));
+    expect(grad).toContain("Background");
+    for (const t of ["gradient", "solid", "pattern", "image"]) expect(grad).toContain(`>${t}</button>`);
+    expect(grad).toContain('aria-label="Gradient presets"');
+    expect(grad).toMatch(/aria-label="Sunset" aria-pressed="true"/);
+    expect(grad).not.toContain("Duplicate");
+
+    const solid = render(bgOf({ type: "solid", solid: "#112233" }));
+    expect(solid).toContain('aria-label="Color"');
+    expect(solid).toContain("#112233");
+    expect(solid).not.toContain("Gradient presets");
+
+    const pattern = render(bgOf({ type: "pattern" }));
+    expect(pattern).toContain('aria-label="Ink"');
+    expect(pattern).toContain('aria-label="Paper"');
+
+    const noImage = render(bgOf({ type: "image", image: null }));
+    expect(noImage).toContain("Upload image");
+    expect(noImage).not.toContain('aria-label="More blur"');
+    const withImage = render(bgOf({ type: "image", image: "data:,", blur: 3 }));
+    expect(withImage).toContain("Replace image");
+    expect(withImage).toContain('aria-label="More blur"');
   });
 
   it("disables the size stepper at the range ends", () => {
