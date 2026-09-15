@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GRADIENTS, FONTS } from "../lib/templates";
 import { getDevice } from "../lib/devices";
 import { orientedCanvas, screenDevices, isFreeMode, panoramaStyle, LEGACY_DEVICE_ID } from "../lib/deviceLayout";
@@ -70,6 +70,7 @@ export default function ScreenCanvas({
   onChangeDevice,
   onDeleteDevice,
   onUploadDevice, // double-click a mockup (legacy or free) → screenshot picker
+  editRequest = null, // { kind: "text", id: field } | { kind: "element", id } → start editing in place
   onFrameCorner,
   onLive3dRotate,
   onLive3dModelInfo,
@@ -136,6 +137,9 @@ export default function ScreenCanvas({
   // would shrink the device band in the editor but not in the export.
   const [editingText, setEditingText] = useState(null);
   const canEditText = editableText && !exporting;
+  useEffect(() => {
+    if (canEditText && editRequest?.kind === "text") setEditingText(editRequest.id);
+  }, [editRequest, canEditText]);
   const textLine = (field, styles, extra = {}) => (
     <InlineText
       value={lscreen[field] || ""}
@@ -159,6 +163,7 @@ export default function ScreenCanvas({
           : ""
       }
       style={styles}
+      data-text-field={field}
       {...extra}
     />
   );
@@ -365,6 +370,7 @@ export default function ScreenCanvas({
           onChange={onChangeElement}
           onDelete={onDeleteElement}
           twemoji={state.twemoji}
+          editRequest={editRequest}
         />
       ) : null}
     </div>

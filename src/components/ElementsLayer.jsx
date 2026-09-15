@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, RotateCw, Maximize2 } from "lucide-react";
 import { elementSvg, fracDelta, clamp01, angleFromCenter, distance, scaleFromResize, snapToGuides, twemojiUrl } from "../lib/elements";
 import { elementIcon } from "../lib/elementIcons";
@@ -27,6 +27,7 @@ export default function ElementsLayer({
   onChange,
   onDelete,
   twemoji = false,
+  editRequest = null, // { kind: "element", id, n } → start editing that label
 }) {
   const rootRef = useRef(null);
   const drag = useRef(null);
@@ -34,6 +35,9 @@ export default function ElementsLayer({
   // Element whose label is being edited in place; export flips `editable` off,
   // which also drops the field so no caret ever rasterizes.
   const [editingId, setEditingId] = useState(null);
+  useEffect(() => {
+    if (editable && editRequest?.kind === "element") setEditingId(editRequest.id);
+  }, [editRequest, editable]);
 
   function canvasRect() {
     return rootRef.current?.getBoundingClientRect();
@@ -43,6 +47,7 @@ export default function ElementsLayer({
     if (!editable || editingId === el.id) return;
     e.stopPropagation();
     onSelect?.(el.id);
+    if (e.button !== 0) return; // right-click: select only, the context menu follows
     const rect = canvasRect();
     drag.current = { mode: "move", id: el.id, startX: e.clientX, startY: e.clientY, ox: el.x, oy: el.y, rect };
     addWindowListeners();
@@ -136,6 +141,7 @@ export default function ElementsLayer({
         return (
           <div
             key={el.id}
+            data-element-id={el.id}
             onPointerDown={(e) => startMove(e, el)}
             className={`absolute ${editable ? "pointer-events-auto cursor-move" : ""}`}
             style={{

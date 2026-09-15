@@ -36,7 +36,7 @@ export function elementColors(el) {
 /**
  * @param sel { selectedEl, selectedText, selectedDevice, selectedBg }
  * @returns one of
- *   { kind: "text",       id?, text }               — headline/subheading/text element (styled by the text bar)
+ *   { kind: "text",       id? | field?, text }      — a text element (id) or headline line (field), styled by the text bar
  *   { kind: "element",    id,  label, colors, opacity, isTop, isBottom }
  *   { kind: "device",     id,  label, scale, hasImage, count, legacy }
  *   { kind: "background", label, bg }               — the screen's backdrop (falls back to the project's)
@@ -88,7 +88,7 @@ export function resolveSelection(state, screen, sel = {}) {
 
   if (selectedText) {
     const text = resolveTextTarget(state, screen, { kind: selectedText });
-    return text ? { kind: "text", text } : null;
+    return text ? { kind: "text", field: selectedText, text } : null;
   }
 
   if (selectedBg) {

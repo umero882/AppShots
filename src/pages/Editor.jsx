@@ -16,6 +16,8 @@ import CanvasToolbar from "../components/CanvasToolbar";
 import { applyTextStyle } from "../lib/textTarget";
 import { resolveSelection } from "../lib/selectionTarget";
 import { placeScreenshots } from "../lib/screenshots";
+import { menuItemsFor } from "../lib/contextMenu";
+import ContextMenu from "../components/ContextMenu";
 import {
   applyTemplateStyle, textPosFor, worstContrast, suggestTextColor,
 } from "../lib/galleryTemplates";
@@ -123,6 +125,12 @@ export default function Editor() {
   // browser fires enter/leave for every child crossed on the way in.
   const [dropping, setDropping] = useState(false);
   const dragDepth = useRef(0);
+  // Right-click menu anchor (viewport px); items come from the selection it made.
+  const [menu, setMenu] = useState(null);
+  // Ask the canvas to start editing a label in place ({ kind, id, n } — `n`
+  // makes repeated requests for the same target distinct).
+  const [editRequest, setEditRequest] = useState(null);
+  const bgFileRef = useRef(null);
   const [format, setFormat] = useState("png"); // png | jpeg
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -224,6 +232,43 @@ export default function Editor() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedEl, state, activeScreen]);
+
+  // The same shortcuts for a selected device mockup. Nudging and deleting
+  // need a real instance, so on a legacy screen only Escape and duplicate
+  // (which promotes) apply.
+  useEffect(() => {
+    function onKey(e) {
+      if (!selectedDevice || selectedEl) return;
+      const t = e.target;
+      const tag = (t?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable) return;
+      const s = state?.screens?.[activeScreen];
+      const d = isFreeMode(s) ? s.devices.find((x) => x.id === selectedDevice) : null;
+      const step = e.shiftKey ? 0.05 : 0.01;
+      const nudge = (patch) => { if (!d) return; e.preventDefault(); changeDevice(d.id, patch); };
+      switch (e.key) {
+        case "Delete":
+        case "Backspace":
+          if (d) { e.preventDefault(); deleteDevice(d.id); }
+          break;
+        case "Escape":
+          setSelectedDevice(null);
+          break;
+        case "ArrowLeft": nudge({ x: clamp01(d?.x - step) }); break;
+        case "ArrowRight": nudge({ x: clamp01(d?.x + step) }); break;
+        case "ArrowUp": nudge({ y: clamp01(d?.y - step) }); break;
+        case "ArrowDown": nudge({ y: clamp01(d?.y + step) }); break;
+        case "d":
+        case "D":
+          if (e.ctrlKey || e.metaKey) { e.preventDefault(); duplicateDevice(selectedDevice); }
+          break;
+        default:
+          break;
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedDevice, selectedEl, state, activeScreen]);
 
   // Undo / redo (Cmd/Ctrl+Z, Shift to redo; Ctrl+Y). Ignored while typing.
   useEffect(() => {
@@ -791,6 +836,46 @@ export default function Editor() {
     },
   };
 
+  // Right-click on the canvas: select what's under the cursor exactly as a
+  // left click would, then open the menu for it. The gutter keeps the
+  // browser's own menu.
+  function onCanvasContextMenu(e) {
+    const t = e.target;
+    if (!canvasRef.current?.contains(t)) return;
+    e.preventDefault();
+    const elId = t.closest?.("[data-element-id]")?.dataset.elementId;
+    const devId = t.closest?.("[data-device-id]")?.dataset.deviceId;
+    const field = t.closest?.("[data-text-field]")?.dataset.textField;
+    if (elId) selectElement(elId);
+    else if (devId) selectDevice(devId);
+    else if (field) selectText(field);
+    else selectBackground();
+    setMenu({ x: e.clientX, y: e.clientY });
+  }
+
+  const closeMenu = useCallback(() => setMenu(null), []);
+
+  const menuActions = {
+    editText: (req) => setEditRequest({ ...req, n: Date.now() }),
+    openPanel: setTab,
+    duplicateElement: () => duplicateSelectedElement(),
+    reorderElement,
+    deleteElement,
+    uploadDevice: () => fileRef.current?.click(),
+    removeScreenshot: (id) => changeDevice(id, { image: null }),
+    duplicateDevice,
+    promoteDevice: promoteToFree,
+    deleteDevice,
+    uploadBackground: () => bgFileRef.current?.click(),
+  };
+
+  async function onUploadBackground(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    changeBackground({ type: "image", image: await readFileAsDataURL(file) });
+  }
+
   function addScreen() {
     update((prev) => {
       const base = prev.screens[activeScreen]?.background || prev.background;
@@ -1316,6 +1401,7 @@ export default function Editor() {
             className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16"
             // The gutter around the canvas: a click here deselects everything.
             onPointerDown={(e) => { if (e.target === e.currentTarget) clearSelection(); }}
+            onContextMenu={onCanvasContextMenu}
             {...dragHandlers}
           >
             {/* The selection ring lives on this wrapper, outside the rasterized node. */}
@@ -1350,6 +1436,7 @@ export default function Editor() {
                   onChangeDevice={changeDevice}
                   onDeleteDevice={deleteDevice}
                   onUploadDevice={() => fileRef.current?.click()}
+                  editRequest={editRequest}
                   onFrameCorner={changeFrameCorner}
                   onLive3dRotate={live3dRotate}
                   onLive3dModelInfo={setLive3dModel}
@@ -1373,12 +1460,16 @@ export default function Editor() {
                 </div>
               )}
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUpload} />
+              <input ref={bgFileRef} type="file" accept="image/*" hidden onChange={onUploadBackground} />
               <input ref={frameRef} type="file" accept="image/png,image/webp,image/*" hidden onChange={onUploadFrame} />
               <input ref={modelRef} type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" hidden onChange={onUploadModel} />
             </div>
           </div>
 
           {showHelp && <ShortcutsModal onClose={() => setShowHelp(false)} />}
+          {menu && (
+            <ContextMenu x={menu.x} y={menu.y} items={menuItemsFor(selection, menuActions)} onClose={closeMenu} />
+          )}
 
           {/* screen filmstrip */}
           <div className="border-t border-white/5 bg-ink-900 p-3">

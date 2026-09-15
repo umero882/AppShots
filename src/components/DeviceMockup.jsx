@@ -324,6 +324,7 @@ export function DevicesLayer({
     if (!editable) return;
     e.stopPropagation();
     onSelect?.(d.id);
+    if (e.button !== 0) return; // right-click: select only, the context menu follows
     const rect = canvasRect();
     drag.current = { mode: "move", id: d.id, startX: e.clientX, startY: e.clientY, ox: d.x, oy: d.y, rect };
     addWindowListeners();
