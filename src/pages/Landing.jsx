@@ -1,13 +1,15 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   Smartphone, Languages, Download, Layers, Palette,
-  Zap, MousePointerClick, Check, ArrowRight,
+  Zap, MousePointerClick, Check, ArrowRight, Megaphone, CalendarDays,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { defaultProjectState } from "../lib/templates";
+import { getDevice } from "../lib/devices";
 import { mockDashboard, mockStats, mockChat } from "../lib/mockScreens";
 import { useAuth } from "../lib/auth";
 
@@ -77,12 +79,119 @@ function HeroPreview() {
   );
 }
 
+// Width of an element, so a fixed-pixel ScreenCanvas can fill a fluid column.
+function useWidth(fallback) {
+  const ref = useRef(null);
+  const [width, setWidth] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    setWidth(el.clientWidth || fallback);
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width) || fallback));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fallback]);
+  return [ref, width];
+}
+
+// The iOS 27 product-page placements and In-App Event media, drawn by the
+// same ScreenCanvas the editor exports with.
+const creativeShowcase = [
+  {
+    deviceId: "aso-header", gradient: "indigo", heading: "Plan your week", sub: "Calm, focused, done",
+    mock: mockDashboard, accent: "#6366f1",
+  },
+  {
+    deviceId: "aso-search", gradient: "ocean", heading: "Stay in flow", sub: "",
+    mock: mockChat, accent: "#0ea5e9",
+  },
+  {
+    deviceId: "iae-card", gradient: "sunset", heading: "Starts Friday", sub: "Double streak points",
+    mock: mockStats, accent: "#fb7185",
+  },
+];
+
+const creativeFormats = [
+  { icon: Megaphone, label: "Product page header", size: "21:9 · 3840×1646" },
+  { icon: Megaphone, label: "Search results card", size: "3:2 · 3840×2560 / 1920×1280" },
+  { icon: Megaphone, label: "Universal header + search", size: "16:9 · 5244×2950 PNG" },
+  { icon: CalendarDays, label: "In-App Event card", size: "16:9 · 3840×2160" },
+  { icon: CalendarDays, label: "In-App Event details", size: "9:16 · 2160×3840" },
+];
+
+function CreativePreview({ item, className = "" }) {
+  const [ref, width] = useWidth(320);
+  const device = getDevice(item.deviceId);
+  const state = {
+    ...defaultProjectState(),
+    deviceId: item.deviceId,
+    background: { type: "gradient", gradient: item.gradient, solid: "" },
+    text: { font: "inter", color: "#ffffff", size: 70, weight: 800, align: "left" },
+  };
+  const screen = { id: item.deviceId, heading: item.heading, subheading: item.sub, image: item.mock(item.accent, { dark: false }) };
+  return (
+    <figure className={className}>
+      <div ref={ref} className="overflow-hidden rounded-xl ring-1 ring-white/10 shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+        <ScreenCanvas state={state} screen={screen} width={width} />
+      </div>
+      <figcaption className="mt-2 text-xs text-slate-500">
+        {device.name} · {device.canvas.w}×{device.canvas.h}
+      </figcaption>
+    </figure>
+  );
+}
+
+function CreativeAssetsSection({ ctaTo }) {
+  const [header, search, event] = creativeShowcase;
+  return (
+    <section id="creative-assets" className="border-t border-white/5">
+      <div className="mx-auto grid max-w-7xl gap-12 px-5 py-20 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center">
+        <div>
+          <span className="chip">New · iOS 27</span>
+          <h2 className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            Header, search &amp; In-App Event art
+          </h2>
+          <p className="mt-4 text-slate-400">
+            The App Store now shows a banner across the top of your product page and a
+            creative card in search results. Design both — plus In-App Event media — in the
+            same editor, at Apple&apos;s exact sizes, with the safe area marked so nothing
+            important gets cropped on iPhone or iPad.
+          </p>
+          <ul className="mt-6 space-y-2.5">
+            {creativeFormats.map((f) => (
+              <li key={f.label} className="flex items-start gap-3 text-sm">
+                <f.icon size={16} className="mt-0.5 shrink-0 text-brand-300" />
+                <span className="text-slate-200">
+                  {f.label} <span className="text-slate-500">— {f.size}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-6 text-sm text-slate-400">
+            Export PNG/JPG or a looping video, and let the AI copywriter write
+            short lines sized for each placement.
+          </p>
+          <Link to={ctaTo} className="btn-primary mt-8 px-5 py-2.5">
+            Make your banner <ArrowRight size={16} />
+          </Link>
+        </div>
+        <div className="grid min-w-0 gap-5 sm:grid-cols-2">
+          <CreativePreview item={header} className="sm:col-span-2" />
+          <CreativePreview item={search} />
+          <CreativePreview item={event} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const features = [
   { icon: Smartphone, title: "Real device frames", desc: "Pixel-perfect iPhone, iPad and Android frames at exact store dimensions." },
   { icon: Palette, title: "Gradients & themes", desc: "Hand-tuned gradient palettes and solid backgrounds with one click." },
   { icon: Layers, title: "Multi-screen sets", desc: "Build a full set of screenshots and keep your styling consistent." },
   { icon: Languages, title: "Localization ready", desc: "Duplicate a set and swap copy for every language you ship in." },
-  { icon: Download, title: "Store-ready export", desc: "Export crisp PNGs sized correctly for App Store and Google Play." },
+  { icon: Download, title: "Store-ready export", desc: "Export crisp PNGs sized correctly for App Store and Google Play — plus iOS 27 header, search and In-App Event art." },
   { icon: Zap, title: "Fast by design", desc: "No bloated editor — go from upload to export in under a minute." },
 ];
 
@@ -126,6 +235,12 @@ export default function Landing() {
               </span>
               Free App Store &amp; Google Play screenshot generator
             </span>
+            <a
+              href="#creative-assets"
+              className="mx-auto mt-3 block w-fit text-xs font-medium text-brand-300 hover:text-brand-200"
+            >
+              New: iOS 27 header, search &amp; In-App Event art →
+            </a>
             <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl">
               Store screenshots that
               <span className="bg-gradient-to-r from-brand-300 to-brand-500 bg-clip-text text-transparent">
@@ -196,6 +311,8 @@ export default function Landing() {
           ))}
         </div>
       </section>
+
+      <CreativeAssetsSection ctaTo={ctaTo} />
 
       {/* How it works */}
       <section id="how" className="border-y border-white/5 bg-white/[0.02]">
