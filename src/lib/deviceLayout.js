@@ -11,6 +11,7 @@
  * materializes the first time the user positions/tilts/adds a mockup.
  */
 import { clamp01 } from "./elements";
+import { mockupDeviceId, isCreative } from "./devices";
 
 // Baseline 3D perspective (px) applied when a mockup is tilted.
 export const PERSPECTIVE = 1200;
@@ -45,10 +46,50 @@ export function getFrameColor(id) {
 
 const freshId = () => `dev_${Math.random().toString(36).slice(2, 9)}`;
 
-/** Output canvas dimensions honoring orientation (landscape swaps w/h). */
+/**
+ * Output canvas dimensions honoring orientation (landscape swaps w/h). App
+ * Store creative assets have one fixed landscape size, so they never swap.
+ */
 export function orientedCanvas(device, orientation = "portrait") {
   const { w, h } = device.canvas;
+  if (device.kind === "creative") return { w, h };
   return orientation === "landscape" ? { w: h, h: w } : { w, h };
+}
+
+/**
+ * The on-screen length a mockup's `scale` multiplies. On a store screenshot it
+ * is the canvas width (unchanged behavior). A creative-asset banner is much
+ * wider than tall, so a width-based phone would overflow it — size from the
+ * height instead, by the format's `mockupK`.
+ */
+export function mockupBase(device, width, height) {
+  return device?.kind === "creative" ? height * (device.mockupK ?? 0.3) : width;
+}
+
+/** A creative asset's safe area as CSS percentages of the canvas (or null). */
+export function safeAreaPct(device) {
+  const s = device?.safe;
+  if (!s) return null;
+  const { w, h } = device.canvas;
+  return {
+    left: `${(s.x / w) * 100}%`,
+    top: `${(s.y / h) * 100}%`,
+    width: `${(s.w / w) * 100}%`,
+    height: `${(s.h / h) * 100}%`,
+  };
+}
+
+/**
+ * Per-screen hold time so a reel lands inside Apple's length window — 5–30 s
+ * for header / search results, 15–30 s for In-App Events (pass `minMs`).
+ * Total = n·hold − (n−1)·transition.
+ */
+export function creativeReelHold(count, { transitionMs = 600, minMs = 5000, maxMs = 30000, baseMs = 2500 } = {}) {
+  const n = Math.max(1, count);
+  const overlap = (n - 1) * transitionMs;
+  const lo = (minMs + overlap) / n;
+  const hi = (maxMs + overlap) / n;
+  return Math.round(Math.min(hi, Math.max(lo, baseMs)));
 }
 
 /** A placed device mockup instance with sensible defaults. */
@@ -110,11 +151,12 @@ export const LEGACY_DEVICE_ID = "legacy";
 export function screenDevices(screen, state) {
   if (isFreeMode(screen)) return screen.devices;
   return [
-    makeDeviceInstance(state.deviceId, {
+    makeDeviceInstance(mockupDeviceId(state), {
       id: LEGACY_DEVICE_ID,
       image: screen?.image ?? null,
       scale: state.deviceScale ?? 0.78,
-      orientation: state.orientation ?? "portrait",
+      // A creative banner's orientation is fixed; its phone stays upright.
+      orientation: isCreative(state.deviceId) ? "portrait" : state.orientation ?? "portrait",
       fit: state.deviceFit,
     }),
   ];

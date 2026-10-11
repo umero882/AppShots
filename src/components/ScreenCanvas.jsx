@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { GRADIENTS, FONTS } from "../lib/templates";
-import { getDevice } from "../lib/devices";
-import { orientedCanvas, screenDevices, isFreeMode, panoramaStyle, LEGACY_DEVICE_ID } from "../lib/deviceLayout";
+import { getDevice, mockupDeviceId, textBaseOf } from "../lib/devices";
+import {
+  orientedCanvas, screenDevices, isFreeMode, panoramaStyle, LEGACY_DEVICE_ID, mockupBase, safeAreaPct,
+} from "../lib/deviceLayout";
 import { localizeScreen, isRtl } from "../lib/i18n";
 import { legibilityHalo } from "../lib/contrast";
 import { patternCss } from "../lib/patterns";
@@ -80,6 +82,13 @@ export default function ScreenCanvas({
   const canvas = orientedCanvas(device, state.orientation);
   const aspect = canvas.h / canvas.w;
   const height = width * aspect;
+  // App Store creative asset (product-page header / search results): a fixed
+  // landscape banner whose mockup is a phone, laid out inside the safe area.
+  const creative = device.kind === "creative";
+  const column = creative && device.layout === "column";
+  const mockDevice = creative ? getDevice(mockupDeviceId(state)) : device;
+  const sizeBase = mockupBase(device, width, height);
+  const safe = creative ? safeAreaPct(device) : null;
   // Background is per-screen; fall back to the project background for older
   // projects/templates that don't have one yet.
   const background = screen.background || state.background;
@@ -102,7 +111,8 @@ export default function ScreenCanvas({
   const panoDesign = panoramaBg || state.background;
   const paneStyle = pano ? panoramaStyle(screenIndex, screenCount) : null;
 
-  const scaledFont = (state.text.size / device.canvas.w) * width;
+  const textBase = textBaseOf(device);
+  const scaledFont = (state.text.size / textBase) * width;
 
   // Subheading styling is independent of the header. Fall back to header-derived
   // defaults for older projects that have no `subtext`.
@@ -111,7 +121,7 @@ export default function ScreenCanvas({
     size: state.subtext?.size ?? Math.round(state.text.size * 0.45),
     weight: state.subtext?.weight ?? 500,
   };
-  const scaledSub = (sub.size / device.canvas.w) * width;
+  const scaledSub = (sub.size / textBase) * width;
 
   // Keep text legible on ANY background (incl. dark-on-dark) with an adaptive
   // opposite-luminance halo, keyed to each line's own color.
@@ -170,7 +180,7 @@ export default function ScreenCanvas({
 
   const TextBlock = lscreen.heading || editingText === "heading" ? (
     <div
-      className="px-[8%] text-center"
+      className={creative ? (column ? "w-full" : "min-w-0 flex-1") : "px-[8%] text-center"}
       dir={rtl ? "rtl" : undefined}
       style={{
         fontFamily: font.stack,
@@ -205,6 +215,47 @@ export default function ScreenCanvas({
             textShadow: haloFor(sub.color, scaledSub),
           })
         : null}
+    </div>
+  ) : null;
+
+  // The single legacy mockup selects like a free-mode instance (id
+  // LEGACY_DEVICE_ID) so the toolbar can size it and take a screenshot;
+  // double-click opens the picker straight away.
+  const legacyMockup = !free && !photo && !live ? (
+    <div
+      data-device-id={LEGACY_DEVICE_ID}
+      className={`relative ${editableDevices ? "cursor-pointer" : ""}`}
+      title={editableDevices ? "Click to select · double-click to upload a screenshot" : undefined}
+      onPointerDown={
+        editableDevices
+          ? (e) => {
+              e.stopPropagation();
+              onSelectDevice?.(LEGACY_DEVICE_ID);
+            }
+          : undefined
+      }
+      onDoubleClick={
+        editableDevices && onUploadDevice
+          ? (e) => {
+              e.stopPropagation();
+              onUploadDevice(LEGACY_DEVICE_ID);
+            }
+          : undefined
+      }
+    >
+      <DeviceMockup
+        device={mockDevice}
+        image={screen.image}
+        width={sizeBase * (state.deviceScale ?? 0.78)}
+        orientation={creative ? "portrait" : state.orientation}
+        color={state.frameColor}
+        fit={state.deviceFit}
+        autoFill={state.autoFill !== false}
+        forceFillIpad={state.ipadForceFill !== false}
+      />
+      {editableDevices && selectedDevice === LEGACY_DEVICE_ID && (
+        <div className="pointer-events-none absolute -inset-1 rounded-[3px] border-2 border-brand-400" />
+      )}
     </div>
   ) : null;
 
@@ -262,7 +313,23 @@ export default function ScreenCanvas({
       )}
 
       {/* layout: headline above / below, device in the middle band (legacy flow) */}
-      {textPos === "top" && (
+      {/* creative asset: headline beside (banner) or above (portrait event page)
+          the phone, both inside the safe area so every device's crop keeps them */}
+      {creative && (
+        <div
+          className="absolute z-20 flex items-center justify-center"
+          style={{
+            ...safe,
+            gap: width * 0.025,
+            flexDirection: column ? "column" : rtl ? "row-reverse" : "row",
+          }}
+        >
+          {TextBlock}
+          {legacyMockup && <div className="relative z-10 shrink-0">{legacyMockup}</div>}
+        </div>
+      )}
+
+      {!creative && textPos === "top" && (
         <div className="relative z-20 pt-[8%] w-full flex justify-center">{TextBlock}</div>
       )}
 
@@ -270,49 +337,10 @@ export default function ScreenCanvas({
         className="relative z-10 flex-1 w-full flex items-center justify-center"
         style={{ paddingTop: textPos === "bottom" ? "6%" : 0 }}
       >
-        {!free && !photo && !live && (
-          // The single legacy mockup selects like a free-mode instance (id
-          // LEGACY_DEVICE_ID) so the toolbar can size it and take a screenshot;
-          // double-click opens the picker straight away.
-          <div
-            data-device-id={LEGACY_DEVICE_ID}
-            className={`relative ${editableDevices ? "cursor-pointer" : ""}`}
-            title={editableDevices ? "Click to select · double-click to upload a screenshot" : undefined}
-            onPointerDown={
-              editableDevices
-                ? (e) => {
-                    e.stopPropagation();
-                    onSelectDevice?.(LEGACY_DEVICE_ID);
-                  }
-                : undefined
-            }
-            onDoubleClick={
-              editableDevices && onUploadDevice
-                ? (e) => {
-                    e.stopPropagation();
-                    onUploadDevice(LEGACY_DEVICE_ID);
-                  }
-                : undefined
-            }
-          >
-            <DeviceMockup
-              device={device}
-              image={screen.image}
-              width={width * (state.deviceScale ?? 0.78)}
-              orientation={state.orientation}
-              color={state.frameColor}
-              fit={state.deviceFit}
-              autoFill={state.autoFill !== false}
-              forceFillIpad={state.ipadForceFill !== false}
-            />
-            {editableDevices && selectedDevice === LEGACY_DEVICE_ID && (
-              <div className="pointer-events-none absolute -inset-1 rounded-[3px] border-2 border-brand-400" />
-            )}
-          </div>
-        )}
+        {!creative && legacyMockup}
       </div>
 
-      {textPos === "bottom" && (
+      {!creative && textPos === "bottom" && (
         <div className="relative z-20 pb-[8%] w-full flex justify-center">{TextBlock}</div>
       )}
 
@@ -347,6 +375,7 @@ export default function ScreenCanvas({
         <DevicesLayer
           devices={devices}
           width={width}
+          sizeBase={sizeBase}
           getDevice={getDevice}
           defaultColor={state.frameColor}
           autoFill={state.autoFill !== false}
@@ -373,6 +402,20 @@ export default function ScreenCanvas({
           editRequest={editRequest}
         />
       ) : null}
+
+      {/* editor-only safe-area guide — never rasterized into an export */}
+      {safe && !exporting && (editableElements || editableDevices || editableText) && (
+        <div
+          aria-hidden="true"
+          data-safe-area
+          className="pointer-events-none absolute z-40 rounded-[2px] border border-dashed border-amber-300/80"
+          style={safe}
+        >
+          <span className="absolute bottom-full left-0 mb-0.5 whitespace-nowrap rounded bg-amber-300/90 px-1 text-[9px] font-semibold leading-tight text-ink-900">
+            Safe area
+          </span>
+        </div>
+      )}
     </div>
   );
 }

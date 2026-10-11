@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Smartphone, Plus, Copy, Trash2, X, Box, Upload, Boxes } from "lucide-react";
-import { DEVICES, getDevice } from "../lib/devices";
+import { Smartphone, Plus, Copy, Trash2, X, Box, Upload, Boxes, Megaphone, CalendarDays } from "lucide-react";
+import { DEVICES, creativeGroup, getDevice, isCreative, mockupDeviceId } from "../lib/devices";
 import { orientedCanvas, isFreeMode, deviceTransform, FRAME_COLORS, projectFit } from "../lib/deviceLayout";
 import { LIVE3D_MATERIALS } from "../lib/live3d";
 
@@ -111,6 +111,38 @@ export function FrameGrid({ activeId, onPick }) {
       ))}
     </div>
   );
+}
+
+// App Store creative assets: the product-page header + search-results card
+// (iOS 27+) and In-App Event media. Picked like a screenshot size; they replace it.
+const CREATIVE_GROUPS = [
+  { id: "placement", label: "App Store creative assets · iOS 27", Icon: Megaphone },
+  { id: "event", label: "In-App Events", Icon: CalendarDays },
+];
+
+export function CreativeGrid({ activeId, onPick }) {
+  return CREATIVE_GROUPS.map(({ id, label, Icon }) => (
+    <div key={id}>
+      <p className="label flex items-center gap-1.5"><Icon size={13} /> {label}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {creativeGroup(id).map((d) => (
+          <button
+            key={d.id}
+            onClick={() => onPick(d.id)}
+            title={d.name}
+            className={`rounded-xl border p-3 text-left text-sm transition ${
+              activeId === d.id
+                ? "border-brand-500 bg-brand-500/10 text-white"
+                : "border-white/10 bg-white/[0.02] text-slate-300 hover:border-white/20"
+            }`}
+          >
+            <p className="font-semibold">{d.short}</p>
+            <p className="text-[11px] text-slate-500">{d.canvas.w}×{d.canvas.h}{d.pngOnly ? " · PNG" : ""}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  ));
 }
 
 function Live3DSection({
@@ -319,6 +351,8 @@ export default function DevicePanel({
   const devices = free ? screen.devices : [];
   const selected = free ? devices.find((d) => d.id === selectedDevice) : null;
   const out = orientedCanvas(getDevice(state.deviceId), state.orientation);
+  const creative = isCreative(state.deviceId);
+  const event = creative && getDevice(state.deviceId).group === "event";
 
   return (
     <div className="space-y-6">
@@ -328,8 +362,30 @@ export default function DevicePanel({
           <p className="label mb-0">Screenshot size</p>
           <span className="text-[11px] text-slate-500">{out.w}×{out.h}</span>
         </div>
-        <OrientationToggle value={state.orientation} onChange={(o) => update({ orientation: o })} />
+        {!creative && <OrientationToggle value={state.orientation} onChange={(o) => update({ orientation: o })} />}
         <FrameGrid activeId={state.deviceId} onPick={(id) => update({ deviceId: id })} />
+        <CreativeGrid activeId={state.deviceId} onPick={(id) => update({ deviceId: id })} />
+        {creative && (
+          <div className="space-y-3 rounded-xl border border-amber-300/30 bg-amber-300/5 p-3">
+            {event ? (
+              <p className="text-[11px] text-slate-300">
+                The App Store prints your event&apos;s name and description with this media, so keep artwork text
+                minimal and inside the dashed <b>safe area</b>. Video must run 15–30 s. Upload it in App Store
+                Connect → your app → In-App Events → Event media.
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-300">
+                One image covers every iPhone and iPad, and each crops the edges differently — keep text and your
+                focal point inside the dashed <b>safe area</b>. No transparency; shows on iOS 27 and later.
+                Upload it in App Store Connect → your app → Product Page Information → Header and Search Results.
+              </p>
+            )}
+            <div>
+              <p className="label">Mockup device</p>
+              <FrameGrid activeId={mockupDeviceId(state)} onPick={(id) => update({ mockupDeviceId: id })} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ---- photoreal 3D frame ---- */}

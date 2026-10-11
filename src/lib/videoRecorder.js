@@ -81,6 +81,7 @@ function drawCover(ctx, img, W, H, scale, panY, alpha) {
  */
 export async function recordReel({
   images, width, height, perScreenMs = 2500, transitionMs = 600, fps = 30, audio = null, onProgress,
+  videoBitsPerSecond = 8_000_000,
 }) {
   if (!videoSupported()) throw new Error("video-unsupported");
   if (!images?.length) throw new Error("video-empty");
@@ -107,7 +108,7 @@ export async function recordReel({
   );
   const rec = new MediaRecorder(stream, {
     ...(mime ? { mimeType: mime } : {}),
-    videoBitsPerSecond: 8_000_000,
+    videoBitsPerSecond,
     audioBitsPerSecond: 128_000,
   });
   const chunks = [];

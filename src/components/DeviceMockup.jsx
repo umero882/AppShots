@@ -300,6 +300,7 @@ function DeviceButtons({ layout, w, h, railPx, color }) {
 export function DevicesLayer({
   devices = [],
   width,
+  sizeBase = null, // length `scale` multiplies (defaults to the canvas width)
   getDevice,
   defaultColor = null,
   autoFill = false,
@@ -390,7 +391,7 @@ export function DevicesLayer({
       )}
       {devices.map((d) => {
         const device = resolve(d.deviceId);
-        const elW = width * d.scale;
+        const elW = (sizeBase ?? width) * d.scale;
         const color = frameColorOf(d, defaultColor, device);
         const selected = editable && selectedId === d.id;
         return (

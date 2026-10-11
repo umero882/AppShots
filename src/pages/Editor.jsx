@@ -47,9 +47,10 @@ import ScreenCanvas from "../components/ScreenCanvas";
 import DevicePanel from "../components/DevicePanel";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
-import { getDevice } from "../lib/devices";
+import { getDevice, isCreative, mockupDeviceId } from "../lib/devices";
 import {
   orientedCanvas, makeDeviceInstance, duplicateDeviceInstance, isFreeMode, screenDevices, LEGACY_DEVICE_ID,
+  creativeReelHold,
 } from "../lib/deviceLayout";
 import {
   makeElement, makeEmojiElement, makeIconElement, makeImageElement, makeTextElement, elementSvg,
@@ -90,6 +91,18 @@ const STORE_SIZE_EXPORT = [
   "iphone-69", "iphone-65", "iphone-55", "ipad-13", "ipad-11", // App Store
   "pixel-8", "android-tablet",                                  // Google Play
 ];
+
+// What "All sizes" exports while a creative-asset canvas is active: one file per
+// placement in that canvas's group — header 21:9 + search 3:2 + universal 16:9,
+// or the In-App Event card 16:9 + details page 9:16.
+const CREATIVE_SIZE_EXPORT = {
+  placement: ["aso-header", "aso-search", "aso-universal"],
+  event: ["iae-card", "iae-detail"],
+};
+
+// Mockups on a creative banner are upright phones; a store screenshot's
+// mockups follow the project orientation.
+const mockupOrientation = (s) => (isCreative(s.deviceId) ? "portrait" : s.orientation ?? "portrait");
 
 /** Does a drag / drop event carry files (as opposed to text or an element)? */
 function hasFiles(e) {
@@ -151,6 +164,8 @@ export default function Editor() {
     try { localStorage.setItem("appshots:zoom", String(v)); } catch { /* private mode */ }
   }, []);
   const [format, setFormat] = useState("png"); // png | jpeg
+  // Apple takes the 16:9 universal creative asset as .png only.
+  const formatFor = (dev) => (dev?.pngOnly ? "png" : format);
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [locale, setLocale] = useState(BASE_LOCALE); // active preview/edit language
@@ -581,10 +596,10 @@ export default function Editor() {
   function devicesOf(prev, s) {
     if (isFreeMode(s)) return s.devices;
     return [
-      makeDeviceInstance(prev.deviceId, {
+      makeDeviceInstance(mockupDeviceId(prev), {
         image: s.image ?? null,
         scale: prev.deviceScale ?? 0.78,
-        orientation: prev.orientation ?? "portrait",
+        orientation: mockupOrientation(prev),
       }),
     ];
   }
@@ -601,10 +616,10 @@ export default function Editor() {
   function promoteToFree() {
     const s = state.screens[activeScreen];
     if (isFreeMode(s)) return s.devices[0]?.id;
-    const inst = makeDeviceInstance(state.deviceId, {
+    const inst = makeDeviceInstance(mockupDeviceId(state), {
       image: s.image ?? null,
       scale: state.deviceScale ?? 0.78,
-      orientation: state.orientation ?? "portrait",
+      orientation: mockupOrientation(state),
       fit: state.deviceFit,
     });
     update((prev) => ({
@@ -620,7 +635,7 @@ export default function Editor() {
   function addDevice(deviceId) {
     const inst = makeDeviceInstance(deviceId, {
       scale: state.deviceScale ?? 0.78,
-      orientation: state.orientation ?? "portrait",
+      orientation: mockupOrientation(state),
       fit: state.deviceFit,
       x: 0.5,
       y: 0.5,
@@ -688,10 +703,10 @@ export default function Editor() {
     const s = state.screens[activeScreen];
     if (!isFreeMode(s)) {
       const inst = {
-        ...makeDeviceInstance(state.deviceId, {
+        ...makeDeviceInstance(mockupDeviceId(state), {
           image: s.image ?? null,
           scale: state.deviceScale ?? 0.78,
-          orientation: state.orientation ?? "portrait",
+          orientation: mockupOrientation(state),
         }),
         ...pose,
       };
@@ -1050,13 +1065,15 @@ export default function Editor() {
     setSelectedDevice(null);
     await new Promise((r) => setTimeout(r, 60)); // let selection chrome clear
     try {
-      const oc = orientedCanvas(getDevice(state.deviceId), state.orientation);
+      const dev = getDevice(state.deviceId);
+      const oc = orientedCanvas(dev, state.orientation);
+      const fmt = formatFor(dev);
       await exportNode(canvasRef.current, oc.w, {
         filename: `${slug(name)}-${activeScreen + 1}`,
-        format,
+        format: fmt,
         targetHeight: oc.h,
       });
-      trackExport({ format, screens: 1, sizes: 1 });
+      trackExport({ format: fmt, screens: 1, sizes: 1 });
     } finally {
       setExporting(false);
     }
@@ -1081,9 +1098,11 @@ export default function Editor() {
     setExporting(true);
     setSelectedEl(null);
     setSelectedDevice(null);
-    const oc = orientedCanvas(getDevice(state.deviceId), state.orientation);
+    const dev = getDevice(state.deviceId);
+    const oc = orientedCanvas(dev, state.orientation);
     const outW = oc.w;
-    const ext = format === "jpeg" ? "jpg" : "png";
+    const fmt = formatFor(dev);
+    const ext = fmt === "jpeg" ? "jpg" : "png";
     // Export every screen for every target locale. With one locale, files sit at
     // the zip root; with several, each locale gets its own folder.
     const locales = projectLocales(state);
@@ -1099,7 +1118,7 @@ export default function Editor() {
           // wait a tick for the canvas to re-render the active screen + locale
           await new Promise((r) => setTimeout(r, 350));
           if (canvasRef.current) {
-            const dataUrl = await renderNode(canvasRef.current, outW, { format, targetHeight: oc.h });
+            const dataUrl = await renderNode(canvasRef.current, outW, { format: fmt, targetHeight: oc.h });
             const base = `${slug(name)}-${i + 1}.${ext}`;
             files.push({ name: multi ? `${loc}/${base}` : base, data: await dataUrlToBytes(dataUrl) });
           }
@@ -1121,23 +1140,31 @@ export default function Editor() {
   // "Auto-scale to all store sizes": render the current design across every
   // required App Store + Google Play device size and bundle them in one ZIP,
   // grouped by device folder. Reuses the exact-dimension/no-alpha pipeline.
+  // On a creative-asset canvas it renders every creative placement instead —
+  // screenshots and banners are different designs, never mixed in one pack.
   async function exportAllSizes() {
     setExporting(true);
     setSelectedEl(null);
     setSelectedDevice(null);
-    const ext = format === "jpeg" ? "jpg" : "png";
+    const creativePack = isCreative(state.deviceId);
+    const sizes = creativePack
+      ? CREATIVE_SIZE_EXPORT[getDevice(state.deviceId).group || "placement"]
+      : STORE_SIZE_EXPORT;
     const origScreen = activeScreen;
     let tailMsg = "";
     try {
       const files = [];
       let done = 0;
       let failed = 0;
-      const total = STORE_SIZE_EXPORT.length * state.screens.length;
-      for (const did of STORE_SIZE_EXPORT) {
+      const total = sizes.length * state.screens.length;
+      for (const did of sizes) {
         const dev = getDevice(did);
         const oc = orientedCanvas(dev, state.orientation);
+        const fmt = formatFor(dev);
+        const ext = fmt === "jpeg" ? "jpg" : "png";
         setExportDeviceId(did);
-        const folder = `${dev.store === "ios" ? "app-store" : "google-play"}/${slug(dev.name)}-${oc.w}x${oc.h}`;
+        const store = isCreative(dev) ? "app-store-creative" : dev.store === "ios" ? "app-store" : "google-play";
+        const folder = `${store}/${slug(dev.name)}-${oc.w}x${oc.h}`;
         for (let i = 0; i < state.screens.length; i++) {
           setActiveScreen(i);
           setExportMsg(`Rendering ${dev.name} · ${done + 1}/${total}`);
@@ -1150,7 +1177,7 @@ export default function Editor() {
           // what succeeds and report the rest.
           try {
             if (canvasRef.current) {
-              const dataUrl = await renderNode(canvasRef.current, oc.w, { format, targetHeight: oc.h });
+              const dataUrl = await renderNode(canvasRef.current, oc.w, { format: fmt, targetHeight: oc.h });
               files.push({ name: `${folder}/${slug(name)}-${i + 1}.${ext}`, data: await dataUrlToBytes(dataUrl) });
             }
           } catch {
@@ -1161,9 +1188,9 @@ export default function Editor() {
       }
       if (files.length) {
         const url = URL.createObjectURL(createZip(files));
-        triggerDownload(url, `${slug(name)}-all-store-sizes.zip`);
+        triggerDownload(url, `${slug(name)}-${creativePack ? "creative-assets" : "all-store-sizes"}.zip`);
         setTimeout(() => URL.revokeObjectURL(url), 5000);
-        trackExport({ format: "all-sizes", screens: state.screens.length, sizes: STORE_SIZE_EXPORT.length });
+        trackExport({ format: creativePack ? "creative-sizes" : "all-sizes", screens: state.screens.length, sizes: sizes.length });
         if (failed) {
           tailMsg = `Exported ${files.length}/${total} — ${failed} failed`;
         }
@@ -1219,11 +1246,26 @@ export default function Editor() {
       setTimeout(() => setVideoMsg(""), 4000);
       return;
     }
+    const dev = getDevice(state.deviceId);
+    if (isCreative(dev) && !dev.video) {
+      setVideoMsg("The universal 16:9 asset is image-only — pick Header or Search results for video.");
+      setTimeout(() => setVideoMsg(""), 5000);
+      return;
+    }
     setExporting(true);
     setSelectedEl(null);
     setSelectedDevice(null);
-    const oc = orientedCanvas(getDevice(state.deviceId), state.orientation);
-    const { width: vw, height: vh } = videoSize(oc.w, oc.h);
+    const oc = orientedCanvas(dev, state.orientation);
+    // Creative-asset videos must be the exact placement size (header 3840x1646,
+    // search 3:2) and 5–30 s long — Apple rejects anything else.
+    const { width: vw, height: vh } = videoSize(oc.w, oc.h, dev.video?.maxLong);
+    const reelTiming = isCreative(dev)
+      ? {
+          perScreenMs: creativeReelHold(state.screens.length, { minMs: dev.video.minMs }),
+          // 8 Mbps smears a 4K header; scale the bitrate with the pixel count.
+          videoBitsPerSecond: Math.max(8_000_000, Math.round((vw * vh) / (1920 * 1080) * 8_000_000)),
+        }
+      : {};
     const origScreen = activeScreen;
     try {
       setVideoMsg("Rendering screens…");
@@ -1237,6 +1279,7 @@ export default function Editor() {
         images,
         width: vw,
         height: vh,
+        ...reelTiming,
         audio: state.audio
           ? { data: state.audio.data, builtin: state.audio.builtin, volume: state.audio.volume ?? 0.7 }
           : null,
@@ -1264,6 +1307,8 @@ export default function Editor() {
   }
 
   const textPos = textPosFor(state.layoutId);
+  const pngOnly = !!getDevice(state.deviceId).pngOnly;
+  const outFormat = formatFor(getDevice(state.deviceId));
   // `exportDeviceId` transiently overrides the rendered device during a
   // multi-size ("all store sizes") export — never persisted to the project.
   const canvasState = { ...state, _textPos: textPos, deviceId: exportDeviceId || state.deviceId };
@@ -1342,8 +1387,10 @@ export default function Editor() {
               <button
                 key={f}
                 onClick={() => setFormat(f)}
-                className={`px-2.5 py-1.5 text-[11px] font-semibold uppercase transition ${
-                  format === f ? "bg-white/10 text-white" : "text-slate-400 hover:text-slate-200"
+                disabled={f === "jpeg" && pngOnly}
+                title={f === "jpeg" && pngOnly ? "Apple accepts the universal 16:9 asset as PNG only" : undefined}
+                className={`px-2.5 py-1.5 text-[11px] font-semibold uppercase transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                  outFormat === f ? "bg-white/10 text-white" : "text-slate-400 hover:text-slate-200"
                 }`}
               >
                 {f === "jpeg" ? "JPG" : "PNG"}
@@ -1367,7 +1414,13 @@ export default function Editor() {
             onClick={exportAllSizes}
             disabled={exporting}
             className="btn-ghost hidden lg:inline-flex"
-            title="Render this design in every required App Store + Google Play size and download as one .zip"
+            title={
+              isCreative(state.deviceId)
+                ? getDevice(state.deviceId).group === "event"
+                  ? "Render this design as In-App Event media (card 16:9 + details page 9:16) in one .zip"
+                  : "Render this design as every App Store creative asset (header 21:9, search 3:2, universal 16:9) in one .zip"
+                : "Render this design in every required App Store + Google Play size and download as one .zip"
+            }
           >
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Layers size={16} />}
             All sizes
@@ -1464,7 +1517,7 @@ export default function Editor() {
           </button>
           <button onClick={exportOne} disabled={exporting} className="btn-primary">
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            Export {format === "jpeg" ? "JPG" : "PNG"}
+            Export {outFormat === "jpeg" ? "JPG" : "PNG"}
           </button>
         </div>
       </header>

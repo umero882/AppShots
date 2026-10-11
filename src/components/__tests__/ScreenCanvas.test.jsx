@@ -66,3 +66,34 @@ describe("ScreenCanvas image background blur + overlay", () => {
     expect(plain).not.toContain("filter:blur(");
   });
 });
+
+describe("ScreenCanvas App Store creative asset (header / search results)", () => {
+  const banner = { ...state, deviceId: "aso-header" };
+  const headed = { ...defaultScreen(), heading: "Hello" };
+  const renderBanner = (props) =>
+    renderToStaticMarkup(<ScreenCanvas state={banner} screen={headed} width={840} {...props} />);
+
+  it("renders at the 21:9 header aspect", () => {
+    // 840 × 1646/3840 = 360.06…
+    expect(renderBanner()).toMatch(/height:360\.0\d*px/);
+  });
+  it("shows the safe-area guide while editing", () => {
+    expect(renderBanner({ editableElements: true })).toContain("data-safe-area");
+  });
+  it("never rasterizes the guide into an export or a thumbnail", () => {
+    expect(renderBanner({ editableElements: true, exporting: true })).not.toContain("data-safe-area");
+    expect(renderBanner()).not.toContain("data-safe-area");
+  });
+  it("store screenshots have no safe-area guide", () => {
+    expect(render({ editableElements: true })).not.toContain("data-safe-area");
+  });
+});
+
+describe("ScreenCanvas In-App Event details page", () => {
+  it("stacks the headline above the phone inside the safe area", () => {
+    const html = renderToStaticMarkup(
+      <ScreenCanvas state={{ ...state, deviceId: "iae-detail" }} screen={{ ...defaultScreen(), heading: "Hi" }} width={300} />
+    );
+    expect(html).toContain("flex-direction:column");
+  });
+});

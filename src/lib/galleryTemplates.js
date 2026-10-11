@@ -1,5 +1,6 @@
 import { LAYOUTS, GRADIENTS } from "./templates";
 import { contrastRatio } from "./contrast";
+import { isCreative } from "./devices";
 import {
   mockDashboard, mockFeed, mockProfile, mockOnboarding,
   mockStats, mockChat, mockMusic, mockMap,
@@ -33,9 +34,13 @@ export function templateToProjectState(template) {
 
 export function applyTemplateStyle(prevState, template) {
   const { deviceId, layoutId, deviceScale, background, text } = template.style;
+  // Restyling an App Store creative asset keeps the banner canvas; the
+  // template's device becomes the phone drawn on it.
+  const creative = isCreative(prevState.deviceId);
   return {
     ...prevState,
-    deviceId,
+    deviceId: creative ? prevState.deviceId : deviceId,
+    ...(creative ? { mockupDeviceId: deviceId } : {}),
     layoutId,
     deviceScale,
     background: { ...background },
