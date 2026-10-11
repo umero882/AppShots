@@ -57,3 +57,26 @@ describe("DevicePanel — free mode (multiple mockups)", () => {
     expect(html).not.toContain("Position &amp; tilt freely"); // no promote button in free mode
   });
 });
+
+describe("DevicePanel — output kind tabs", () => {
+  it("offers Screenshots / Header & Search / In-App Events up front", () => {
+    const html = render({ screen: defaultScreen() });
+    expect(html).toContain("Screenshots");
+    expect(html).toContain("Header &amp; Search");
+    expect(html).toContain("In-App Events");
+  });
+  it("opens on the tab of the project's current output size", () => {
+    const shots = render({ screen: defaultScreen() });
+    expect(shots).toContain("iPhone 6.9");
+    expect(shots).not.toContain("Header 21:9");
+
+    const banner = render({ screen: defaultScreen(), state: { ...defaultProjectState(), deviceId: "aso-header" } });
+    expect(banner).toContain("Header 21:9");
+    expect(banner).toContain("Universal 16:9");
+    expect(banner).toContain("Mockup device");
+
+    const event = render({ screen: defaultScreen(), state: { ...defaultProjectState(), deviceId: "iae-card" } });
+    expect(event).toContain("Event details 9:16");
+    expect(event).not.toContain("Header 21:9");
+  });
+});

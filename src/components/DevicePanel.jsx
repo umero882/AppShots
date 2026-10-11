@@ -120,8 +120,8 @@ const CREATIVE_GROUPS = [
   { id: "event", label: "In-App Events", Icon: CalendarDays },
 ];
 
-export function CreativeGrid({ activeId, onPick }) {
-  return CREATIVE_GROUPS.map(({ id, label, Icon }) => (
+export function CreativeGrid({ activeId, onPick, only = null }) {
+  return CREATIVE_GROUPS.filter((g) => !only || g.id === only).map(({ id, label, Icon }) => (
     <div key={id}>
       <p className="label flex items-center gap-1.5"><Icon size={13} /> {label}</p>
       <div className="grid grid-cols-2 gap-2">
@@ -143,6 +143,37 @@ export function CreativeGrid({ activeId, onPick }) {
       </div>
     </div>
   ));
+}
+
+// What the "Screenshot size" picker shows. Creative assets live in their own
+// tabs so they're visible up front instead of below the whole device list.
+const OUTPUT_KINDS = [
+  { id: "screens", label: "Screenshots" },
+  { id: "placement", label: "Header & Search" },
+  { id: "event", label: "In-App Events" },
+];
+
+/** The picker tab a project's output size belongs to. */
+export function outputKindOf(deviceId) {
+  return isCreative(deviceId) ? getDevice(deviceId).group || "placement" : "screens";
+}
+
+function OutputKindTabs({ value, onChange }) {
+  return (
+    <div className="flex overflow-hidden rounded-lg border border-white/10">
+      {OUTPUT_KINDS.map((k) => (
+        <button
+          key={k.id}
+          onClick={() => onChange(k.id)}
+          className={`flex-1 px-1.5 py-1.5 text-[11px] font-semibold transition ${
+            value === k.id ? "bg-brand-600 text-white" : "bg-white/5 text-slate-300 hover:text-white"
+          }`}
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function Live3DSection({
@@ -347,6 +378,9 @@ export default function DevicePanel({
   live3dModelNames, live3dModelError, onUploadModel, onRemoveModel, onChangeLive3dModel,
 }) {
   const [adding, setAdding] = useState(false);
+  // Picker tab; follows the project's output size until the user switches.
+  const [kindTab, setKindTab] = useState(null);
+  const kind = kindTab || outputKindOf(state.deviceId);
   const free = isFreeMode(screen);
   const devices = free ? screen.devices : [];
   const selected = free ? devices.find((d) => d.id === selectedDevice) : null;
@@ -362,9 +396,15 @@ export default function DevicePanel({
           <p className="label mb-0">Screenshot size</p>
           <span className="text-[11px] text-slate-500">{out.w}×{out.h}</span>
         </div>
-        {!creative && <OrientationToggle value={state.orientation} onChange={(o) => update({ orientation: o })} />}
-        <FrameGrid activeId={state.deviceId} onPick={(id) => update({ deviceId: id })} />
-        <CreativeGrid activeId={state.deviceId} onPick={(id) => update({ deviceId: id })} />
+        <OutputKindTabs value={kind} onChange={setKindTab} />
+        {!creative && kind === "screens" && (
+          <OrientationToggle value={state.orientation} onChange={(o) => update({ orientation: o })} />
+        )}
+        {kind === "screens" ? (
+          <FrameGrid activeId={state.deviceId} onPick={(id) => update({ deviceId: id })} />
+        ) : (
+          <CreativeGrid only={kind} activeId={state.deviceId} onPick={(id) => update({ deviceId: id })} />
+        )}
         {creative && (
           <div className="space-y-3 rounded-xl border border-amber-300/30 bg-amber-300/5 p-3">
             {event ? (
