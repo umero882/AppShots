@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  DEVICES, CREATIVE_FORMATS, getDevice, isCreative, mockupDeviceId, textBaseOf, creativeGroup,
+  DEVICES, CREATIVE_FORMATS, getDevice, isCreative, mockupDeviceId, textBaseOf, creativeGroup, copyPlacementOf,
 } from "../devices.js";
 import {
   orientedCanvas, mockupBase, safeAreaPct, creativeReelHold, screenDevices,
@@ -171,5 +171,17 @@ describe("In-App Event media", () => {
       expect(tl.total).toBeGreaterThanOrEqual(15000 - 1);
       expect(tl.total).toBeLessThanOrEqual(30000 + 1);
     }
+  });
+});
+
+describe("AI copy placement per output size", () => {
+  it("maps each canvas to its copy brief", () => {
+    expect(copyPlacementOf("iphone-69")).toBe("screenshot");
+    expect(copyPlacementOf("aso-header")).toBe("header");
+    expect(copyPlacementOf("aso-search")).toBe("search");
+    expect(copyPlacementOf("aso-search-min")).toBe("search");
+    expect(copyPlacementOf("aso-universal")).toBe("universal");
+    expect(copyPlacementOf("iae-card")).toBe("event");
+    expect(copyPlacementOf("iae-detail")).toBe("event");
   });
 });

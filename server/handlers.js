@@ -11,7 +11,7 @@
  */
 import {
   buildPrompt, parseConcepts, extractHexColors, buildTranslatePrompt, parseTranslations,
-  buildCopyPrompt, parseCopy, COPY_TONES, COPY_MODES, COPY_LIMITS,
+  buildCopyPrompt, parseCopy, COPY_TONES, COPY_MODES, COPY_LIMITS, COPY_PLACEMENTS,
 } from "../src/lib/aiCore.js";
 
 const AI_MODEL_DEFAULT = "claude-haiku-4-5-20251001";
@@ -203,7 +203,7 @@ const str = (v, max) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().s
  * Claude as an image block so the copy reflects what the screen actually does.
  */
 export async function copy({
-  appName, brief, tone, language, mode, screens, activeIndex, image, model,
+  appName, brief, tone, language, mode, screens, activeIndex, image, model, placement,
 } = {}) {
   if (!env("ANTHROPIC_API_KEY")) throw new Error("no-llm-key");
 
@@ -242,6 +242,7 @@ export async function copy({
     activeIndex: idx,
     count,
     hasImage: !!imageBlock,
+    placement: Object.hasOwn(COPY_PLACEMENTS, placement) ? placement : "screenshot",
   });
 
   const key = env("ANTHROPIC_API_KEY");

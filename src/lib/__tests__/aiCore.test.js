@@ -13,6 +13,7 @@ import {
   normalizeCopyIdea,
   COPY_TONES,
   COPY_LIMITS,
+  COPY_PLACEMENTS,
 } from "../aiCore.js";
 
 describe("buildTranslatePrompt", () => {
@@ -235,5 +236,50 @@ describe("parseCopy", () => {
     expect(() => parseCopy("not json", 1)).toThrow("ai-parse");
     expect(() => parseCopy("", 1)).toThrow("ai-parse");
     expect(() => parseCopy(null, 1)).toThrow("ai-parse");
+  });
+});
+
+describe("buildCopyPrompt — App Store creative placements", () => {
+  const screens = [{ heading: "Grow anything", subheading: "" }, { heading: "", subheading: "" }];
+
+  it("default / unknown placement keeps the screenshot-caption prompt", () => {
+    for (const placement of [undefined, "screenshot", "nope"]) {
+      const p = buildCopyPrompt({ brief: "x", placement });
+      expect(p).toContain("screenshot captions");
+      expect(p).toContain("at most 40 characters");
+    }
+  });
+
+  it("header gets its own brief and tighter length rules", () => {
+    const p = buildCopyPrompt({ brief: "x", placement: "header", screens });
+    expect(p).toContain("Product page header");
+    expect(p).toContain("at most 28 characters");
+    expect(p).not.toContain("screenshot captions");
+    expect(p).toContain("THE VERSIONS (2 alternative versions");
+  });
+
+  it("search and universal get their own rules", () => {
+    expect(buildCopyPrompt({ brief: "x", placement: "search" })).toContain("search results");
+    expect(buildCopyPrompt({ brief: "x", placement: "universal" })).toContain("at most 24 characters");
+  });
+
+  it("event copy must not repeat the event name the store already shows", () => {
+    const p = buildCopyPrompt({ brief: "x", placement: "event" });
+    expect(p).toContain("In-App Event");
+    expect(p).toContain("must NOT repeat");
+  });
+
+  it("set mode on a creative asks for A/B alternatives, not a story", () => {
+    const p = buildCopyPrompt({ brief: "x", mode: "set", placement: "header", screens });
+    expect(p).toContain("EACH of the 2 versions");
+    expect(p).toContain("not a story");
+    expect(p).not.toContain("tells one story");
+  });
+
+  it("every placement has a name, brief and rules", () => {
+    for (const [id, v] of Object.entries(COPY_PLACEMENTS)) {
+      if (id === "screenshot") continue;
+      expect(v.name && v.about && v.rules).toBeTruthy();
+    }
   });
 });

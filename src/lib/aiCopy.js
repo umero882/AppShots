@@ -7,7 +7,7 @@
  */
 import { apiFetch } from "./apiClient";
 
-export { COPY_TONES, COPY_LIMITS } from "./aiCore";
+export { COPY_TONES, COPY_LIMITS, COPY_PLACEMENTS } from "./aiCore";
 
 // Long side of the screenshot sent for vision. 800px is plenty to read UI text
 // and keeps the request ~100 KB; a raw 3x iPhone capture would be 5–10 MB.
@@ -29,10 +29,11 @@ export async function suggestCopy({
   activeIndex = 0,
   image = null,
   model,
+  placement = "screenshot", // see COPY_PLACEMENTS — header / search / universal / event
 } = {}) {
   return apiFetch("/api/ai/copy", {
     method: "POST",
-    body: { appName, brief, tone, language, mode, screens, activeIndex, image: image || undefined, model },
+    body: { appName, brief, tone, language, mode, screens, activeIndex, image: image || undefined, model, placement },
   });
 }
 

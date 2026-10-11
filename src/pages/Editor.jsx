@@ -32,7 +32,7 @@ import { trackExport, track } from "../lib/analytics";
 import {
   getCapabilities, suggestBackgrounds, generateImage, aiGradientCss, AI_MODELS, translateTexts,
 } from "../lib/aiBackground";
-import { suggestCopy, shrinkForVision, COPY_TONES, COPY_LIMITS } from "../lib/aiCopy";
+import { suggestCopy, shrinkForVision, COPY_TONES, COPY_LIMITS, COPY_PLACEMENTS } from "../lib/aiCopy";
 import {
   BASE_LOCALE, LOCALES, localeName, projectLocales, localizeScreen, setLocaleText,
   baseStrings, applyLocaleStrings,
@@ -47,7 +47,7 @@ import ScreenCanvas from "../components/ScreenCanvas";
 import DevicePanel from "../components/DevicePanel";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
-import { getDevice, isCreative, mockupDeviceId } from "../lib/devices";
+import { getDevice, isCreative, mockupDeviceId, copyPlacementOf } from "../lib/devices";
 import {
   orientedCanvas, makeDeviceInstance, duplicateDeviceInstance, isFreeMode, screenDevices, LEGACY_DEVICE_ID,
   creativeReelHold,
@@ -2537,6 +2537,9 @@ function AiCopySection({ state, update, screen, screenIndex, appName, locale, on
   const [applied, setApplied] = useState(null); // idea index just used, or "all"
 
   const brief = state.copyBrief || "";
+  // Header / search / event canvases get their own brief + length rules.
+  const placement = copyPlacementOf(state.deviceId);
+  const place = COPY_PLACEMENTS[placement];
   const shot = screenDevices(screen, state).find((d) => d?.image)?.image || null;
   const language = localeName(locale);
   // Existing copy in the language being edited, placeholders blanked, index-aligned
@@ -2565,9 +2568,10 @@ function AiCopySection({ state, update, screen, screenIndex, appName, locale, on
         screens,
         activeIndex: screenIndex,
         image,
+        placement,
       });
       setResult({ mode, ideas, forIndex: screenIndex });
-      track("ai_copy", { mode, tone, with_image: !!image, screens: screens.length });
+      track("ai_copy", { mode, tone, with_image: !!image, screens: screens.length, placement });
     } catch (e) {
       setError(
         e.message === "no-llm-key"
@@ -2619,6 +2623,12 @@ function AiCopySection({ state, update, screen, screenIndex, appName, locale, on
         </p>
         {locale !== BASE_LOCALE && <span className="text-[10px] text-slate-500">writes in {language}</span>}
       </div>
+      {place && (
+        <p className="text-[11px] text-slate-400">
+          Writing for the <b className="text-slate-200">{place.name}</b> — shorter lines sized for its safe area
+          {placement === "event" ? ", without repeating the event name the App Store already shows" : ""}.
+        </p>
+      )}
 
       {caps && !hasAi && (
         <div className="flex gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">

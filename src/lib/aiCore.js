@@ -217,6 +217,56 @@ export const COPY_TONES = [
   { id: "minimal", name: "Minimal", hint: "as few words as possible" },
 ];
 
+/**
+ * Where the copy will appear. Each App Store surface reads differently, so the
+ * writer gets its own brief and length rules per placement. "screenshot" is
+ * the default (store screenshot captions) and keeps the original prompt.
+ */
+export const COPY_PLACEMENTS = {
+  screenshot: null,
+  header: {
+    name: "Product page header",
+    about:
+      "the hero banner at the very top of an App Store product page (iOS 27), shown " +
+      "above the app icon and name. Every iPhone and iPad crops it to a small centre " +
+      "area, so the line must be short. It sets the tone for the whole page: one " +
+      "brand-level promise, not a feature list.",
+    rules:
+      "headline 2–5 words, at most 28 characters, no trailing period, no emoji. " +
+      "Subheading is one short line under 50 characters, or an empty string.",
+  },
+  search: {
+    name: "Search results card",
+    about:
+      "the creative card shown under the app in App Store search results (iOS 27), in " +
+      "place of its screenshots. Shoppers compare several apps at a glance, so state " +
+      "the single clearest reason to tap this one.",
+    rules:
+      "headline 2–5 words, at most 30 characters, no trailing period, no emoji. " +
+      "Subheading is one short line under 50 characters, or an empty string.",
+  },
+  universal: {
+    name: "Universal header + search image",
+    about:
+      "one image used both as the App Store product-page header and the search " +
+      "results card (iOS 27). Its safe area is tiny, so every word must earn its place.",
+    rules:
+      "headline 2–4 words, at most 24 characters, no trailing period, no emoji. " +
+      "Subheading under 40 characters, usually an empty string.",
+  },
+  event: {
+    name: "In-App Event media",
+    about:
+      "the artwork of an App Store In-App Event card / details page. The App Store " +
+      "already prints the event name and short description next to it, so the " +
+      "artwork must NOT repeat them — at most a tiny hook (a date, a reward, a " +
+      "feeling) that adds to them.",
+    rules:
+      "headline 1–4 words, at most 24 characters, no trailing period, no emoji. " +
+      "Subheading under 30 characters (e.g. a date or reward) or an empty string.",
+  },
+};
+
 /** "screen" = alternatives for one screen; "set" = one idea per screen, in order. */
 export const COPY_MODES = ["screen", "set"];
 
@@ -264,16 +314,26 @@ export function buildCopyPrompt({
   activeIndex = 0,
   count = COPY_LIMITS.alternatives,
   hasImage = false,
+  placement = "screenshot",
 } = {}) {
   const voice = COPY_TONES.find((t) => t.id === tone) || COPY_TONES[0];
   const total = screens.length || 1;
   const parts = [];
+  // A creative asset (header / search / event) — null for store screenshots.
+  const place = COPY_PLACEMENTS[placement] || null;
 
-  parts.push(
-    "You write App Store / Google Play screenshot captions: the big headline over " +
-      "each screenshot and its optional supporting line. Captions sell one benefit " +
-      "per screen, in plain words a shopper skims in a second."
-  );
+  if (place) {
+    parts.push(
+      `You write the text for an App Store ${place.name}: ${place.about} ` +
+        "Use plain words a shopper reads in a second."
+    );
+  } else {
+    parts.push(
+      "You write App Store / Google Play screenshot captions: the big headline over " +
+        "each screenshot and its optional supporting line. Captions sell one benefit " +
+        "per screen, in plain words a shopper skims in a second."
+    );
+  }
   if (appName) parts.push(`\nAPP: ${appName}`);
   if (brief) parts.push(`ABOUT THE APP / THIS SCREEN: ${brief}`);
   if (hasImage) {
@@ -284,7 +344,11 @@ export function buildCopyPrompt({
   }
 
   if (screens.length) {
-    parts.push(`\nTHE SET (${total} screen${total === 1 ? "" : "s"}, in store order):`);
+    parts.push(
+      place
+        ? `\nTHE VERSIONS (${total} alternative version${total === 1 ? "" : "s"} of this one asset):`
+        : `\nTHE SET (${total} screen${total === 1 ? "" : "s"}, in store order):`
+    );
     screens.forEach((s, i) => {
       const here = mode === "screen" && i === activeIndex ? "  ← write for this one" : "";
       const sub = s.subheading ? ` / ${JSON.stringify(s.subheading)}` : "";
@@ -295,14 +359,28 @@ export function buildCopyPrompt({
   parts.push(`\nVOICE: ${voice.name} — ${voice.hint}.`);
   parts.push(`LANGUAGE: write in ${language}.`);
   parts.push(
-    "RULES: headline 2–6 words, at most 40 characters, no trailing period, no " +
-      "emoji, no exclamation marks unless the voice is Playful. Subheading is one " +
-      "short sentence under 80 characters, or an empty string when the headline " +
-      "stands alone. Never repeat the app name in the headline. Do not reuse a " +
-      "headline that already appears in the set."
+    place
+      ? `RULES: ${place.rules} No exclamation marks unless the voice is Playful. ` +
+          "Never repeat the app name in the headline. Do not reuse a headline that " +
+          "already appears in the versions."
+      : "RULES: headline 2–6 words, at most 40 characters, no trailing period, no " +
+          "emoji, no exclamation marks unless the voice is Playful. Subheading is one " +
+          "short sentence under 80 characters, or an empty string when the headline " +
+          "stands alone. Never repeat the app name in the headline. Do not reuse a " +
+          "headline that already appears in the set."
   );
 
-  if (mode === "set") {
+  if (mode === "set" && place) {
+    parts.push(
+      `\nWrite ONE headline + subheading for EACH of the ${total} versions, in order. ` +
+        "They are alternatives to test against each other, not a story — give each " +
+        "a different angle (outcome, feeling, feature, social proof)."
+    );
+    parts.push(
+      `Return ONLY a JSON array of exactly ${total} objects, no prose, no markdown ` +
+        `fences: [{ "heading": string, "subheading": string }, …] — index i is version i+1.`
+    );
+  } else if (mode === "set") {
     parts.push(
       `\nWrite ONE headline + subheading for EACH of the ${total} screens, in order, ` +
         "so the set tells one story: screen 1 states the core promise, the rest " +

@@ -180,6 +180,19 @@ describe("copy", () => {
     expect(out.ideas).toHaveLength(2);
   });
 
+  it("passes a known creative placement through to the prompt, ignores unknown ones", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    const texts = [];
+    vi.stubGlobal("fetch", vi.fn(async (url, opts) => {
+      texts.push(JSON.parse(opts.body).messages[0].content[0].text);
+      return claudeOk(IDEAS);
+    }));
+    await copy({ brief: "x", placement: "header" });
+    await copy({ brief: "x", placement: "__proto__" });
+    expect(texts[0]).toContain("Product page header");
+    expect(texts[1]).toContain("screenshot captions");
+  });
+
   it("attaches a valid screenshot as an image block before the text", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
     const fetchMock = vi.fn(async (url, opts) => {

@@ -176,6 +176,7 @@ export const CREATIVE_FORMATS = [
     textBase: 1300,
     video: { maxLong: 3840 },
     mockupK: 0.36,
+    copy: "header",
     mockup: "iphone-69",
   },
   {
@@ -190,6 +191,7 @@ export const CREATIVE_FORMATS = [
     textBase: 1300,
     video: { maxLong: 1920 }, // 1920×1280 — Apple's 3:2 minimum, light to record
     mockupK: 0.3,
+    copy: "search",
     mockup: "iphone-69",
   },
   {
@@ -205,6 +207,7 @@ export const CREATIVE_FORMATS = [
     textBase: 650,
     video: { maxLong: 1920 },
     mockupK: 0.3,
+    copy: "search",
     mockup: "iphone-69",
   },
   {
@@ -220,6 +223,7 @@ export const CREATIVE_FORMATS = [
     pngOnly: true,
     video: null,
     mockupK: 0.2,
+    copy: "universal",
     mockup: "iphone-69",
   },
   {
@@ -234,6 +238,7 @@ export const CREATIVE_FORMATS = [
     textBase: 1300,
     video: { maxLong: 1920, minMs: 15000 }, // 1920×1080 — Apple's minimum
     mockupK: 0.36,
+    copy: "event",
     mockup: "iphone-69",
   },
   {
@@ -251,6 +256,7 @@ export const CREATIVE_FORMATS = [
     textBase: 1100,
     video: { maxLong: 1920, minMs: 15000 }, // 1080×1920 — Apple's minimum
     mockupK: 0.34,
+    copy: "event",
     mockup: "iphone-69",
   },
 ];
@@ -280,6 +286,11 @@ export function mockupDeviceId(state) {
   if (!isCreative(out)) return out;
   const pick = state?.mockupDeviceId;
   return DEVICES.some((d) => d.id === pick) ? pick : getDevice(out).mockup;
+}
+
+/** Which AI-copy brief a project's output size gets (see aiCore COPY_PLACEMENTS). */
+export function copyPlacementOf(deviceId) {
+  return isCreative(deviceId) ? getDevice(deviceId).copy || "header" : "screenshot";
 }
 
 /** Width the headline / subheading sizes are measured against. */
