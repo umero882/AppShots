@@ -14,6 +14,47 @@ import { toPng, toJpeg } from "html-to-image";
  * `targetHeight` is the canonical store height; when omitted we keep the node's
  * own aspect ratio (used by the video reel, which controls its own size).
  */
+// ---- free-plan watermark ---------------------------------------------------
+// The Free plan's exports carry a small "Made with AppShots" badge; Pro and Team
+// remove it. Every export path (single PNG, zip, all sizes, clipboard, video
+// reel) goes through renderNode, so enforcing it here covers them all. It fails
+// CLOSED: until the editor says the account is paid, exports are watermarked.
+// (A browser-side badge can be defeated by a determined user; it is the
+// standard "free tier" mark, not DRM.)
+let watermarkOn = true;
+export function setExportWatermark(on) {
+  watermarkOn = !!on;
+}
+
+/** Badge geometry for an output of w x h px: a pill centred near the bottom edge. */
+export function watermarkSpec(w, h) {
+  const font = Math.max(12, Math.round(w * 0.028));
+  const padX = Math.round(font * 0.9);
+  const padY = Math.round(font * 0.5);
+  const text = "Made with AppShots";
+  return { text, font, padX, padY, h: font + padY * 2, bottom: Math.round(h * 0.018) };
+}
+
+export function drawWatermark(canvas) {
+  const ctx = canvas.getContext("2d");
+  const { text, font, padX, padY, h, bottom } = watermarkSpec(canvas.width, canvas.height);
+  ctx.save();
+  ctx.font = `600 ${font}px Inter, system-ui, -apple-system, Segoe UI, Arial, sans-serif`;
+  const tw = ctx.measureText(text).width;
+  const bw = Math.round(tw + padX * 2);
+  const x = Math.round((canvas.width - bw) / 2);
+  const y = canvas.height - bottom - h;
+  ctx.fillStyle = "rgba(11,11,14,0.72)";
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, bw, h, h / 2);
+  else ctx.rect(x, y, bw, h);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x + padX, y + h / 2 + 1);
+  ctx.restore();
+}
+
 export async function renderNode(node, targetWidth, { format = "png", scale = 1, targetHeight } = {}) {
   const rect = node.getBoundingClientRect();
   const outW = Math.round(targetWidth * scale);
@@ -32,6 +73,7 @@ export async function renderNode(node, targetWidth, { format = "png", scale = 1,
   if (typeof document === "undefined") return raw; // SSR/tests
   // Flatten onto an opaque canvas first (drops any transparency).
   const canvas = await drawOpaque(raw, outW, outH);
+  if (watermarkOn) drawWatermark(canvas);
   if (format === "jpeg") return canvas.toDataURL("image/jpeg", 0.95); // JPEG has no alpha
   // PNG: browser canvas.toDataURL always writes truecolor+ALPHA (colorType 6),
   // and App Store Connect rejects screenshots that contain an alpha channel.

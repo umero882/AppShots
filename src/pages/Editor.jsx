@@ -65,7 +65,7 @@ import {
   GRADIENTS, SOLIDS, FONTS, LAYOUTS, defaultScreen, hydrateProjectState,
 } from "../lib/templates";
 import {
-  exportNode, copyNodeToClipboard, readFileAsDataURL, renderNode, dataUrlToBytes, triggerDownload,
+  exportNode, setExportWatermark, copyNodeToClipboard, readFileAsDataURL, renderNode, dataUrlToBytes, triggerDownload,
 } from "../lib/export";
 import { createZip } from "../lib/zip";
 import { pushPast, undoStacks, redoStacks } from "../lib/history";
@@ -113,6 +113,14 @@ export default function Editor() {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // Free exports carry a small badge; Pro, Team and workspace members do not.
+  // Keyed on user fields so it re-evaluates when the plan changes mid-session.
+  const paidExport = !!user && ((!!user.plan && user.plan !== "free") || !!user.teamId);
+  useEffect(() => {
+    setExportWatermark(!paidExport);
+    return () => setExportWatermark(true);
+  }, [paidExport]);
 
   const [project, setProject] = useState(null);
   const [state, setState] = useState(null);
