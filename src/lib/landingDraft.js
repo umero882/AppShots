@@ -67,6 +67,15 @@ export function draftToProjectState(d) {
   };
 }
 
+/**
+ * The image files in a drop or file-picker result, in order. Folders, text
+ * files and anything else are skipped, so dropping a mixed selection still
+ * uses the screenshots in it.
+ */
+export function imageFiles(list) {
+  return Array.from(list || []).filter((f) => f && /^image\//.test(f.type));
+}
+
 /** Reads an image file and shrinks it so it fits in localStorage. */
 export function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {

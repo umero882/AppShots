@@ -8,7 +8,7 @@ import { useAuth } from "../lib/auth";
 import { useTeam } from "../lib/teamContext";
 import { trackPurchase, trackProjectCreated } from "../lib/analytics";
 import { backend } from "../lib/backend";
-import { takeLandingDraft, draftToProjectState, fileToDataUrl } from "../lib/landingDraft";
+import { takeLandingDraft, draftToProjectState, fileToDataUrl, imageFiles } from "../lib/landingDraft";
 import { defaultProjectState, hydrateProjectState } from "../lib/templates";
 import TemplatePicker from "../components/TemplatePicker";
 import { templateToProjectState, textPosFor, makeVariantState, nextVariantName } from "../lib/galleryTemplates";
@@ -122,21 +122,29 @@ export default function Dashboard() {
   // First-run shortcut: one dropped screenshot becomes a project with the image
   // already sitting in a device frame, so the editor opens on something real.
   const [dropError, setDropError] = useState("");
-  async function createFromImage(file) {
+  const MAX_FIRST_RUN_SCREENS = 10;
+  async function createFromImage(list) {
     setDropError("");
+    const files = imageFiles(list);
+    if (!files.length) {
+      // A dropped folder arrives as an empty list or a blank-typed entry, so one message covers it.
+      setDropError("Drop screenshot images (PNG or JPG). Folders and other files cannot be used.");
+      return;
+    }
     setCreating(true);
     try {
-      const image = await fileToDataUrl(file);
+      const images = (await Promise.all(files.slice(0, MAX_FIRST_RUN_SCREENS).map((f) => fileToDataUrl(f).catch(() => null)))).filter(Boolean);
+      if (!images.length) throw new Error("unreadable");
       const base = defaultProjectState();
       const project = await backend.createProject(user.id, {
         name: "My first set",
-        state: { ...base, screens: [{ ...base.screens[0], image }] },
+        state: { ...base, screens: images.map((image, i) => ({ ...base.screens[0], id: `${base.screens[0].id}${i}`, image })) },
         teamId: inTeamScope ? teamId : null,
       });
       trackProjectCreated({ source: "screenshot_drop" });
       navigate(`/editor/${project.id}`);
     } catch {
-      setDropError("That file isn't an image we can read. Try a PNG or JPG.");
+      setDropError("Drop screenshot images (PNG or JPG). Folders and other files cannot be used.");
     } finally {
       setCreating(false);
     }
@@ -290,7 +298,7 @@ export default function Dashboard() {
                       {inTeamScope ? `by ${memberName(p.userId)}` : new Date(p.updatedAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 [@media(hover:none)]:opacity-100">
+                  <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 max-md:opacity-100 [@media(hover:none)]:opacity-100">
                     {teamId && p.userId === user.id && (
                       <button
                         onClick={(e) => toggleShare(e, p)}
@@ -344,7 +352,7 @@ export default function Dashboard() {
   );
 }
 
-function FirstRunDrop({ onDropImage, onCreate, dropError, creating }) {
+export function FirstRunDrop({ onDropImage, onCreate, dropError, creating }) {
   const fileRef = useRef(null);
   const [over, setOver] = useState(false);
   return (
@@ -352,7 +360,7 @@ function FirstRunDrop({ onDropImage, onCreate, dropError, creating }) {
       <div
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={() => setOver(false)}
-        onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) onDropImage(f); }}
+        onDrop={(e) => { e.preventDefault(); setOver(false); onDropImage(e.dataTransfer.files); }}
         className={`card mx-auto max-w-xl border-dashed px-6 py-14 transition ${over ? "border-brand-400 bg-brand-500/10" : ""}`}
       >
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-brand-500/15 text-brand-300">
@@ -360,7 +368,7 @@ function FirstRunDrop({ onDropImage, onCreate, dropError, creating }) {
         </div>
         <h3 className="mt-5 text-xl font-semibold text-white">Drop your first app screenshot</h3>
         <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-400">
-          We&apos;ll put it in a device frame and open the editor, so you start from your own app.
+          We&apos;ll put it in a device frame and open the editor, so you start from your own app. Drop several to start with a full set.
         </p>
         <button onClick={() => fileRef.current?.click()} disabled={creating} className="btn-primary mt-6">
           <Plus size={18} /> {creating ? "Opening…" : "Choose a screenshot"}
@@ -369,8 +377,9 @@ function FirstRunDrop({ onDropImage, onCreate, dropError, creating }) {
           ref={fileRef}
           type="file"
           accept="image/*"
+          multiple
           hidden
-          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onDropImage(f); }}
+          onChange={(e) => { const list = Array.from(e.target.files || []); e.target.value = ""; onDropImage(list); }}
         />
         {dropError && <p role="alert" className="mt-3 text-sm text-red-400">{dropError}</p>}
       </div>
@@ -384,7 +393,7 @@ function FirstRunDrop({ onDropImage, onCreate, dropError, creating }) {
   );
 }
 
-function EmptyState({ onCreate, onDropImage, dropError, creating, teamName }) {
+export function EmptyState({ onCreate, onDropImage, dropError, creating, teamName }) {
   if (!teamName) return <FirstRunDrop onDropImage={onDropImage} onCreate={onCreate} dropError={dropError} creating={creating} />;
   return (
     <div className="card mt-10 flex flex-col items-center justify-center px-6 py-20 text-center">
