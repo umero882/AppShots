@@ -21,6 +21,16 @@ const heroMocks = { indigo: mockStats, sunset: mockDashboard, ocean: mockChat, f
 // Live studio: the visitor styles a real screenshot before signing up, and the
 // result carries into their first project (see lib/landingDraft).
 function TryItLive({ ctaTo }) {
+  // On a phone the preview goes first and smaller, so the visitor sees each edit
+  // land instead of scrolling past a button to find it.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
   const [heading, setHeading] = useState("Plan your week");
   const [subheading, setSubheading] = useState("Calm, focused, done");
   const [gradient, setGradient] = useState("sunset");
@@ -122,8 +132,8 @@ function TryItLive({ ctaTo }) {
         </Link>
         <p className="text-center text-xs text-slate-500">We keep your design and open it in the editor.</p>
       </div>
-      <div className="mx-auto drop-shadow-[0_28px_45px_rgba(0,0,0,0.45)]">
-        <ScreenCanvas state={state} screen={screen} width={248} />
+      <div className="order-first mx-auto drop-shadow-[0_28px_45px_rgba(0,0,0,0.45)] md:order-none">
+        <ScreenCanvas state={state} screen={screen} width={narrow ? 168 : 248} />
       </div>
     </div>
   );
