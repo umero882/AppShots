@@ -79,7 +79,7 @@ function TryDesign({ template, onClose, onContinue }) {
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => take(e.target.files?.[0])} />
             {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
           </div>
-          <div className="scroll-thin order-first flex min-w-0 flex-1 items-start gap-4 overflow-auto pb-2 md:order-none">
+          <div className="scroll-thin order-first flex min-w-0 shrink-0 items-start gap-4 overflow-x-auto pb-2 md:order-none md:flex-1 md:shrink md:overflow-auto">
             {screens.map((s, i) => (
               <div key={s.id} className="shrink-0">
                 <ScreenCanvas state={state} screen={s} width={narrow ? (i === 0 ? 150 : 120) : i === 0 ? 210 : 170} />
