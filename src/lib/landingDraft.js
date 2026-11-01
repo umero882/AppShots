@@ -39,6 +39,8 @@ export function takeLandingDraft() {
 }
 
 export function draftToProjectState(d) {
+  // A full project state (a template tried out on the Inspiration page).
+  if (d.state && Array.isArray(d.state.screens) && d.state.screens.length) return d.state;
   const base = defaultProjectState();
   const [screen] = base.screens;
   const many = Array.isArray(d.screens) && d.screens.length
