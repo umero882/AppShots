@@ -129,6 +129,8 @@ export default function Editor() {
   const [activeScreen, setActiveScreen] = useState(0);
   const [leftTab, setLeftTab] = useState("device");
   const [rightTab, setRightTab] = useState("text");
+  // Below md the two side panels are bottom sheets: "left" | "right" | null.
+  const [sheet, setSheet] = useState(null);
   // Route a panel id to whichever sidebar owns it, so callers that surface a
   // panel (select an element → "elements", add a locale → "text") stay simple.
   function setTab(id) {
@@ -1372,20 +1374,22 @@ export default function Editor() {
         <WatermarkGate before={gate.before} after={gate.after} onFree={() => closeGate(true)} onClose={() => closeGate(false)} />
       )}
       {/* top bar */}
-      <header className="flex items-center justify-between gap-4 border-b border-white/5 px-4 py-2.5">
+      <header className="flex items-center justify-between gap-2 border-b border-white/5 px-2 py-2 sm:gap-4 sm:px-4 sm:py-2.5">
         <div className="flex min-w-0 items-center gap-3">
           <Link to="/dashboard" className="btn-ghost px-2.5 py-2">
             <ArrowLeft size={16} />
           </Link>
-          <Logo to="/dashboard" />
-          <span className="text-white/20">/</span>
+          <span className="hidden sm:contents">
+            <Logo to="/dashboard" />
+            <span className="text-white/20">/</span>
+          </span>
           <input
             value={name}
             onChange={(e) => updateName(e.target.value)}
-            className="min-w-0 rounded-lg bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none hover:bg-white/5 focus:bg-white/5"
+            className="w-28 min-w-0 rounded-lg bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none hover:bg-white/5 focus:bg-white/5 sm:w-auto"
           />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           <div className="flex items-center gap-1">
             <button
               onClick={undo}
@@ -1406,7 +1410,7 @@ export default function Editor() {
             <button
               onClick={() => setShowHelp(true)}
               title="Keyboard shortcuts (?)"
-              className="btn-ghost px-2 py-2"
+              className="btn-ghost hidden px-2 py-2 sm:inline-flex"
             >
               <Keyboard size={16} />
             </button>
@@ -1568,7 +1572,8 @@ export default function Editor() {
           laptop still leaves the 300px canvas plus its padding room to breathe. */}
       <div className="flex min-h-0 flex-1">
         {/* left controls — the scene: templates, device, background */}
-        <aside className="flex w-[280px] shrink-0 flex-col border-r border-white/5 bg-ink-900 xl:w-[330px]">
+        <aside className={`${sheet === "left" ? "fixed inset-x-0 bottom-0 z-40 flex h-[58vh] rounded-t-2xl border-t border-white/10 shadow-[0_-20px_40px_rgba(0,0,0,0.5)]" : "hidden"} shrink-0 flex-col bg-ink-900 md:static md:z-auto md:flex md:h-auto md:w-[280px] md:rounded-none md:border-r md:border-t-0 md:border-white/5 md:shadow-none xl:w-[330px]`}>
+          <SheetDone onClose={() => setSheet(null)} />
           <TabStrip tabs={LEFT_TABS} active={leftTab} onChange={setLeftTab} />
 
           <div className="scroll-thin flex-1 overflow-y-auto p-4">
@@ -1613,7 +1618,7 @@ export default function Editor() {
 
         {/* center stage */}
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-11 shrink-0 items-stretch border-b border-white/5 bg-ink-900/80 backdrop-blur">
+          <div className="flex h-11 shrink-0 items-stretch overflow-x-auto border-b border-white/5 bg-ink-900/80 backdrop-blur">
             <CanvasToolbar
               target={selection}
               onTextStyle={(patch) => update((prev) => applyTextStyle(prev, activeScreen, textSel, patch))}
@@ -1632,7 +1637,7 @@ export default function Editor() {
           </div>
           <div
             ref={stageRef}
-            className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-8 pb-16"
+            className="flex flex-1 overflow-auto bg-[radial-gradient(circle_at_50%_30%,rgba(99,102,241,0.08),transparent_60%)] p-3 pb-16 md:p-8 md:pb-16"
             // The gutter around the canvas: a click here deselects everything.
             onPointerDown={(e) => { if (e.target === e.currentTarget) clearSelection(); }}
             onContextMenu={onCanvasContextMenu}
@@ -1730,7 +1735,8 @@ export default function Editor() {
         </main>
 
         {/* right controls — the dressing: text, layout, elements */}
-        <aside className="flex w-[280px] shrink-0 flex-col border-l border-white/5 bg-ink-900 xl:w-[330px]">
+        <aside className={`${sheet === "right" ? "fixed inset-x-0 bottom-0 z-40 flex h-[58vh] rounded-t-2xl border-t border-white/10 shadow-[0_-20px_40px_rgba(0,0,0,0.5)]" : "hidden"} shrink-0 flex-col bg-ink-900 md:static md:z-auto md:flex md:h-auto md:w-[280px] md:rounded-none md:border-l md:border-t-0 md:border-white/5 md:shadow-none xl:w-[330px]`}>
+          <SheetDone onClose={() => setSheet(null)} />
           <TabStrip tabs={RIGHT_TABS} active={rightTab} onChange={setRightTab} />
 
           <div className="scroll-thin flex-1 overflow-y-auto p-4">
@@ -1774,6 +1780,33 @@ export default function Editor() {
           </div>
         </aside>
       </div>
+
+      {/* Phones: the two side panels open as bottom sheets from this bar. */}
+      <nav className="flex shrink-0 border-t border-white/10 bg-ink-900 md:hidden" aria-label="Editor panels">
+        {[
+          { id: "left", label: "Design", icon: Palette },
+          { id: "right", label: "Text & elements", icon: Type },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setSheet(sheet === t.id ? null : t.id)}
+            aria-pressed={sheet === t.id}
+            className={`flex flex-1 items-center justify-center gap-2 py-3 text-sm font-semibold transition ${sheet === t.id ? "bg-white/5 text-brand-300" : "text-slate-300"}`}
+          >
+            <t.icon size={18} /> {t.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+/** Phones only: the sheet's close bar. */
+function SheetDone({ onClose }) {
+  return (
+    <div className="flex items-center justify-between border-b border-white/5 px-4 py-2 md:hidden">
+      <span className="h-1 w-10 rounded-full bg-white/20" aria-hidden="true" />
+      <button onClick={onClose} className="rounded-lg px-3 py-1 text-sm font-semibold text-brand-300">Done</button>
     </div>
   );
 }

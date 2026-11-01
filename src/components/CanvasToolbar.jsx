@@ -41,7 +41,7 @@ export default function CanvasToolbar({
 }) {
   if (!target) {
     return (
-      <div className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 px-4 text-[11px] text-slate-500">
+      <div className="hidden h-11 min-w-0 flex-1 items-center justify-center gap-2 px-4 text-[11px] text-slate-500 md:flex">
         <MousePointerClick size={13} />
         Click anything on the canvas to style it · double-click text to edit it in place
       </div>
