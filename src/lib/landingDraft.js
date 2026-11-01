@@ -52,7 +52,8 @@ export function draftToProjectState(d) {
     : null;
   return {
     ...base,
-    background: { ...base.background, type: "gradient", gradient: d.gradient || base.background.gradient },
+    ...(d.deviceId ? { deviceId: d.deviceId } : {}),
+    background: d.background || { ...base.background, type: "gradient", gradient: d.gradient || base.background.gradient },
     screens: many || [
       {
         ...screen,
