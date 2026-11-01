@@ -41,10 +41,19 @@ export function takeLandingDraft() {
 export function draftToProjectState(d) {
   const base = defaultProjectState();
   const [screen] = base.screens;
+  const many = Array.isArray(d.screens) && d.screens.length
+    ? d.screens.map((x, i) => ({
+        ...screen,
+        id: `${screen.id}${i}`,
+        heading: (x.heading || "").trim() || screen.heading,
+        subheading: (x.subheading || "").trim(),
+        image: x.image || null,
+      }))
+    : null;
   return {
     ...base,
     background: { ...base.background, type: "gradient", gradient: d.gradient || base.background.gradient },
-    screens: [
+    screens: many || [
       {
         ...screen,
         heading: (d.heading || "").trim() || screen.heading,

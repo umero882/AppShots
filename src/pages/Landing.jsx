@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import AppRestyle from "../components/AppRestyle";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { defaultProjectState, GRADIENTS } from "../lib/templates";
 import { saveLandingDraft, fileToDataUrl } from "../lib/landingDraft";
@@ -320,6 +321,8 @@ export default function Landing() {
           <span className="hidden h-px flex-1 bg-gradient-to-l from-transparent to-white/10 sm:block" />
         </div>
       </section>
+
+      <AppRestyle ctaTo={ctaTo} />
 
       {/* Features */}
       <section id="features" className="mx-auto max-w-7xl px-5 py-20">
