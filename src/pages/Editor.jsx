@@ -47,6 +47,7 @@ import ScreenCanvas from "../components/ScreenCanvas";
 import DevicePanel from "../components/DevicePanel";
 import { useAuth } from "../lib/auth";
 import { backend } from "../lib/backend";
+import WatermarkGate from "../components/WatermarkGate";
 import { getDevice, isCreative, mockupDeviceId, copyPlacementOf } from "../lib/devices";
 import {
   orientedCanvas, makeDeviceInstance, duplicateDeviceInstance, isFreeMode, screenDevices, LEGACY_DEVICE_ID,
@@ -1066,6 +1067,36 @@ export default function Editor() {
     setActiveScreen((a) => Math.min(last, Math.max(0, a > idx ? a - 1 : a)));
   }
 
+  // First export of the session on the Free plan: show the design with and
+  // without the badge, then carry on with whatever they asked for. Never blocks.
+  const [gate, setGate] = useState(null);
+  async function guard(run) {
+    let seen = false;
+    try { seen = sessionStorage.getItem("appshots.wmGateSeen") === "1"; } catch { /* storage blocked */ }
+    if (paidExport || seen || !canvasRef.current) return run();
+    setSelectedEl(null);
+    setSelectedDevice(null);
+    setGate({ run, before: null, after: null });
+    await new Promise((r) => setTimeout(r, 80));
+    try {
+      const oc = orientedCanvas(getDevice(state.deviceId), state.orientation);
+      const w = 340;
+      const h = Math.round((oc.h / oc.w) * w);
+      const before = await renderNode(canvasRef.current, w, { targetHeight: h, watermark: true });
+      const after = await renderNode(canvasRef.current, w, { targetHeight: h, watermark: false });
+      setGate((g) => (g ? { ...g, before, after } : g));
+    } catch {
+      setGate(null);
+      run();
+    }
+  }
+  function closeGate(runIt) {
+    const g = gate;
+    setGate(null);
+    try { sessionStorage.setItem("appshots.wmGateSeen", "1"); } catch { /* storage blocked */ }
+    if (runIt && g) g.run();
+  }
+
   async function exportOne() {
     if (!canvasRef.current) return;
     setExporting(true);
@@ -1337,6 +1368,9 @@ export default function Editor() {
 
   return (
     <div className="flex h-screen flex-col bg-ink-950">
+      {gate && (
+        <WatermarkGate before={gate.before} after={gate.after} onFree={() => closeGate(true)} onClose={() => closeGate(false)} />
+      )}
       {/* top bar */}
       <header className="flex items-center justify-between gap-4 border-b border-white/5 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
@@ -1410,7 +1444,7 @@ export default function Editor() {
             {copied ? "Copied" : "Copy"}
           </button>
           <button
-            onClick={exportAll}
+            onClick={() => guard(exportAll)}
             disabled={exporting}
             className="btn-ghost hidden sm:inline-flex"
             title={projectLocales(state).length > 1 ? "Download every screen in every language as a .zip" : "Download all screens as a .zip"}
@@ -1419,7 +1453,7 @@ export default function Editor() {
             {projectLocales(state).length > 1 ? "Export all langs" : "Export .zip"}
           </button>
           <button
-            onClick={exportAllSizes}
+            onClick={() => guard(exportAllSizes)}
             disabled={exporting}
             className="btn-ghost hidden lg:inline-flex"
             title={
@@ -1515,7 +1549,7 @@ export default function Editor() {
             )}
           </div>
           <button
-            onClick={exportVideo}
+            onClick={() => guard(exportVideo)}
             disabled={exporting}
             className="btn-ghost hidden md:inline-flex"
             title="Render an animated app-preview reel (MP4/WebM) of all screens"
@@ -1523,7 +1557,7 @@ export default function Editor() {
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Film size={16} />}
             Video
           </button>
-          <button onClick={exportOne} disabled={exporting} className="btn-primary">
+          <button onClick={() => guard(exportOne)} disabled={exporting} className="btn-primary">
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             Export {outFormat === "jpeg" ? "JPG" : "PNG"}
           </button>

@@ -28,7 +28,7 @@ export function setExportWatermark(on) {
 
 /** Badge geometry for an output of w x h px: a pill centred near the bottom edge. */
 export function watermarkSpec(w, h) {
-  const font = Math.max(12, Math.round(w * 0.028));
+  const font = Math.max(8, Math.round(w * 0.028));
   const padX = Math.round(font * 0.9);
   const padY = Math.round(font * 0.5);
   const text = "Made with AppShots";
@@ -55,7 +55,7 @@ export function drawWatermark(canvas) {
   ctx.restore();
 }
 
-export async function renderNode(node, targetWidth, { format = "png", scale = 1, targetHeight } = {}) {
+export async function renderNode(node, targetWidth, { format = "png", scale = 1, targetHeight, watermark } = {}) {
   const rect = node.getBoundingClientRect();
   const outW = Math.round(targetWidth * scale);
   const outH = Math.round(
@@ -73,7 +73,7 @@ export async function renderNode(node, targetWidth, { format = "png", scale = 1,
   if (typeof document === "undefined") return raw; // SSR/tests
   // Flatten onto an opaque canvas first (drops any transparency).
   const canvas = await drawOpaque(raw, outW, outH);
-  if (watermarkOn) drawWatermark(canvas);
+  if (watermark ?? watermarkOn) drawWatermark(canvas);
   if (format === "jpeg") return canvas.toDataURL("image/jpeg", 0.95); // JPEG has no alpha
   // PNG: browser canvas.toDataURL always writes truecolor+ALPHA (colorType 6),
   // and App Store Connect rejects screenshots that contain an alpha channel.

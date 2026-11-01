@@ -6,7 +6,7 @@ describe("watermarkSpec", () => {
     for (const [w, h] of [[1290, 2796], [1080, 1920], [3840, 1646], [640, 1136]]) {
       const s = watermarkSpec(w, h);
       expect(s.text).toBe("Made with AppShots");
-      expect(s.font).toBeGreaterThanOrEqual(12);
+      expect(s.font).toBeGreaterThanOrEqual(8);
       expect(s.h + s.bottom).toBeLessThan(h * 0.2);
     }
   });
