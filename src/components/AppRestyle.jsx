@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight, Loader2, Plus } from "lucide-react";
 import ScreenCanvas from "./ScreenCanvas";
@@ -66,6 +66,30 @@ function splash(icon, name, c1, c2) {
     `<image href="${icon}" x="115" y="300" width="160" height="160" clip-path="url(#r)"/>` +
     `<text x="195" y="520" font-family="Inter, Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#fff" text-anchor="middle">${esc}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+// A preview that is at most `max` px wide and shrinks to its container, so a
+// banner never forces sideways scrolling on a phone.
+function Fluid({ max, children }) {
+  const ref = useRef(null);
+  const [w, setW] = useState(max);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const set = () => setW(Math.min(max, Math.round(el.clientWidth) || max));
+    set();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [max]);
+  return (
+    <div ref={ref} style={{ width: max, maxWidth: "100%" }}>
+      <div className="overflow-hidden rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] ring-1 ring-white/10">
+        {children(w)}
+      </div>
+    </div>
+  );
 }
 
 const PLACEMENTS = [
@@ -208,10 +232,8 @@ export default function AppRestyle({ ctaTo }) {
                     image: brand.splash,
                   };
                   return (
-                    <figure key={pl.id} className="max-w-full">
-                      <div className="overflow-hidden rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] ring-1 ring-white/10" style={{ maxWidth: "100%", overflowX: "auto" }}>
-                        <ScreenCanvas state={state} screen={screen} width={pl.width} />
-                      </div>
+                    <figure key={pl.id} className="min-w-0 max-w-full">
+                      <Fluid max={pl.width}>{(w) => <ScreenCanvas state={state} screen={screen} width={w} />}</Fluid>
                       <figcaption className="mt-2 text-xs text-slate-500">
                         {pl.label} · {device.canvas.w}×{device.canvas.h}
                       </figcaption>
