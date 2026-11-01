@@ -4,6 +4,7 @@ import { Check, Sparkles } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../lib/auth";
+import { PRICING_FAQ, faqJsonLd } from "../lib/pricingFaq";
 
 const plans = [
   {
@@ -250,6 +251,24 @@ export default function Pricing() {
           <br />
           Team seats are invited by email and cost nothing extra — the workspace owner pays one bill.
         </p>
+      </section>
+
+      <section className="mx-auto max-w-3xl px-5 pb-24" aria-labelledby="faq-title">
+        <h2 id="faq-title" className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+          Questions before you start
+        </h2>
+        <div className="mt-6 divide-y divide-white/10 rounded-2xl border border-white/10">
+          {PRICING_FAQ.map((item) => (
+            <details key={item.q} className="group px-5 py-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left font-semibold text-white">
+                {item.q}
+                <span aria-hidden="true" className="text-xl leading-none text-brand-300 transition group-open:rotate-45">+</span>
+              </summary>
+              <p className="mt-3 text-sm leading-relaxed text-slate-400">{item.a}</p>
+            </details>
+          ))}
+        </div>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd()) }} />
       </section>
       <Footer />
     </div>
