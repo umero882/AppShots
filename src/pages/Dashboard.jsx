@@ -8,6 +8,7 @@ import { useAuth } from "../lib/auth";
 import { useTeam } from "../lib/teamContext";
 import { trackPurchase, trackProjectCreated } from "../lib/analytics";
 import { backend } from "../lib/backend";
+import { takeLandingDraft, draftToProjectState } from "../lib/landingDraft";
 import { defaultProjectState, hydrateProjectState } from "../lib/templates";
 import TemplatePicker from "../components/TemplatePicker";
 import { templateToProjectState, textPosFor, makeVariantState, nextVariantName } from "../lib/galleryTemplates";
@@ -100,6 +101,23 @@ export default function Dashboard() {
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A screenshot styled on the landing page before signup becomes the first project.
+  useEffect(() => {
+    if (!user) return;
+    const draft = takeLandingDraft();
+    if (!draft) return;
+    setCreating(true);
+    backend
+      .createProject(user.id, { name: draft.heading?.trim() || "My first set", state: draftToProjectState(draft), teamId: null })
+      .then((project) => {
+        trackProjectCreated({ source: "landing_draft" });
+        navigate(`/editor/${project.id}`);
+      })
+      .catch(() => {})
+      .finally(() => setCreating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   async function createFrom(template) {
     setPickerOpen(false);

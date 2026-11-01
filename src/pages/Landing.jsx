@@ -1,80 +1,129 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Smartphone, Languages, Download, Layers, Palette,
-  Zap, MousePointerClick, Check, ArrowRight, Megaphone, CalendarDays,
+  Zap, MousePointerClick, Check, ArrowRight, Megaphone, CalendarDays, Upload,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ScreenCanvas from "../components/ScreenCanvas";
-import { defaultProjectState } from "../lib/templates";
+import { defaultProjectState, GRADIENTS } from "../lib/templates";
+import { saveLandingDraft, fileToDataUrl } from "../lib/landingDraft";
 import { getDevice } from "../lib/devices";
 import { mockDashboard, mockStats, mockChat } from "../lib/mockScreens";
 import { useAuth } from "../lib/auth";
 
-// Hero devices show believable app UI (via mockScreens) instead of empty frames,
-// fanned with a lifted centre. rotate/lift build the fan; mock+accent fill the screen.
-const heroScreens = [
-  {
-    gradient: "indigo", heading: "Track every habit", sub: "Build streaks that stick",
-    mock: mockStats, accent: "#6366f1", rotate: -8, lift: 12,
-  },
-  {
-    gradient: "sunset", heading: "Plan your week", sub: "Calm, focused, done",
-    mock: mockDashboard, accent: "#fb7185", rotate: 0, lift: -14, center: true,
-  },
-  {
-    gradient: "ocean", heading: "Stay in flow", sub: "Less noise, more focus",
-    mock: mockChat, accent: "#0ea5e9", rotate: 8, lift: 12,
-  },
-];
+const lookChoices = ["indigo", "sunset", "ocean", "forest", "grape", "peach"];
+const heroMocks = { indigo: mockStats, sunset: mockDashboard, ocean: mockChat, forest: mockStats, grape: mockDashboard, peach: mockChat };
 
-function HeroPreview() {
-  const reduce = useReducedMotion();
+// Live studio: the visitor styles a real screenshot before signing up, and the
+// result carries into their first project (see lib/landingDraft).
+function TryItLive({ ctaTo }) {
+  const [heading, setHeading] = useState("Plan your week");
+  const [subheading, setSubheading] = useState("Calm, focused, done");
+  const [gradient, setGradient] = useState("sunset");
+  const [image, setImage] = useState(null);
+  const [over, setOver] = useState(false);
+  const [error, setError] = useState("");
+  const fileRef = useRef(null);
+  const g = GRADIENTS.find((x) => x.id === gradient) || GRADIENTS[0];
+
+  async function take(file) {
+    setError("");
+    try {
+      setImage(await fileToDataUrl(file));
+    } catch {
+      setError("That file isn't an image. Try a PNG or JPG.");
+    }
+  }
+
+  const state = {
+    ...defaultProjectState(),
+    background: { type: "gradient", gradient, solid: "" },
+    deviceScale: 0.84,
+    _textPos: "top",
+    text: { font: "inter", color: "#ffffff", size: 66, weight: 800, align: "center" },
+  };
+  const screen = {
+    id: "try",
+    heading: heading || " ",
+    subheading,
+    image: image || heroMocks[gradient](g.from, { dark: false }),
+  };
+
   return (
-    <div className="relative flex items-end justify-center gap-3 sm:gap-6">
-      {/* soft spotlight pooled beneath the devices */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-2 mx-auto h-40 max-w-2xl rounded-[100%] bg-brand-500/25 blur-3xl"
-      />
-      {heroScreens.map((s, i) => {
-        const state = {
-          ...defaultProjectState(),
-          background: { type: "gradient", gradient: s.gradient, solid: "" },
-          deviceScale: 0.82,
-          _textPos: "top",
-          text: { font: "inter", color: "#ffffff", size: 70, weight: 800, align: "center" },
-        };
-        const screen = {
-          id: i,
-          heading: s.heading,
-          subheading: s.sub,
-          image: s.mock(s.accent, { dark: false }),
-        };
-        const w = s.center ? 212 : 172;
-        return (
-          <motion.div
-            key={i}
-            className={`relative ${s.center ? "z-10" : "z-[1]"}`}
-            initial={{ opacity: 0, y: 46 }}
-            animate={{ opacity: 1, y: s.lift }}
-            transition={{ delay: 0.12 * i, duration: 0.6, ease: "easeOut" }}
-            style={{ rotate: s.rotate }}
-          >
-            <motion.div
-              animate={reduce ? undefined : { y: [0, s.center ? -9 : -6, 0] }}
-              transition={
-                reduce ? undefined : { duration: 5 + i, repeat: Infinity, ease: "easeInOut", delay: i * 0.6 }
-              }
-              className="drop-shadow-[0_28px_45px_rgba(0,0,0,0.45)]"
-            >
-              <ScreenCanvas state={state} screen={screen} width={w} />
-            </motion.div>
-          </motion.div>
-        );
-      })}
+    <div className="mx-auto grid max-w-4xl items-center gap-8 rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-left shadow-glow sm:p-8 md:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="space-y-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-brand-300">Try it now · no signup</p>
+          <p className="mt-1 text-sm text-slate-400">Type your headline, pick a look, drop in your own screenshot.</p>
+        </div>
+        <label className="block text-xs font-medium text-slate-400">
+          Headline
+          <input
+            value={heading}
+            maxLength={40}
+            onChange={(e) => setHeading(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2.5 text-base text-white outline-none focus:border-brand-500"
+          />
+        </label>
+        <label className="block text-xs font-medium text-slate-400">
+          Subheading
+          <input
+            value={subheading}
+            maxLength={50}
+            onChange={(e) => setSubheading(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-500"
+          />
+        </label>
+        <div>
+          <p className="text-xs font-medium text-slate-400">Look</p>
+          <div className="mt-2 flex gap-2.5">
+            {lookChoices.map((id) => {
+              const x = GRADIENTS.find((q) => q.id === id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-label={x.name}
+                  aria-pressed={gradient === id}
+                  onClick={() => setGradient(id)}
+                  className={`h-8 w-8 rounded-full ring-2 ring-offset-2 ring-offset-ink-950 transition ${gradient === id ? "ring-white" : "ring-transparent hover:ring-white/40"}`}
+                  style={{ background: `linear-gradient(${x.angle}deg, ${x.from}, ${x.to})` }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <div
+          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files?.[0]); }}
+          className={`flex items-center gap-3 rounded-xl border border-dashed px-4 py-3 text-sm transition ${over ? "border-brand-400 bg-brand-500/10" : "border-white/15"}`}
+        >
+          <Upload size={18} className="shrink-0 text-brand-300" />
+          <span className="min-w-0 flex-1 text-slate-300">
+            {image ? "Your screenshot is in." : "Drop your app screenshot here"}
+          </span>
+          <button type="button" onClick={() => fileRef.current?.click()} className="btn-ghost px-3 py-1.5 text-xs">
+            {image ? "Replace" : "Browse"}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => take(e.target.files?.[0])} />
+        </div>
+        {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+        <Link
+          to={ctaTo}
+          onClick={() => saveLandingDraft({ heading, subheading, gradient, image })}
+          className="btn-primary w-full justify-center px-6 py-3 text-base"
+        >
+          Finish &amp; download free <ArrowRight size={18} />
+        </Link>
+        <p className="text-center text-xs text-slate-500">We keep your design and open it in the editor.</p>
+      </div>
+      <div className="mx-auto drop-shadow-[0_28px_45px_rgba(0,0,0,0.45)]">
+        <ScreenCanvas state={state} screen={screen} width={248} />
+      </div>
     </div>
   );
 }
@@ -252,19 +301,11 @@ export default function Landing() {
               screenshots in minutes. Device frames, gradients, and
               store-ready exports — no design skills needed.
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link to={ctaTo} className="btn-primary text-base px-6 py-3">
-                Start creating free <ArrowRight size={18} />
-              </Link>
-              <a href="#features" className="btn-ghost text-base px-6 py-3">
-                See features
-              </a>
-            </div>
             <p className="mt-3 text-xs text-slate-500">No credit card required · Free plan forever</p>
           </motion.div>
 
-          <div className="mt-16">
-            <HeroPreview />
+          <div className="mt-14">
+            <TryItLive ctaTo={ctaTo} />
           </div>
         </div>
       </section>
