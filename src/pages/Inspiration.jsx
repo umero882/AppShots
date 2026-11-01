@@ -20,6 +20,16 @@ function TryDesign({ template, onClose, onContinue }) {
   const [image, setImage] = useState(null);
   const [error, setError] = useState("");
   const fileRef = useRef(null);
+  // On a phone the preview goes above the fields and smaller, so each edit is
+  // visible without scrolling past the controls.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
 
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -69,10 +79,10 @@ function TryDesign({ template, onClose, onContinue }) {
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => take(e.target.files?.[0])} />
             {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
           </div>
-          <div className="scroll-thin flex min-w-0 flex-1 items-start gap-4 overflow-auto pb-2">
+          <div className="scroll-thin order-first flex min-w-0 flex-1 items-start gap-4 overflow-auto pb-2 md:order-none">
             {screens.map((s, i) => (
               <div key={s.id} className="shrink-0">
-                <ScreenCanvas state={state} screen={s} width={i === 0 ? 210 : 170} />
+                <ScreenCanvas state={state} screen={s} width={narrow ? (i === 0 ? 150 : 120) : i === 0 ? 210 : 170} />
               </div>
             ))}
           </div>
