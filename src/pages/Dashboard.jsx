@@ -8,7 +8,7 @@ import { useAuth } from "../lib/auth";
 import { useTeam } from "../lib/teamContext";
 import { trackPurchase, trackProjectCreated } from "../lib/analytics";
 import { backend } from "../lib/backend";
-import { takeLandingDraft, draftToProjectState, fileToDataUrl, imageFiles } from "../lib/landingDraft";
+import { takeLandingDraft, draftToProjectState, fileToDataUrl, imageFiles, accentFromImage, brandBackground } from "../lib/landingDraft";
 import { defaultProjectState, hydrateProjectState } from "../lib/templates";
 import TemplatePicker from "../components/TemplatePicker";
 import { templateToProjectState, textPosFor, makeVariantState, nextVariantName } from "../lib/galleryTemplates";
@@ -136,9 +136,11 @@ export default function Dashboard() {
       const images = (await Promise.all(files.slice(0, MAX_FIRST_RUN_SCREENS).map((f) => fileToDataUrl(f).catch(() => null)))).filter(Boolean);
       if (!images.length) throw new Error("unreadable");
       const base = defaultProjectState();
+      // Open in the app's own colours instead of a preset the app may clash with.
+      const accent = await accentFromImage(images[0]);
       const project = await backend.createProject(user.id, {
         name: "My first set",
-        state: { ...base, screens: images.map((image, i) => ({ ...base.screens[0], id: `${base.screens[0].id}${i}`, image })) },
+        state: { ...base, ...(accent ? { background: brandBackground(accent) } : {}), screens: images.map((image, i) => ({ ...base.screens[0], id: `${base.screens[0].id}${i}`, image })) },
         teamId: inTeamScope ? teamId : null,
       });
       trackProjectCreated({ source: "screenshot_drop" });

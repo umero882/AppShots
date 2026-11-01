@@ -10,7 +10,7 @@ import Footer from "../components/Footer";
 import AppRestyle from "../components/AppRestyle";
 import ScreenCanvas from "../components/ScreenCanvas";
 import { defaultProjectState, GRADIENTS } from "../lib/templates";
-import { saveLandingDraft, fileToDataUrl } from "../lib/landingDraft";
+import { saveLandingDraft, fileToDataUrl, accentFromImage, brandBackground } from "../lib/landingDraft";
 import { getDevice } from "../lib/devices";
 import { mockDashboard, mockStats, mockChat } from "../lib/mockScreens";
 import { useAuth } from "../lib/auth";
@@ -35,6 +35,9 @@ function TryItLive({ ctaTo }) {
   const [subheading, setSubheading] = useState("Calm, focused, done");
   const [gradient, setGradient] = useState("sunset");
   const [image, setImage] = useState(null);
+  // "Match my app": a backdrop built from the uploaded screenshot's accent colour.
+  const [brandBg, setBrandBg] = useState(null);
+  const [useBrand, setUseBrand] = useState(false);
   const [over, setOver] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef(null);
@@ -43,7 +46,11 @@ function TryItLive({ ctaTo }) {
   async function take(file) {
     setError("");
     try {
-      setImage(await fileToDataUrl(file));
+      const url = await fileToDataUrl(file);
+      setImage(url);
+      const accent = await accentFromImage(url);
+      setBrandBg(accent ? brandBackground(accent) : null);
+      setUseBrand(!!accent);
     } catch {
       setError("That file isn't an image. Try a PNG or JPG.");
     }
@@ -51,7 +58,7 @@ function TryItLive({ ctaTo }) {
 
   const state = {
     ...defaultProjectState(),
-    background: { type: "gradient", gradient, solid: "" },
+    background: useBrand && brandBg ? brandBg : { type: "gradient", gradient, solid: "" },
     deviceScale: 0.84,
     _textPos: "top",
     text: { font: "inter", color: "#ffffff", size: 66, weight: 800, align: "center" },
@@ -91,6 +98,17 @@ function TryItLive({ ctaTo }) {
         <div>
           <p className="text-xs font-medium text-slate-400">Look</p>
           <div className="mt-2 flex gap-2.5">
+            {brandBg && (
+              <button
+                type="button"
+                aria-label="Match my app"
+                title="Match my app"
+                aria-pressed={useBrand}
+                onClick={() => setUseBrand(true)}
+                className={`h-8 w-8 rounded-full ring-2 ring-offset-2 ring-offset-ink-950 transition ${useBrand ? "ring-white" : "ring-transparent hover:ring-white/40"}`}
+                style={{ background: brandBg.aiGradient.css }}
+              />
+            )}
             {lookChoices.map((id) => {
               const x = GRADIENTS.find((q) => q.id === id);
               return (
@@ -98,9 +116,9 @@ function TryItLive({ ctaTo }) {
                   key={id}
                   type="button"
                   aria-label={x.name}
-                  aria-pressed={gradient === id}
-                  onClick={() => setGradient(id)}
-                  className={`h-8 w-8 rounded-full ring-2 ring-offset-2 ring-offset-ink-950 transition ${gradient === id ? "ring-white" : "ring-transparent hover:ring-white/40"}`}
+                  aria-pressed={!useBrand && gradient === id}
+                  onClick={() => { setGradient(id); setUseBrand(false); }}
+                  className={`h-8 w-8 rounded-full ring-2 ring-offset-2 ring-offset-ink-950 transition ${!useBrand && gradient === id ? "ring-white" : "ring-transparent hover:ring-white/40"}`}
                   style={{ background: `linear-gradient(${x.angle}deg, ${x.from}, ${x.to})` }}
                 />
               );
@@ -125,7 +143,7 @@ function TryItLive({ ctaTo }) {
         {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
         <Link
           to={ctaTo}
-          onClick={() => saveLandingDraft({ heading, subheading, gradient, image })}
+          onClick={() => saveLandingDraft({ heading, subheading, gradient, image, ...(useBrand && brandBg ? { background: brandBg } : {}) })}
           className="btn-primary w-full justify-center px-6 py-3 text-base"
         >
           Finish &amp; download free <ArrowRight size={18} />
