@@ -54,6 +54,11 @@ export const PAGES = {
     description:
       "Browse finished app store screenshot designs across eight styles, then open any one as the starting point for your own — no blank canvas to fill.",
   },
+  "/screenshot-sizes": {
+    title: "App Store & Google Play Screenshot Sizes — Free Checker",
+    description:
+      "Every App Store and Google Play screenshot size in pixels, plus a free checker: drop a screenshot and see which store sizes it fits. Nothing is uploaded.",
+  },
   "/signup": {
     title: "Create your free AppShots account",
     description:

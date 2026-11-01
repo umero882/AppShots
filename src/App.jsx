@@ -12,6 +12,7 @@ import BlogPost from "./pages/BlogPost";
 import Dashboard from "./pages/Dashboard";
 import Inspiration from "./pages/Inspiration";
 import Tracker from "./pages/Tracker";
+import ScreenshotSizes from "./pages/ScreenshotSizes";
 import Editor from "./pages/Editor";
 import Settings from "./pages/Settings";
 import Team from "./pages/Team";
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/inspiration" element={<Inspiration />} />
+        <Route path="/screenshot-sizes" element={<ScreenshotSizes />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/blog/:slug" element={<BlogPost />} />
         <Route path="/login" element={<Login />} />

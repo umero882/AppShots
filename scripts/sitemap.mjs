@@ -22,6 +22,7 @@ const STATIC_HINTS = {
   "/": { changefreq: "weekly", priority: "1.0" },
   "/pricing": { changefreq: "monthly", priority: "0.9" },
   "/inspiration": { changefreq: "weekly", priority: "0.7" },
+  "/screenshot-sizes": { changefreq: "monthly", priority: "0.8" },
   "/signup": { changefreq: "yearly", priority: "0.5" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
   "/terms": { changefreq: "yearly", priority: "0.3" },

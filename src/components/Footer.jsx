@@ -12,6 +12,7 @@ export default function Footer() {
         { label: "How it works", href: "/#how" },
         { label: "Pricing", to: "/pricing" },
         { label: "Inspiration", to: "/inspiration" },
+        { label: "Screenshot sizes", to: "/screenshot-sizes" },
         // Appears with the first published article — see Navbar.
         ...(publishedCount() > 0 ? [{ label: "Blog", to: "/blog" }] : []),
       ],
