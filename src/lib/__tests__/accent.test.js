@@ -31,3 +31,15 @@ describe("brandBackground", () => {
     expect(bg.aiGradient.css).toMatch(/^linear-gradient\(135deg, rgb\(/);
   });
 });
+
+describe("accentFromPixels rejects murky results", () => {
+  it("returns null for a dark brown (photo shadows)", () => {
+    expect(accentFromPixels(new Uint8ClampedArray(px(1000, [90, 55, 25])))).toBeNull();
+  });
+  it("returns null for a dull olive", () => {
+    expect(accentFromPixels(new Uint8ClampedArray(px(1000, [127, 112, 73])))).toBeNull();
+  });
+  it("still accepts a soft but bright pink", () => {
+    expect(accentFromPixels(new Uint8ClampedArray(px(1000, [235, 146, 199])))).not.toBeNull();
+  });
+});

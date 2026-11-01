@@ -126,12 +126,17 @@ export function accentFromPixels(data) {
     else if (max === g) h = (b - r) / d + 2;
     else h = (r - g) / d + 4;
     const bin = bins[Math.min(11, Math.floor((h / 6) * 12))];
-    const wgt = sat;
+    // Vivid, bright pixels speak for the brand; dark, murky ones are usually photo or shadow.
+    const wgt = sat * Math.pow(max / 255, 1.5);
     bin.w += wgt; bin.r += r * wgt; bin.g += g * wgt; bin.b += b * wgt;
   }
   if (!total || coloured / total < 0.04) return null;
   const best = bins.reduce((a, b) => (b.w > a.w ? b : a));
-  return [Math.round(best.r / best.w), Math.round(best.g / best.w), Math.round(best.b / best.w)];
+  const out = [Math.round(best.r / best.w), Math.round(best.g / best.w), Math.round(best.b / best.w)];
+  // A dull or dark average (muddy brown from a photo, olive from a dark UI) looks worse than a preset.
+  const hi = Math.max(...out), lo = Math.min(...out);
+  if (hi < 145 || (hi - lo) / hi < 0.33) return null;
+  return out;
 }
 
 /** The accent colour of an image data URL, or null (also null where there is no canvas). */
